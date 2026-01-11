@@ -47,7 +47,7 @@ def build_parser():
     parser.add_argument('--tokenstorefile', default=default_temp, help=f'path for tokenstore (default: {default_temp})')
     parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set logging level')
     parser.add_argument('--log-file', help='Path to log file (default: stdout only)')
-    parser.add_argument('--transport', default='http', choices=['http', 'stdio'], help='Transport mode (default: http)')
+    parser.add_argument('--transport', default='stdio', choices=['http', 'stdio'], help='Transport mode (default: http)')
     parser.add_argument('--port', type=int, default=8667, help='Port for HTTP mode (default: 8667)')
     return parser
 
