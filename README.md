@@ -31,16 +31,17 @@ A developer-focused server that exposes information from VW vehicles via a Model
    cd weconnect_mvp
    ```
 
-2. **Create and activate a virtual environment**  
+2. **Create and activate a virtual environment and install dependencies**  
    ```bash
    python -m venv .venv
    source .venv/bin/activate
+   pip install -r requirements.txt
    ```
 
-3. **Install dependencies in editable mode**  
-   ```bash
-   pip install -e .
-   ```
+	You can use the convenience scripts to automatically set up everything:
+	```bash
+	./scripts/setup.sh
+	```
 
 ---
 
@@ -77,6 +78,7 @@ Example (`src/config.json`):
 **Do not commit your credentials!**  
 Copy and edit `src/config.json` as needed.
 
+
 ---
 
 ## Usage
@@ -85,29 +87,51 @@ Copy and edit `src/config.json` as needed.
 
 You can start the MCP server using the provided CLI scripts or directly via Python:
 
-#### 1. Foreground (with logs to console)
+#### 1. Starting the server in foreground (with logs to console)
 ```bash
-./start_server_fg.sh [config.json] [port]
+./scripts/start_server_fg.sh
 ```
 
-#### 2. Background (with logs to file)
+#### 2. Starting the server in background (with logs to file)
 ```bash
-./start_server_bg.sh [config.json] [port]
+./scripts/start_server_bg.sh
 ```
 
-#### 3. Directly via Python
+#### 3. Starting the server directly via Python
 ```bash
 python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8765
 ```
 
-#### 4. After editable install (console script)
+### 4. Stopping the Server
+
+If started in the background, stop the server using the script:
 ```bash
-weconnect-mvp-server path/to/config.json --port 8765
+./scripts/stop_server.sh
 ```
 
-### Stopping the Server
+Alternatively, kill the process via PID.
+---
 
-If started in the background, stop the server using the stored PID or your process manager.
+## CLI Parameters
+
+The MCP server can be started with several command-line parameters to control its behavior:
+
+| Parameter           | Default                                   | Description                                                      |
+|---------------------|-------------------------------------------|------------------------------------------------------------------|
+| `config`            | (required)                                | Path to the configuration file                                   |
+| `--tokenstorefile`  | `/tmp/tokenstore`                         | Path for the token store file                                    |
+| `--log-level`       | (none; uses default if not set)           | Set logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `--log-file`        | (stdout only)                             | Path to log file (if not set, logs to stdout only)               |
+| `--transport`       | `http`                                    | Transport mode: `http` or `stdio`                                |
+| `--port`            | `8667`                                    | Port for HTTP mode                                               |
+
+**Example:**
+
+```bash
+python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --log-file server.log --transport http --port 8765
+```
+
+---
 
 ---
 
@@ -115,7 +139,7 @@ If started in the background, stop the server using the stored PID or your proce
 
 Run the test suite with:
 ```bash
-./run_tests.sh
+./scripts/tests.sh
 ```
 or
 ```bash
