@@ -5,3 +5,6 @@ tests/__pycache__/
 logs/
 .vscode/
 src/weconnect_mvp.egg-info/
+.pytest_cache/
+.venv/
+logs/
