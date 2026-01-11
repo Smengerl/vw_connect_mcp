@@ -17,4 +17,4 @@ echo "Activating virtualenv"
 ${ROOT_DIR}/scripts/activate_venv.sh
 
 echo "Starting server (foreground) with config=${CONFIG}"
-python3 "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile /tmp/tokenstore --log-level DEBUG
+python3 "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile /tmp/tokenstore --log-level DEBUG "$@"

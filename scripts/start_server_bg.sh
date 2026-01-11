@@ -16,8 +16,8 @@ mkdir -p "${LOG_DIR}"
 echo "Activating virtualenv"
 ${ROOT_DIR}/scripts/activate_venv.sh
 
-echo "Starting server (background) with config=${CONFIG}"
-nohup python3 "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile /tmp/tokenstore > "${LOG_FILE}" 2>&1 &
+echo "Starting server (background, http mode) with config=${CONFIG}"
+nohup python3 "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile /tmp/tokenstore --transport=http "$@" > "${LOG_FILE}" 2>&1 &
 PID=$!
 echo $PID > "${PID_FILE}"
 echo "Server started with PID=${PID}, logs -> ${LOG_FILE}, pidfile -> ${PID_FILE}"
