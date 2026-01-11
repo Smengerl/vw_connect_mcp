@@ -4,3 +4,4 @@ src/__pycache__/
 tests/__pycache__/
 logs/
 .vscode/
+src/weconnect_mvp.egg-info/
