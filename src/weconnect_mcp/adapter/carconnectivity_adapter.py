@@ -48,6 +48,18 @@ class CarConnectivityAdapter(AbstractAdapter):
             except Exception:
                 pass
 
+    async def __aenter__(self) -> CarConnectivityAdapter:
+        return self
+    
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        self.shutdown()
+
+    def __enter__(self) -> CarConnectivityAdapter:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.shutdown()
+
     # vehicles getter used by the generic server
     def list_vehicles(self) -> list[str]:
         if self.car_connectivity is not None:
