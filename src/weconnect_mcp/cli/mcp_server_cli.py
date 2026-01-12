@@ -32,9 +32,9 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
         server = get_server(adapter)
         try:
             if transport == "http":
-                server.run(transport="http", host="0.0.0.0", port=port)
+                server.run(show_banner=False, transport="http", host="0.0.0.0", port=port)
             elif transport == "stdio":
-                server.run(transport="stdio")
+                server.run(show_banner=False, transport="stdio")
             else:
                 raise ValueError(f"Unsupported transport: {transport}")
         finally:

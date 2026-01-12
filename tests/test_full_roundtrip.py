@@ -48,7 +48,7 @@ async def mcp_server(config_path: Path, adapter: CarConnectivityAdapter):
     # wrap server run in a task that signals when finished for clean shutdown when task is cancelled
     async def run_and_signal():
         try:
-            await server.run_stdio_async()
+            await server.run_stdio_async(show_banner=False)
         finally:
             finished.set()
 
