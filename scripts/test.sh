@@ -18,5 +18,5 @@ fi
 
 echo "Running tests"
 # forward all args to pytest
-pytest "${ROOT_DIR}/tests/test_mcp_server.py" --asyncio-mode=auto $PYTEST_VERBOSE $PYTEST_LOG "$@"
+pytest "${ROOT_DIR}/tests/test_mcp_server.py" "${ROOT_DIR}/tests/test_full_roundtrip.py" --asyncio-mode=auto $PYTEST_VERBOSE $PYTEST_LOG "$@"
 echo "Tests completed successfully"
