@@ -53,8 +53,11 @@ async def test_mcp_resources_provide_valid_data(mockdata_mcp_server: Any):
     assert isinstance(vehicles, list), "vehicles should be a list"
     assert len(vehicles) == TestAdapter.vehicles.__len__(), f"Expected {TestAdapter.vehicles.__len__()} vehicles, got {len(vehicles)}"
 
-    # Get state for each vehicle
-    for vehicle_id in vehicles:
+    # Get state for each vehicle (vehicles are now dicts with vin, name, model)
+    for vehicle_info in vehicles:
+        assert isinstance(vehicle_info, dict), f"vehicle_info should be a dict, got {type(vehicle_info)}"
+        assert "vin" in vehicle_info, "vehicle_info should have a 'vin' key"
+        vehicle_id = vehicle_info["vin"]
         logger.debug(f"Try resource: data://state/{vehicle_id}")
         state_resource_template = await mockdata_mcp_server.get_resource_template("data://state/{vehicle_id}")
         assert state_resource_template is not None, f"state_resource_template for {vehicle_id} should not be None"
@@ -89,8 +92,11 @@ async def test_mcp_list_vehicles(mockdata_mcp_client):
     logger.debug(f"Deserialized JSON from client: {vehicles}")
 
     assert vehicles.__len__() == TestAdapter.vehicles.__len__(), f"Expected {TestAdapter.vehicles.__len__()} vehicles, got {vehicles.__len__()}"
-    for vin in vehicles:
-        assert isinstance(vin, str), f"VIN should be a string, got {type(vin)}"
+    # vehicles are now dicts with vin, name, model
+    for vehicle_info in vehicles:
+        assert isinstance(vehicle_info, dict), f"vehicle_info should be a dict, got {type(vehicle_info)}"
+        assert "vin" in vehicle_info, "vehicle_info should have a 'vin' key"
+        vin = vehicle_info["vin"]
         if vin in [v.vin for v in TestAdapter.vehicles]:
             logger.debug(f"Found vehicle VIN from client: {vin}")
         else:

@@ -83,8 +83,11 @@ async def test_mcp_list_vehicles(mcp_client):
     vehicles = json.loads(all_vehicles_str)
     logger.debug(f"Found vehicles: {vehicles}")
 
-    for vin in vehicles:
-        assert isinstance(vin, str), f"VIN should be a string, got {type(vin)}"
+    # vehicles are now dicts with vin, name, model
+    for vehicle_info in vehicles:
+        assert isinstance(vehicle_info, dict), f"vehicle_info should be a dict, got {type(vehicle_info)}"
+        assert "vin" in vehicle_info, "vehicle_info should have a 'vin' key"
+        vin = vehicle_info["vin"]
         logger.debug(f"Reading details for vehicle: {vin}")
 
         result = await mcp_client.read_resource(f"data://state/{vin}")

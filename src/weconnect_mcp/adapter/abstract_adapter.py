@@ -77,13 +77,19 @@ class VehicleModel(BaseModel):
     climate: Optional[ClimateModel] = None
     tyres: Optional[TyresModel] = None
 
+class VehicleListItem(BaseModel):
+    """Simplified vehicle information for listing"""
+    vin: str
+    name: Optional[str] = None
+    model: Optional[str] = None
+
 class AbstractAdapter(ABC):
     @abstractmethod
     def shutdown(self) -> None:
         """Perform any cleanup required by the adapter."""
 
     @abstractmethod
-    def list_vehicles(self) -> list[str]:
+    def list_vehicles(self) -> list[VehicleListItem]:
         """Return a list of vehicle dicts. Each dict should include an 'id' key."""
         pass
 

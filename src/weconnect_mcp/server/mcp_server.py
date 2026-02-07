@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleListItem
 from carconnectivity.vehicle import GenericVehicle
 
 from pydantic import BaseModel
@@ -17,11 +17,12 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     # Register as TOOLS (not resources) so AI can call them
     @mcp.tool()
-    def list_vehicles() -> List[str]:
-        """List all available vehicles. Returns a list of vehicle IDs that can be used with other tools."""
-        vehicles: List[str] = adapter.list_vehicles()
+    def list_vehicles() -> List[Dict[str, Any]]:
+        """List all available vehicles. Returns a list of vehicle information including VIN, name, and model.
+        Use the VIN field to identify vehicles in other tool calls."""
+        vehicles: List[VehicleListItem] = adapter.list_vehicles()
         logger.info("Listing %d vehicles", len(vehicles))
-        return vehicles
+        return [v.model_dump() for v in vehicles]
 
     @mcp.tool()
     def get_vehicle_state(vehicle_id: str) -> Dict[str, Any]:
@@ -97,11 +98,11 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     # Also keep resources for direct data access
     @mcp.resource("data://list_vehicles")
-    def list_vehicles_resource() -> List[str]:
+    def list_vehicles_resource() -> List[Dict[str, Any]]:
         """Return a list of available vehicles using the adapter."""
-        vehicles: List[str] = adapter.list_vehicles()
+        vehicles: List[VehicleListItem] = adapter.list_vehicles()
         logger.info("Listing %d vehicles via resource", len(vehicles))
-        return vehicles
+        return [v.model_dump() for v in vehicles]
 
     @mcp.resource("data://state/{vehicle_id}")
     def get_vehicle_state_resource(vehicle_id: str) -> BaseModel:
@@ -131,14 +132,17 @@ def get_server(adapter: AbstractAdapter) -> FastMCP:
             This server provides access to Volkswagen vehicle data via MCP tools.
             
             Available tools:
-            - list_vehicles: Get a list of all available vehicle IDs
+            - list_vehicles: Get a list of all available vehicles with VIN, name, and model
             - get_vehicle_state: Get complete state of a vehicle (battery, position, doors, windows, climate, tyres)
             - get_vehicle_doors: Get door lock and open/closed status
             - get_vehicle_windows: Get window open/closed status
             - get_vehicle_tyres: Get tyre pressure and temperature
             
-            Start by calling list_vehicles to see available vehicles, then use the vehicle ID with other tools.
-            All tools require a vehicle_id parameter (except list_vehicles).
+            Start by calling list_vehicles to see available vehicles. When referring to vehicles, 
+            use their name if available (more user-friendly), but always use the VIN as the vehicle_id 
+            parameter when calling other tools.
+            
+            All tools except list_vehicles require a vehicle_id parameter (which should be the VIN).
         """,
         version="1.0.0",
         auth=None,

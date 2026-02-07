@@ -10,7 +10,7 @@ import os
 import sys
 import logging
 from typing import List, Any, Optional
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
 from carconnectivity.vehicle import GenericVehicle, Length, ElectricVehicle, CombustionVehicle
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
@@ -68,13 +68,29 @@ class CarConnectivityAdapter(AbstractAdapter):
         self.shutdown()
 
     # vehicles getter used by the generic server
-    def list_vehicles(self) -> list[str]:
+    def list_vehicles(self) -> list[VehicleListItem]:
         if self.car_connectivity is None:
             return []
         garage = self.car_connectivity.get_garage() if self.car_connectivity else None
         if garage is None or not hasattr(garage, "list_vehicle_vins"):
             return []
-        return garage.list_vehicle_vins()
+        
+        vehicle_list = []
+        for vin in garage.list_vehicle_vins():
+            vehicle = garage.get_vehicle(vin)
+            if vehicle:
+                name_val = vehicle.name.value if vehicle.name is not None else None
+                model_val = vehicle.model.value if vehicle.model is not None else None
+                vehicle_list.append(VehicleListItem(
+                    vin=vin,
+                    name=name_val,
+                    model=model_val
+                ))
+            else:
+                # Fallback if vehicle can't be retrieved
+                vehicle_list.append(VehicleListItem(vin=vin))
+        
+        return vehicle_list
 
 
     def _get_vehicle_for_vin(self, vehicle_id: str) -> Optional[GenericVehicle]:
@@ -170,7 +186,7 @@ class CarConnectivityAdapter(AbstractAdapter):
 
 
     def _get_tyres_state(self, vehicle: GenericVehicle) -> Optional[TyresModel]:
-        tyres = vehicle.getattr(vehicle, 'tyres', None)
+        tyres = getattr(vehicle, 'tyres', None)
         if tyres is None or not hasattr(tyres, 'tyres'):
             return None
         tyre_models = {}

@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
 from weconnect_mcp.adapter.carconnectivity_adapter import VehicleModel
 
 from pydantic import BaseModel
@@ -79,9 +79,16 @@ class TestAdapter(AbstractAdapter):
     def shutdown(self):
         pass
 
-    def list_vehicles(self) -> list[str]:
-        # Return the list of vehicle IDs (vin)
-        return [v.vin for v in self.vehicles if isinstance(v.vin, str)]
+    def list_vehicles(self) -> list[VehicleListItem]:
+        # Return the list of vehicles with VIN, name, and model
+        return [
+            VehicleListItem(
+                vin=v.vin if v.vin else "",
+                name=v.name,
+                model=v.model
+            )
+            for v in self.vehicles if v.vin
+        ]
 
     def get_vehicle(self, vehicle_id) -> Optional[VehicleModel]:
         # Return the vehicle object matching the vin
