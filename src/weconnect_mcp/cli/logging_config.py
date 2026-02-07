@@ -42,7 +42,7 @@ def setup_logging(
     Args:
         name: Logger name (typically __name__). If None, returns root logger.
         level: Log level (e.g., logging.INFO). If None, uses environment variable or default.
-        log_file: Path to log file. If None, uses LOG_FILE env var. If still None, logs to stdout only.
+        log_file: Path to log file. If None, uses LOG_FILE env var. If still None, logs to stderr only.
         format_string: Custom log format string. If None, uses default format.
         date_format: Custom date format string. If None, uses default format.
         
@@ -66,11 +66,11 @@ def setup_logging(
     datefmt = date_format or DEFAULT_DATE_FORMAT
     formatter = logging.Formatter(fmt, datefmt=datefmt)
     
-    # Add stdout handler
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(level)
-    stdout_handler.setFormatter(formatter)
-    logger.addHandler(stdout_handler)
+    # Add console handler (always use stderr for MCP compatibility)
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
     
     # Add file handler if log file specified
     if log_file:

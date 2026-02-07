@@ -7,6 +7,8 @@ This file depends on the third-party `carconnectivity` library; its responsibili
 
 import json
 import os
+import sys
+import logging
 from typing import List, Any, Optional
 from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
 from carconnectivity.vehicle import GenericVehicle, Length, ElectricVehicle, CombustionVehicle
@@ -15,9 +17,13 @@ from carconnectivity.windows import Windows
 from carconnectivity.attributes import GenericAttribute
 
 
-
-
-import logging
+# Configure logging to use stderr to avoid interfering with MCP stdio communication
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr,
+    force=True
+)
 logger = logging.getLogger(__name__)
 
 from pydantic import BaseModel
