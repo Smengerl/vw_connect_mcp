@@ -226,6 +226,13 @@ class CarConnectivityAdapter(AbstractAdapter):
             return None
         return self._get_tyres_state(vehicle)
 
+    def get_vehicle_type(self, vehicle_id: str) -> Optional[str]:
+        vehicle = self._get_vehicle_for_vin(vehicle_id)
+        if vehicle is None:
+            return None
+        type_val = vehicle.type.value if vehicle.type is not None else None
+        return type_val
+
     def get_vehicle(self, vehicle_id: str) -> Optional[VehicleModel]:
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:

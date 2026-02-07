@@ -15,7 +15,7 @@ class TestAdapter(AbstractAdapter):
         name='T7',
         state='unknown vehicle state',
         vin='WV2ZZZSTZNH009136',
-        type='electric',
+        type='combustion',
         odometer=12345.0,
         windows=WindowsModel(
             front_left=WindowModel(open=False),
@@ -116,4 +116,10 @@ class TestAdapter(AbstractAdapter):
         for v in self.vehicles:
             if v.vin == vehicle_id:
                 return v.tyres
+        return None
+    def get_vehicle_type(self, vehicle_id) -> Optional[str]:
+        # Return the vehicle type
+        for v in self.vehicles:
+            if v.vin == vehicle_id:
+                return v.type
         return None

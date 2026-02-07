@@ -125,3 +125,12 @@ class AbstractAdapter(ABC):
         If the vehicle is not found, return None.
         """
         pass
+
+    @abstractmethod
+    def get_vehicle_type(self, vehicle_id: str) -> Optional[str]:
+        """Return the vehicle type for the given vehicle_id.
+        
+        Returns the vehicle type as a string, e.g., 'electric', 'combustion', 'hybrid'.
+        If the vehicle is not found, return None.
+        """
+        pass

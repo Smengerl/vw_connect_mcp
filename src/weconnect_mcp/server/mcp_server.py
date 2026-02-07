@@ -96,6 +96,27 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         
         return tyres.model_dump() if tyres else {}
 
+    @mcp.tool()
+    def get_vehicle_type(vehicle_id: str) -> Dict[str, Any]:
+        """Get the type of a specific vehicle (e.g., electric, combustion, hybrid).
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Vehicle type information. Common types include:
+            - 'electric': Battery Electric Vehicle (BEV)
+            - 'combustion': Internal Combustion Engine vehicle
+            - 'hybrid': Hybrid Electric Vehicle (HEV/PHEV)
+        """
+        logger.info("get vehicle type for id=%s", vehicle_id)
+        vehicle_type = adapter.get_vehicle_type(vehicle_id)
+        if vehicle_type is None:
+            logger.warning("Vehicle '%s' not found or type not available", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or type not available"}
+        
+        return {"vehicle_id": vehicle_id, "type": vehicle_type}
+
     # Also keep resources for direct data access
     @mcp.resource("data://list_vehicles")
     def list_vehicles_resource() -> List[Dict[str, Any]]:
@@ -137,6 +158,7 @@ def get_server(adapter: AbstractAdapter) -> FastMCP:
             - get_vehicle_doors: Get door lock and open/closed status
             - get_vehicle_windows: Get window open/closed status
             - get_vehicle_tyres: Get tyre pressure and temperature
+            - get_vehicle_type: Get the vehicle type (electric/BEV, combustion, hybrid)
             
             Start by calling list_vehicles to see available vehicles. When referring to vehicles, 
             use their name if available (more user-friendly), but always use the VIN as the vehicle_id 
