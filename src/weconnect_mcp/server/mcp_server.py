@@ -15,20 +15,99 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     to the adapter. This is called once during lazy initialization.
     """
 
-    @mcp.resource("data://list_vehicles")
+    # Register as TOOLS (not resources) so AI can call them
+    @mcp.tool()
     def list_vehicles() -> List[str]:
-        """Return a list of available vehicles using the adapter."""
+        """List all available vehicles. Returns a list of vehicle IDs that can be used with other tools."""
         vehicles: List[str] = adapter.list_vehicles()
         logger.info("Listing %d vehicles", len(vehicles))
         return vehicles
 
+    @mcp.tool()
+    def get_vehicle_state(vehicle_id: str) -> Dict[str, Any]:
+        """Get the complete state of a specific vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Complete vehicle information including position, battery, doors, windows, climate, and tyres
+        """
+        logger.info("get vehicle state for id=%s", vehicle_id)
+        vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
+        if vehicle is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found"}
+
+        return vehicle.model_dump() if vehicle else {}
+
+    @mcp.tool()
+    def get_vehicle_doors(vehicle_id: str) -> Dict[str, Any]:
+        """Get the door status of a specific vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Door states including lock status and open/closed state for all doors
+        """
+        logger.info("get vehicle doors for id=%s", vehicle_id)
+        doors = adapter.get_doors_state(vehicle_id)
+        if doors is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found"}
+        
+        return doors.model_dump() if doors else {}
+
+    @mcp.tool()
+    def get_vehicle_windows(vehicle_id: str) -> Dict[str, Any]:
+        """Get the window status of a specific vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Window states for all windows (open/closed)
+        """
+        logger.info("get vehicle windows for id=%s", vehicle_id)
+        windows = adapter.get_windows_state(vehicle_id)
+        if windows is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found"}
+        
+        return windows.model_dump() if windows else {}
+
+    @mcp.tool()
+    def get_vehicle_tyres(vehicle_id: str) -> Dict[str, Any]:
+        """Get the tyre status of a specific vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Tyre pressure and temperature for all tyres
+        """
+        logger.info("get vehicle tyres for id=%s", vehicle_id)
+        tyres = adapter.get_tyres_state(vehicle_id)
+        if tyres is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found"}
+        
+        return tyres.model_dump() if tyres else {}
+
+    # Also keep resources for direct data access
+    @mcp.resource("data://list_vehicles")
+    def list_vehicles_resource() -> List[str]:
+        """Return a list of available vehicles using the adapter."""
+        vehicles: List[str] = adapter.list_vehicles()
+        logger.info("Listing %d vehicles via resource", len(vehicles))
+        return vehicles
 
     @mcp.resource("data://state/{vehicle_id}")
-    def get_vehicle_state(vehicle_id: str) -> BaseModel:
+    def get_vehicle_state_resource(vehicle_id: str) -> BaseModel:
         """Return the state for a specific vehicle. Adapter may return
         an error dict when the vehicle is not found."""
-
-        logger.info("get vehicle state for id=%s", vehicle_id)
+        logger.info("get vehicle state via resource for id=%s", vehicle_id)
         vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
         if vehicle is None:
             logger.warning("Vehicle '%s' not found", vehicle_id)
@@ -49,9 +128,17 @@ def get_server(adapter: AbstractAdapter) -> FastMCP:
     mcp = FastMCP(
         name="vehicle-service",
         instructions="""
-            This server provides access to the vehicle data 
-            Call list_vehicles to get an overview of available vehicles
-            Call get_vehicle_state with a vehicle ID to get detailed state information
+            This server provides access to Volkswagen vehicle data via MCP tools.
+            
+            Available tools:
+            - list_vehicles: Get a list of all available vehicle IDs
+            - get_vehicle_state: Get complete state of a vehicle (battery, position, doors, windows, climate, tyres)
+            - get_vehicle_doors: Get door lock and open/closed status
+            - get_vehicle_windows: Get window open/closed status
+            - get_vehicle_tyres: Get tyre pressure and temperature
+            
+            Start by calling list_vehicles to see available vehicles, then use the vehicle ID with other tools.
+            All tools require a vehicle_id parameter (except list_vehicles).
         """,
         version="1.0.0",
         auth=None,
