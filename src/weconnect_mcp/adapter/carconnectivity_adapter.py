@@ -10,7 +10,7 @@ import os
 import sys
 import logging
 from typing import List, Any, Optional
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleModel, VehicleListItem, ChargingModel, PositionModel, DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel
 from carconnectivity.vehicle import GenericVehicle, Length, ElectricVehicle, CombustionVehicle
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
@@ -208,6 +208,101 @@ class CarConnectivityAdapter(AbstractAdapter):
 
 
 
+    def _get_charging_state(self, vehicle: GenericVehicle) -> Optional[ChargingModel]:
+        
+        # Only electric and hybrid vehicles have charging capability
+        if not isinstance(vehicle, ElectricVehicle):
+            return None
+        
+        charging = getattr(vehicle, 'charging', None)
+        if charging is None:
+            return None
+        
+        # Extract charging state
+        is_charging = None
+        charging_state_str = None
+        if charging.state is not None and charging.state.value is not None:
+            from carconnectivity.charging import Charging
+            if charging.state.value == Charging.ChargingState.CHARGING:
+                is_charging = True
+                charging_state_str = 'charging'
+            elif charging.state.value == Charging.ChargingState.READY_FOR_CHARGING:
+                is_charging = False
+                charging_state_str = 'ready'
+            elif charging.state.value == Charging.ChargingState.OFF:
+                is_charging = False
+                charging_state_str = 'off'
+            elif charging.state.value == Charging.ChargingState.ERROR:
+                is_charging = False
+                charging_state_str = 'error'
+            else:
+                charging_state_str = str(charging.state.value.value) if hasattr(charging.state.value, 'value') else str(charging.state.value)
+        
+        # Check if plugged in via connector
+        is_plugged_in = None
+        connector = getattr(charging, 'connector', None)
+        if connector is not None:
+            connection_state = getattr(connector, 'connection_state', None)
+            if connection_state is not None and connection_state.value is not None:
+                from carconnectivity.charging_connector import ChargingConnector
+                if connection_state.value == ChargingConnector.ChargingConnectorConnectionState.CONNECTED:
+                    is_plugged_in = True
+                elif connection_state.value == ChargingConnector.ChargingConnectorConnectionState.DISCONNECTED:
+                    is_plugged_in = False
+        
+        # Get charging power
+        charging_power_kw = None
+        if charging.power is not None and charging.power.value is not None:
+            charging_power_kw = float(charging.power.value)
+        
+        # Get estimated completion time
+        remaining_time_minutes = None
+        if charging.estimated_date_reached is not None and charging.estimated_date_reached.value is not None:
+            from datetime import datetime, timezone
+            try:
+                estimated_date = charging.estimated_date_reached.value
+                now = datetime.now(timezone.utc)
+                if estimated_date > now:
+                    time_diff = estimated_date - now
+                    remaining_time_minutes = int(time_diff.total_seconds() / 60)
+            except Exception:
+                pass
+        
+        # Get target SOC and current SOC
+        target_soc_percent = None
+        settings = getattr(charging, 'settings', None)
+        if settings is not None:
+            target_level = getattr(settings, 'target_level', None)
+            if target_level is not None and target_level.value is not None:
+                target_soc_percent = int(target_level.value)
+        
+        current_soc_percent = None
+        battery = getattr(vehicle, 'battery', None)
+        if battery is not None:
+            level = getattr(battery, 'level', None)
+            if level is not None and level.value is not None:
+                current_soc_percent = float(level.value)
+        
+        # Get charge mode (if available)
+        charge_mode = None
+        # The charge mode might be in different locations depending on the vehicle
+        # This is a simplified implementation
+        
+        return ChargingModel(
+            is_charging=is_charging,
+            is_plugged_in=is_plugged_in,
+            charging_power_kw=charging_power_kw,
+            charging_state=charging_state_str,
+            remaining_time_minutes=remaining_time_minutes,
+            target_soc_percent=target_soc_percent,
+            current_soc_percent=current_soc_percent,
+            charge_mode=charge_mode
+        )
+    
+
+
+
+
     def get_doors_state(self, vehicle_id: str) -> Optional[DoorsModel]:
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
@@ -232,6 +327,12 @@ class CarConnectivityAdapter(AbstractAdapter):
             return None
         type_val = vehicle.type.value if vehicle.type is not None else None
         return type_val
+
+    def get_charging_state(self, vehicle_id: str) -> Optional[ChargingModel]:
+        vehicle = self._get_vehicle_for_vin(vehicle_id)
+        if vehicle is None:
+            return None
+        return self._get_charging_state(vehicle)
 
     def get_vehicle(self, vehicle_id: str) -> Optional[VehicleModel]:
         vehicle = self._get_vehicle_for_vin(vehicle_id)

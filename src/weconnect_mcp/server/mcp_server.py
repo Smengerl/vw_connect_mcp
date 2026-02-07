@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleListItem
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleListItem, ChargingModel
 from carconnectivity.vehicle import GenericVehicle
 
 from pydantic import BaseModel
@@ -117,6 +117,34 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         
         return {"vehicle_id": vehicle_id, "type": vehicle_type}
 
+    @mcp.tool()
+    def get_charging_state(vehicle_id: str) -> Dict[str, Any]:
+        """Get the current charging status of an electric or hybrid vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Detailed charging information including:
+            - is_charging: Whether the vehicle is currently charging
+            - is_plugged_in: Whether the charging cable is connected
+            - charging_power_kw: Current charging power in kilowatts
+            - charging_state: Current state (charging, ready, off, error)
+            - remaining_time_minutes: Estimated minutes until fully charged
+            - target_soc_percent: Target state of charge percentage
+            - current_soc_percent: Current battery level percentage
+            - charge_mode: Charging mode (manual, timer, etc.)
+            
+        Note: Only available for electric (BEV) and plug-in hybrid (PHEV) vehicles.
+        """
+        logger.info("get charging state for id=%s", vehicle_id)
+        charging_state = adapter.get_charging_state(vehicle_id)
+        if charging_state is None:
+            logger.warning("Vehicle '%s' not found or doesn't support charging", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't support charging"}
+        
+        return charging_state.model_dump()
+
     # Also keep resources for direct data access
     @mcp.resource("data://list_vehicles")
     def list_vehicles_resource() -> List[Dict[str, Any]]:
@@ -159,10 +187,16 @@ def get_server(adapter: AbstractAdapter) -> FastMCP:
             - get_vehicle_windows: Get window open/closed status
             - get_vehicle_tyres: Get tyre pressure and temperature
             - get_vehicle_type: Get the vehicle type (electric/BEV, combustion, hybrid)
+            - get_charging_state: Get detailed charging information for electric/hybrid vehicles
             
             Start by calling list_vehicles to see available vehicles. When referring to vehicles, 
             use their name if available (more user-friendly), but always use the VIN as the vehicle_id 
             parameter when calling other tools.
+            
+            For charging information, use get_charging_state to get details about:
+            - Whether the vehicle is currently charging
+            - Charging power and estimated completion time
+            - Battery level and target charge percentage
             
             All tools except list_vehicles require a vehicle_id parameter (which should be the VIN).
         """,

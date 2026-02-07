@@ -23,6 +23,17 @@ class BatteryModel(BaseModel):
     plugged_in: Optional[bool]
     charging_power: Optional[float]
 
+class ChargingModel(BaseModel):
+    """Detailed charging information for electric/hybrid vehicles"""
+    is_charging: Optional[bool] = None  # True if currently charging
+    is_plugged_in: Optional[bool] = None  # True if charging cable is connected
+    charging_power_kw: Optional[float] = None  # Current charging power in kW
+    charging_state: Optional[str] = None  # e.g., 'charging', 'complete', 'error', 'notReady'
+    remaining_time_minutes: Optional[int] = None  # Estimated time to full charge in minutes
+    target_soc_percent: Optional[int] = None  # Target state of charge percentage
+    current_soc_percent: Optional[float] = None  # Current state of charge percentage
+    charge_mode: Optional[str] = None  # e.g., 'manual', 'timer', 'preferredTime'
+
 class DoorModel(BaseModel):
     locked: Optional[bool]
     open: Optional[bool]
@@ -132,5 +143,14 @@ class AbstractAdapter(ABC):
         
         Returns the vehicle type as a string, e.g., 'electric', 'combustion', 'hybrid'.
         If the vehicle is not found, return None.
+        """
+        pass
+
+    @abstractmethod
+    def get_charging_state(self, vehicle_id: str) -> Optional[ChargingModel]:
+        """Return the charging state for the given vehicle_id.
+        
+        Returns detailed charging information if the vehicle supports it (BEV/PHEV).
+        If the vehicle is not found or doesn't support charging, return None.
         """
         pass

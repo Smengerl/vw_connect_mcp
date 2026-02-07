@@ -123,3 +123,34 @@ class TestAdapter(AbstractAdapter):
             if v.vin == vehicle_id:
                 return v.type
         return None
+
+    def get_charging_state(self, vehicle_id) -> Optional['ChargingModel']:
+        # Return mock charging state for electric vehicles
+        from weconnect_mcp.adapter.abstract_adapter import ChargingModel
+        for v in self.vehicles:
+            if v.vin == vehicle_id and v.type == 'electric':
+                # Mock: ID7 is charging, T7 is not
+                if 'ID7' in (v.name or ''):
+                    return ChargingModel(
+                        is_charging=True,
+                        is_plugged_in=True,
+                        charging_power_kw=11.0,
+                        charging_state='charging',
+                        remaining_time_minutes=45,
+                        target_soc_percent=90,
+                        current_soc_percent=77.0,
+                        charge_mode='manual'
+                    )
+                else:
+                    return ChargingModel(
+                        is_charging=False,
+                        is_plugged_in=False,
+                        charging_power_kw=0.0,
+                        charging_state='off',
+                        remaining_time_minutes=None,
+                        target_soc_percent=90,
+                        current_soc_percent=77.0,
+                        charge_mode='manual'
+                    )
+        return None
+
