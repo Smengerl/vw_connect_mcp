@@ -6,14 +6,38 @@ A developer-focused server that exposes information from VW vehicles via a Model
 
 ---
 
-## Features
+## Quick Start
 
-- **MCP Server**: Provides a standard MCP interface for accessing vehicle data.
-- **Volkswagen Integration**: Connects to VW vehicles using the `carconnectivity` library.
-- **Flexible CLI**: Multiple scripts and options for starting the server in different modes.
-- **Configurable**: Easily adapt connection and authentication settings via a config file.
+Get up and running in 3 steps:
+
+1. **Install**
+   ```bash
+   git clone <repo-url>
+   cd weconnect_mvp
+   ./scripts/setup.sh
+   ```
+
+2. **Configure**  
+   Edit `src/config.json` with your VW credentials (username, password, spin)
+
+3. **Use with Claude Desktop**
+   ```bash
+   ./scripts/get_claude_config.sh  # Copy output to Claude config
+   ```
+   Restart Claude Desktop and ask: *"What vehicles are available?"*
+
+For detailed instructions, see sections below.
 
 ---
+
+## Features
+
+- **MCP Server**: Provides a standard MCP interface for accessing vehicle data
+- **Volkswagen Integration**: Connects to VW vehicles using the `carconnectivity` library
+- **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, and other MCP-compatible tools
+- **Flexible CLI**: Multiple transport modes (stdio for AI, HTTP for API access)
+- **Configurable**: Easily adapt connection and authentication settings via config file
+
 
 ## Getting Started
 
@@ -43,9 +67,8 @@ A developer-focused server that exposes information from VW vehicles via a Model
 	./scripts/setup.sh
 	```
 
----
 
-## Configuration
+### Configuration
 
 The server requires a configuration file (default: `src/config.json`).  
 **You must edit this file to provide your VW credentials and adjust settings as needed.**
@@ -78,10 +101,13 @@ Example (`src/config.json`):
 **Do not commit your credentials!**  
 Copy and edit `src/config.json` as needed.
 
-
 ---
 
 ## Usage
+
+The server supports two transport modes:
+- **stdio**: For AI assistants (Claude Desktop, VS Code Copilot) - recommended for AI integration
+- **http**: For programmatic API access - use when building custom applications
 
 ### CLI Options
 
@@ -102,7 +128,7 @@ You can start the MCP server using the provided CLI scripts or directly via Pyth
 python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8765
 ```
 
-### 4. Stopping the Server
+#### 4. Stopping the Server
 
 If started in the background, stop the server using the script:
 ```bash
@@ -110,9 +136,9 @@ If started in the background, stop the server using the script:
 ```
 
 Alternatively, kill the process via PID.
----
 
-## CLI Parameters
+
+### CLI Parameters
 
 The MCP server can be started with several command-line parameters to control its behavior:
 
@@ -120,9 +146,9 @@ The MCP server can be started with several command-line parameters to control it
 |---------------------|-------------------------------------------|------------------------------------------------------------------|
 | `config`            | (required)                                | Path to the configuration file                                   |
 | `--tokenstorefile`  | `/tmp/tokenstore`                         | Path for the token store file                                    |
-| `--log-level`       | (none; uses default if not set)           | Set logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `--log-file`        | (stdout only)                             | Path to log file (if not set, logs to stdout only)               |
-| `--transport`       | `http`                                    | Transport mode: `http` or `stdio`                                |
+| `--log-level`       | `INFO`                                    | Set logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `--log-file`        | (stderr only)                             | Path to log file (if not set, logs to stderr only)              |
+| `--transport`       | `stdio`                                   | Transport mode: `stdio` (for AI) or `http` (for API)            |
 | `--port`            | `8667`                                    | Port for HTTP mode                                               |
 
 **Example:**
@@ -133,15 +159,35 @@ python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --l
 
 ---
 
----
-
 ## AI Integration
 
-This MCP server can be used with AI assistants like Claude Desktop, VS Code Copilot, and other MCP-compatible tools.
+This MCP server provides **5 tools** that AI assistants can use to interact with your VW vehicle:
 
-### Quick Start with Claude Desktop
+| Tool | Description |
+|------|-------------|
+| `list_vehicles` | Get all available vehicle IDs |
+| `get_vehicle_state` | Get complete vehicle state (battery, position, doors, windows, climate, tyres) |
+| `get_vehicle_doors` | Get door lock and open/closed status |
+| `get_vehicle_windows` | Get window open/closed status |
+| `get_vehicle_tyres` | Get tyre pressure and temperature |
 
-#### Step 1: Generate Configuration Automatically
+### What AI Assistants Can Do
+
+✅ List vehicles and recognize their IDs  
+✅ Intelligently interpret vehicle status  
+✅ Retrieve specific information (doors, windows, tyres)  
+✅ Answer natural questions like "Where is my car?"  
+✅ Combine multiple queries for complex answers  
+
+---
+
+### Claude Desktop Integration
+
+**Setup in 3 steps:**
+
+#### Step 1: Generate Configuration
+
+Interact with your VW car in Claude Desktop - here's how to set it up:
 
 Generate your configuration for Claude Desktop with the following script:
 
@@ -151,9 +197,9 @@ cd /path/to/weconnect_mvp
 ```
 
 The script will:
-- ✅ Automatically detect your Python path
-- ✅ Generate the complete configuration
-- ✅ Show you where to save it
+- Automatically detect your Python path
+- Generate the complete configuration
+- Show you where to save it
 
 #### Step 2: Copy Configuration
 
@@ -175,41 +221,51 @@ Copy the configuration output from the script to your Claude Desktop config file
    - "Are my doors locked?"
    - "How much battery does my car have?"
 
-### Available Tools for AI
+---
 
-The server provides these tools that AI assistants can use:
+#### Example Interactions
 
-- **list_vehicles** - Get all available vehicle IDs
-- **get_vehicle_state** - Get complete vehicle state (battery, position, doors, windows, climate, tyres)
-- **get_vehicle_doors** - Get door lock and open/closed status
-- **get_vehicle_windows** - Get window open/closed status  
-- **get_vehicle_tyres** - Get tyre pressure and temperature
+**You**: "List all my vehicles"  
+**Claude** uses the `list_vehicles` tool and shows the results
 
-### What AI Assistants Can Do
+**You**: "What's the status of my car?"  
+**Claude** first uses `list_vehicles` to get the vehicle ID, then `get_vehicle_state` for details
 
-✅ List vehicles and recognize their IDs  
-✅ Intelligently interpret vehicle status  
-✅ Retrieve specific information (doors, windows, tyres)  
-✅ Answer natural questions like "Where is my car?"  
-✅ Combine multiple queries for complex answers  
+**You**: "Are my windows closed?"  
+**Claude** uses `get_vehicle_windows` and interprets the results
 
-### Troubleshooting AI Integration
+---
 
-#### Common Problems:
+#### Setup Checklist
 
-**1. "Failed to spawn process: No such file or directory"**
+- [ ] Virtual environment activated and dependencies installed
+- [ ] `src/config.json` configured with valid VW credentials
+- [ ] Python path in Claude config correct (full path to `.venv/bin/python`)
+- [ ] `PYTHONPATH` set in Claude config
+- [ ] Claude Desktop completely restarted
+- [ ] In case of problems: Logs enabled and checked
+- [ ] Token store directory is writable (`/tmp/`)
+
+---
+
+#### Known Limitations
+
+1. **First start takes time:** VW API login can take 10-30 seconds
+2. **VW API rate limiting:** Too many requests may be blocked
+3. **Token expiration:** After a few hours, re-authentication is required
+4. **Read-only access:** Currently only data retrieval is possible, no control (opening doors, starting climate control, etc.)
+
+---
+
+#### Troubleshooting 
+
+**"Failed to spawn process: No such file or directory"**
 
 - **Cause:** Claude Desktop cannot find the Python command
 - **Solution:** Use full Python path from your venv (the script handles this automatically)
 - **Helper script:** `./scripts/get_claude_config.sh`
 
-**2. "Unexpected non-whitespace character after JSON"**
-
-- **Cause:** Log outputs interfere with JSON-RPC communication over stdio
-- **Solution:** ✅ Already fixed! All logs are now directed to stderr
-- **If it persists:** Check for `print()` statements or third-party library outputs
-
-**3. "TemporaryAuthenticationError: Token could not be fetched"**
+**"TemporaryAuthenticationError: Token could not be fetched"**
 
 - **Cause:** VW WeConnect server temporarily unavailable, incorrect credentials, or account issues
 - **Solutions:**
@@ -218,13 +274,7 @@ The server provides these tools that AI assistants can use:
   3. Delete token store: `rm /tmp/tokenstore` and restart
   4. Test VW WeConnect app to ensure account is working
 
-**4. DeprecationWarning about datetime.utcnow()**
-
-- **Cause:** The carconnectivity library uses deprecated Python functions
-- **Solution:** This warning is harmless and can be ignored
-- **Suppress (optional):** Add `"PYTHONWARNINGS": "ignore::DeprecationWarning"` to env in config
-
-**5. Server starts but tools are not displayed**
+**Server starts but tools are not displayed**
 
 - **Diagnosis:** Check Claude Desktop logs (Help → View Logs) for `"tools":[...]`
 - **Solutions:**
@@ -232,15 +282,7 @@ The server provides these tools that AI assistants can use:
   - Completely restart Claude Desktop (not just close window)
   - Clear cache (uninstall and reinstall Claude Desktop)
 
-**6. Server running but no vehicles found**
-
-- **Symptom:** `list_vehicles` returns empty list
-- **Causes:**
-  1. Authentication failed (see problem 3)
-  2. No vehicles in VW account
-  3. API problems (check logs)
-
-**7. Server not responding / Timeout**
+**Server not responding / Timeout**
 
 - **Cause:** First request after server start can take 10-30 seconds (VW API login)
 - **Solutions:**
@@ -248,7 +290,7 @@ The server provides these tools that AI assistants can use:
   - Use token store to avoid re-login
   - Check network (VPN can cause problems)
 
-#### Enable Debug Logs
+**Enable Debug Logs**
 
 If problems occur, add logging parameters to your Claude config:
 
@@ -276,83 +318,22 @@ tail -f /tmp/weconnect_mcp.log
 
 You can also check Claude Desktop logs via: **Help → View Logs** (search for "weconnect")
 
-#### Logging Configuration
+---
 
-**Recommended Production Configuration (minimal logs):**
+### VS Code Copilot Integration
 
-```json
-{
-  "mcpServers": {
-    "weconnect": {
-      "command": "/path/to/weconnect_mvp/.venv/bin/python",
-      "args": [
-        "-m",
-        "weconnect_mcp.cli.mcp_server_cli",
-        "/path/to/config.json"
-      ],
-      "cwd": "/path/to/weconnect_mvp",
-      "env": {
-        "PYTHONPATH": "/path/to/weconnect_mvp/src"
-      }
-    }
-  }
-}
-```
-
-**Debug Configuration (verbose logs):**
-
-```json
-{
-  "mcpServers": {
-    "weconnect": {
-      "command": "/path/to/weconnect_mvp/.venv/bin/python",
-      "args": [
-        "-m",
-        "weconnect_mcp.cli.mcp_server_cli",
-        "/path/to/config.json",
-        "--log-level", "debug",
-        "--log-file", "/tmp/weconnect_mcp.log"
-      ],
-      "cwd": "/path/to/weconnect_mvp",
-      "env": {
-        "PYTHONPATH": "/path/to/weconnect_mvp/src"
-      }
-    }
-  }
-}
-```
-
-#### Setup Checklist
-
-- [ ] Virtual environment activated and dependencies installed
-- [ ] `src/config.json` configured with valid VW credentials
-- [ ] Python path in Claude config correct (full path to `.venv/bin/python`)
-- [ ] `PYTHONPATH` set in Claude config
-- [ ] Claude Desktop completely restarted
-- [ ] In case of problems: Logs enabled and checked
-- [ ] Token store directory is writable (`/tmp/`)
-
-#### Known Limitations
-
-1. **First start takes time:** VW API login can take 10-30 seconds
-2. **VW API rate limiting:** Too many requests may be blocked
-3. **Token expiration:** After a few hours, re-authentication is required
-4. **Read-only access:** Currently only data retrieval is possible, no control (opening doors, starting climate control, etc.)
-
-### Integration with VS Code Copilot
-
-For VS Code with GitHub Copilot you can also use the server:
+For VS Code with GitHub Copilot:
 
 1. Install the MCP extension for VS Code (if available)
 2. Configure the server in VS Code settings under `mcp.servers`
 
-### Integration with Other AI Tools
+---
 
-The server uses the standard MCP protocol and should work with all MCP-compatible tools.
+### Other AI Tools (Cline)
 
-#### Cline (VS Code Extension)
+The server uses the standard MCP protocol and works with all MCP-compatible tools.
 
-Configuration in `.vscode/cline_mcp_settings.json`:
+**Cline (VS Code Extension)** - Configuration in `.vscode/cline_mcp_settings.json`:
 
 ```json
 {
@@ -372,6 +353,8 @@ Configuration in `.vscode/cline_mcp_settings.json`:
 }
 ```
 
+---
+
 ### HTTP Mode for API Access
 
 You can also start the server in HTTP mode for programmatic access:
@@ -385,44 +368,6 @@ python -m weconnect_mcp.cli.mcp_server_cli \
 
 The server will then be available at `http://localhost:8765`.
 
-### Example AI Interactions
-
-#### With Claude Desktop:
-
-**You**: "List all my vehicles"  
-**Claude** uses the `list_vehicles` tool and shows the results
-
----
-
-**You**: "What's the status of my car?"  
-**Claude** first uses `list_vehicles` to get the vehicle ID, then `get_vehicle_state` for details
-
----
-
-**You**: "Are my windows closed?"  
-**Claude** uses `get_vehicle_windows` and interprets the results
-
-### Additional Resources
-
-For more information:
-- [MCP Specification](https://spec.modelcontextprotocol.io/)
-- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
-- [Carconnectivity Library](https://github.com/tillsteinbach/CarConnectivity)
-
-**Helper Tools:**
-- **Config Generator:** `./scripts/get_claude_config.sh` - Generates correct configuration
-- **Test Script:** `./scripts/test_ai_integration.py` - Test AI integration locally
-- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
-- [Carconnectivity Library](https://github.com/tillsteinbach/CarConnectivity)
-
-### Important Security Notes
-
-⚠️ **Never** commit `config.json` with your VW credentials!  
-⚠️ Add `src/config.json` to `.gitignore` if not already done  
-⚠️ The token store (default: `/tmp/tokenstore`) contains session tokens - keep it secure  
-⚠️ Use environment variables for sensitive data in production  
-⚠️ HTTP mode should only be used in trusted networks  
-⚠️ Consider additional authentication for production deployments
 
 ---
 
@@ -441,9 +386,19 @@ pytest ./tests/test_mcp_server.py --verbose --asyncio-mode=auto
 
 ## Development Notes
 
-- The main package source is under `src/`.
-- For development, always use a virtual environment and install in editable mode.
-- The CLI scripts activate the virtual environment automatically.
+- For development, always use a virtual environment and install in editable mode
+- The CLI scripts activate the virtual environment automatically
+- Main package source is under `src/`
+
+### Security Best Practices
+
+⚠️ **Never** commit `config.json` with your VW credentials!  
+⚠️ Add `src/config.json` to `.gitignore` if not already done  
+⚠️ The token store (default: `/tmp/tokenstore`) contains session tokens - keep it secure  
+⚠️ Use environment variables for sensitive data in production  
+⚠️ HTTP mode should only be used in trusted networks  
+⚠️ Consider additional authentication for production deployments
+
 
 ---
 
@@ -459,3 +414,8 @@ This project is licensed under the terms of the MIT License. See `LICENSE.txt` f
 
 ---
 
+## Additional Resources
+
+- [MCP Specification](https://spec.modelcontextprotocol.io/)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [Carconnectivity Library](https://github.com/tillsteinbach/CarConnectivity)
