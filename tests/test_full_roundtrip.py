@@ -2,45 +2,21 @@ import pytest
 import json
 from src.weconnect_mcp.server.mcp_server import get_server
 from fastmcp import Client
-from typing import Any
-import logging
 from src.weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
 import asyncio
-import contextlib
 from pathlib import Path
 from collections.abc import AsyncIterator
 
+import logging
 logger = logging.getLogger(__name__)
 
+from tests.test_carconnectivity_adapter import config_path, tokenstore_file, adapter
 
-@pytest.fixture(scope="module")
-def config_path() -> Path:
-    current_dir = Path(__file__).resolve().parent
-    return (current_dir / "../src/config.json").resolve()
-
-
-@pytest.fixture(scope="module")
-def tokenstore_file() -> Path:
-    current_dir = Path(__file__).resolve().parent
-    return (current_dir / "../tmp/tokenstore").resolve()
-
-
-@pytest.fixture(scope="module")
-async def adapter(
-    config_path: Path,
-    tokenstore_file: Path,
-) -> AsyncIterator[CarConnectivityAdapter]:
-    logger.debug("1/7 Entering adapter fixture")
-    async with CarConnectivityAdapter(
-        config_path.as_posix(),
-        tokenstore_file.as_posix(),
-    ) as adapter:
-        yield adapter
-    logger.debug("7/7 Exiting adapter fixture")
 
 
 @pytest.fixture(scope="module")
 async def mcp_server(config_path: Path, adapter: CarConnectivityAdapter):
+    """ Provides a MCP server instance for testing. Long lived, so module scope. """
     logger.debug("2/7 Entering server fixture")
     server = get_server(adapter)
     finished = asyncio.Event()
@@ -65,10 +41,13 @@ async def mcp_server(config_path: Path, adapter: CarConnectivityAdapter):
 
 @pytest.fixture(scope="function")
 async def mcp_client(mcp_server):
+    """ Provides a MCP client instance for testing. Restarted as per function under test, so function scope. """
     logger.debug("3/7 Entering mcp_client fixture")
     async with Client(mcp_server) as mcp_client:
         yield mcp_client
     logger.debug("4/7 Exiting mcp_client fixture")
+
+
 
 
 
