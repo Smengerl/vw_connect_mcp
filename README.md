@@ -375,13 +375,26 @@ The server will then be available at `http://localhost:8765`.
 ## Testing
 
 Run the test suite with:
+
 ```bash
-./scripts/tests.sh
+# Run all tests (including slow real API tests)
+./scripts/test.sh
+
+# Run only fast mock tests (skip real API tests - recommended for CI/CD)
+./scripts/test.sh --skip-slow
+
+# Run with verbose output
+./scripts/test.sh --skip-slow -v
+
+# Show help
+./scripts/test.sh --help
 ```
-or
-```bash
-pytest ./tests/test_mcp_server.py --verbose --asyncio-mode=auto
-```
+
+**Test Structure:**
+- **197 fast mock tests** - Run in ~4 seconds, no VW credentials needed
+- **18 slow real API tests** - Require valid VW account in `src/config.json`
+
+For detailed test documentation, see [tests/README.md](tests/README.md)
 
 ---
 
