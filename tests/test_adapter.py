@@ -49,6 +49,7 @@ class TestAdapter(AbstractAdapter):
         manufacturer='Volkswagen',
         model='Transporter 7',
         name='T7',
+        license_plate='M-AB 1234',
         state='parked',
         vin='WV2ZZZSTZNH009136',
         type='combustion',
@@ -61,6 +62,7 @@ class TestAdapter(AbstractAdapter):
         manufacturer='Volkswagen',
         model='ID.7 Tourer',
         name='ID7',
+        license_plate='M-XY 5678',
         state='parked',
         vin='WVWZZZED4SE003938',
         type='electric',
@@ -111,6 +113,7 @@ class TestAdapter(AbstractAdapter):
                         vin=v.vin,
                         model=v.model,
                         name=v.name,
+                        license_plate=v.license_plate,
                         manufacturer=v.manufacturer,
                         type=v.type,
                     )

@@ -133,6 +133,7 @@ class VehicleModel(BaseModel):
     vin: Optional[str] # only mandatory field
     model: Optional[str] = None
     name: Optional[str] = None
+    license_plate: Optional[str] = None
     odometer: Optional[float] = None
     manufacturer: Optional[str] = None
     state: Optional[str] = None
