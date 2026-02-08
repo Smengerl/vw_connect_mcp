@@ -71,7 +71,7 @@ def test_config_json_is_valid(config_path):
 @pytest.mark.timeout(10)
 async def test_mcp_list_vehicles(real_mcp_client):
     """ Tests that the MCP client can list vehicles via the server. """
-    result = await real_mcp_client.read_resource("data://list_vehicles")
+    result = await real_mcp_client.read_resource("data://vehicles")
     logger.debug(f"Resource read: {result}")
     assert result is not None, "Result from read_resource should not be None"
     assert result.__len__() == 1, f"Expected 1 result, got {result.__len__()}"
@@ -89,7 +89,7 @@ async def test_mcp_list_vehicles(real_mcp_client):
         vin = vehicle_info["vin"]
         logger.debug(f"Reading details for vehicle: {vin}")
 
-        result = await real_mcp_client.read_resource(f"data://state/{vin}")
+        result = await real_mcp_client.read_resource(f"data://vehicle/{vin}/state")
         assert result is not None, f"Result for vehicle {vin} should not be None"
         assert result.__len__() == 1, f"Expected 1 result for vehicle {vin}, got {result.__len__()}"
         assert hasattr(result[0], "text"), f"Result[0] for vehicle {vin} should have attribute 'text'"

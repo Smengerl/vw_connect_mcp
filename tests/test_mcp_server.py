@@ -51,14 +51,13 @@ async def test_mcp_client_connects(mcp_client):
 async def test_mcp_get_climatization_state(mcp_client):
     """Test that the MCP client can get climatization state via the server."""
     # Test with ID7 (should have active heating)
-    result = await mcp_client.call_tool("get_climatization_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/climate")
     logger.debug(f"Climatization state result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    climatization = result.content[0].text
+    climatization = result[0].text
     logger.debug(f"Climatization data: {climatization}")
     
     climatization_dict = json.loads(climatization)
@@ -72,14 +71,13 @@ async def test_mcp_get_climatization_state(mcp_client):
 async def test_mcp_get_maintenance_info(mcp_client):
     """Test that the MCP client can get maintenance info via the server."""
     # Test with T7 (combustion vehicle with oil service)
-    result = await mcp_client.call_tool("get_maintenance_info", arguments={"vehicle_id": "WV2ZZZSTZNH009136"})
+    result = await mcp_client.read_resource("data://vehicle/WV2ZZZSTZNH009136/maintenance")
     logger.debug(f"Maintenance info result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    maintenance = result.content[0].text
+    maintenance = result[0].text
     logger.debug(f"Maintenance data: {maintenance}")
     
     maintenance_dict = json.loads(maintenance)
@@ -94,14 +92,13 @@ async def test_mcp_get_maintenance_info(mcp_client):
 async def test_mcp_get_range_info(mcp_client):
     """Test that the MCP client can get range info via the server."""
     # Test with ID7 (electric vehicle)
-    result = await mcp_client.call_tool("get_range_info", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/range")
     logger.debug(f"Range info result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    range_info = result.content[0].text
+    range_info = result[0].text
     logger.debug(f"Range data: {range_info}")
     
     range_dict = json.loads(range_info)
@@ -118,14 +115,13 @@ async def test_mcp_get_range_info(mcp_client):
 async def test_mcp_get_window_heating_state(mcp_client):
     """Test that the MCP client can get window heating state via the server."""
     # Test with ID7 (should have both heaters on)
-    result = await mcp_client.call_tool("get_window_heating_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/window-heating")
     logger.debug(f"Window heating result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    window_heating = result.content[0].text
+    window_heating = result[0].text
     logger.debug(f"Window heating data: {window_heating}")
     
     window_heating_dict = json.loads(window_heating)
@@ -138,14 +134,13 @@ async def test_mcp_get_window_heating_state(mcp_client):
 async def test_mcp_get_lights_state(mcp_client):
     """Test that the MCP client can get lights state via the server."""
     # Test with ID7
-    result = await mcp_client.call_tool("get_lights_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/lights")
     logger.debug(f"Lights result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    lights = result.content[0].text
+    lights = result[0].text
     logger.debug(f"Lights data: {lights}")
     
     lights_dict = json.loads(lights)
@@ -158,14 +153,13 @@ async def test_mcp_get_lights_state(mcp_client):
 async def test_mcp_get_position(mcp_client):
     """Test that the MCP client can get vehicle position via the server."""
     # Test with ID7 (Munich position)
-    result = await mcp_client.call_tool("get_position", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/position")
     logger.debug(f"Position result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    position = result.content[0].text
+    position = result[0].text
     logger.debug(f"Position data: {position}")
     
     position_dict = json.loads(position)
@@ -181,14 +175,13 @@ async def test_mcp_get_position(mcp_client):
 async def test_mcp_get_battery_status(mcp_client):
     """Test that the MCP client can get battery status via the server."""
     # Test with ID7 (electric vehicle)
-    result = await mcp_client.call_tool("get_battery_status", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.read_resource("data://vehicle/WVWZZZED4SE003938/battery")
     logger.debug(f"Battery status result: {result}")
     
     assert result is not None
-    assert isinstance(result.content, list)
-    assert len(result.content) > 0
+    assert len(result) > 0
     
-    battery = result.content[0].text
+    battery = result[0].text
     logger.debug(f"Battery data: {battery}")
     
     battery_dict = json.loads(battery)
