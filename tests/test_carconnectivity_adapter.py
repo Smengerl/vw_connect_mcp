@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 def test_adapter_list_vehicles(real_adapter: CarConnectivityAdapter):
     """Test that list_vehicles returns valid vehicle data"""
-    vehicles = adapter.list_vehicles()
+    vehicles = real_adapter.list_vehicles()
     
     assert isinstance(vehicles, list)
     from weconnect_mcp.adapter.abstract_adapter import VehicleListItem
@@ -55,11 +55,11 @@ def test_adapter_list_vehicles(real_adapter: CarConnectivityAdapter):
 
 def test_adapter_get_vehicle_basic_info(real_adapter: CarConnectivityAdapter):    
     """Test getting basic vehicle information for all vehicles"""
-    vehicles = adapter.list_vehicles()
+    vehicles = real_adapter.list_vehicles()
     
     for vehicle_info in vehicles:
         vin = vehicle_info.vin
-        vehicle = adapter.get_vehicle(vin, details=VehicleDetailLevel.BASIC)
+        vehicle = real_adapter.get_vehicle(vin, details=VehicleDetailLevel.BASIC)
         
         assert isinstance(vehicle, VehicleModel)
         assert vehicle.vin == vin
@@ -71,11 +71,11 @@ def test_adapter_get_vehicle_basic_info(real_adapter: CarConnectivityAdapter):
 
 def test_adapter_get_vehicle_full_info(real_adapter: CarConnectivityAdapter):
     """Test getting full vehicle information including state and software"""
-    vehicles = adapter.list_vehicles()
+    vehicles = real_adapter.list_vehicles()
     
     for vehicle_info in vehicles:
         vin = vehicle_info.vin
-        vehicle = adapter.get_vehicle(vin, details=VehicleDetailLevel.FULL)
+        vehicle = real_adapter.get_vehicle(vin, details=VehicleDetailLevel.FULL)
         
         assert isinstance(vehicle, VehicleModel)
         assert vehicle.vin == vin
@@ -90,7 +90,7 @@ def test_adapter_get_vehicle_full_info(real_adapter: CarConnectivityAdapter):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_physical_status_doors(real_adapter, vin):
     """Test getting door status via get_physical_status"""
-    status = adapter.get_physical_status(vin, components=["doors"])
+    status = real_adapter.get_physical_status(vin, components=["doors"])
     
     assert status is not None
     assert status.doors is not None
@@ -107,7 +107,7 @@ async def test_get_physical_status_doors(real_adapter, vin):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_physical_status_windows(real_adapter, vin):
     """Test getting window status via get_physical_status"""
-    status = adapter.get_physical_status(vin, components=["windows"])
+    status = real_adapter.get_physical_status(vin, components=["windows"])
     
     assert status is not None
     assert status.windows is not None
@@ -121,7 +121,7 @@ async def test_get_physical_status_windows(real_adapter, vin):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_physical_status_tyres(real_adapter, vin):
     """Test getting tyre status via get_physical_status"""
-    status = adapter.get_physical_status(vin, components=["tyres"])
+    status = real_adapter.get_physical_status(vin, components=["tyres"])
     
     # Note: Tyre data may not always be available from VW API
     if status is not None and status.tyres is not None:
@@ -134,7 +134,7 @@ async def test_get_physical_status_tyres(real_adapter, vin):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_physical_status_all_components(real_adapter, vin):
     """Test getting all physical components at once"""
-    status = adapter.get_physical_status(vin)
+    status = real_adapter.get_physical_status(vin)
     
     assert status is not None
     assert status.doors is not None
@@ -146,7 +146,7 @@ async def test_get_physical_status_all_components(real_adapter, vin):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_energy_status(real_adapter, vin):
     """Test getting energy status for electric vehicle"""
-    energy = adapter.get_energy_status(vin)
+    energy = real_adapter.get_energy_status(vin)
     
     assert energy is not None
     assert energy.vehicle_type is not None
@@ -162,7 +162,7 @@ async def test_get_energy_status(real_adapter, vin):
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
 async def test_get_climate_status(real_adapter, vin):
     """Test getting climate status"""
-    climate = adapter.get_climate_status(vin)
+    climate = real_adapter.get_climate_status(vin)
     
     assert climate is not None
     assert climate.climatization is not None
