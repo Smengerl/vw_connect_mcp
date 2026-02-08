@@ -1,708 +1,473 @@
-# AI Instructions for WeConnect MCP Server# AI Instructions for WeConnect MCP Server# AI Instructions for WeConnect MCP Ser## AVAILABLE RESOURCES (Read-Only Data)
+# AI Instructions for WeConnect MCP Server
 
+**Purpose**: Access Volkswagen WeConnect vehicle data and control via Model Context Protocol (MCP)
 
+**Key Features**:
+- Read vehicle data (battery, doors, climate, position, etc.)
+- Control vehicle remotely (lock, climate, charging, lights)
+- Automatic caching (5 minutes) to respect VW API rate limits
+- Support for BEV (electric), PHEV (hybrid), and combustion vehicles
 
-Volkswagen WeConnect vehicle data access via MCP.
+**Critical Limitation** ⚠️:
+As of February 2026, the VW WeConnect API does **NOT** provide license plate information. This is a Volkswagen API limitation, not a limitation of this server. All vehicles return `license_plate: null`. You cannot search or filter by license plate.
 
+---
 
+## Quick Start Guide (for AI Assistants)
 
-## ⚠️ IMPORTANT: VW API LIMITATION - LICENSE PLATESVolkswagen WeConnect vehicle data access via MCP.All resources are cached server-side for 5 minutes to avoid VW API rate limits. Cache is automatically invalidated after any control command.
+### 1. Discover Available Vehicles
+**Always start here!** Call `get_vehicles()` to see what vehicles are available.
 
+```python
+# First command in any conversation about vehicles
+get_vehicles()
+# Returns: [{"vin": "WVWZZZ...", "name": "Golf", "model": "Golf 8", "license_plate": null}, ...]
+```
 
+### 2. Identify Vehicles
+Use either:
+- **Vehicle name** (preferred): `"Golf"`, `"ID.7"`, `"T7"` - easier for humans to read
+- **VIN**: `"WVWZZZAUZPW123456"` - unique identifier
 
-**As of February 2026, the VW WeConnect API does NOT provide license plate information.**
+Both formats work automatically. The system resolves them internally.
 
+### 3. Read Vehicle Data
+Use the `get_*` tools to access cached vehicle data.
 
+### 4. Control Vehicle
+Use the command tools (`lock_*`, `start_*`, `stop_*`) to control the vehicle. These automatically invalidate the cache.
 
-This is a current limitation of Volkswagen's official API, not a limitation of this MCP server or the carconnectivity library. The API returns `null`/`None` for the `license_plate` field for all vehicles, regardless of whether a license plate is registered in the VW account.## IMPORTANT: HOW TO ACCESS DATA**Access method**: Use MCP `resources/read` operation with the resource URI below.
+---
+---
 
+## Available Tools (Complete Reference)
 
+All tools return JSON data. Data is cached for 5 minutes. Cache auto-refreshes after control commands.
 
-**What this means:**
+### Discovery & Basic Info
 
-- `get_vehicles()` will return `license_plate: null` for all vehicles
+**`get_vehicles()`**
+- **Purpose**: List all available vehicles
+- **Returns**: Array of vehicles with VIN, name, model (license_plate always null)
+- **When to use**: Always use this first to discover what vehicles exist
+- **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "Golf", "model": "Golf 8", "license_plate": null}]`
 
-- You cannot search or filter vehicles by license plate**All vehicle data is available through TOOLS.**### Vehicle List
+**`get_vehicle_info(vehicle_id)`**
+- **Purpose**: Get basic vehicle information
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: Manufacturer, model, software version, year, odometer, connection state
+- **Example**: `get_vehicle_info("Golf")` → `{"model": "Golf 8", "odometer": 15432, ...}`
 
-- License plates shown in test data are for demonstration purposes only
-
-- This may change if VW updates their API in the future
-
-
-
-## IMPORTANT: HOW TO ACCESS DATAUse these tools to read vehicle data:- **URI**: `data://vehicles`
-
-
-
-**All vehicle data is available through TOOLS.**- `get_vehicles()` - List all available vehicles (start here!)- **Description**: List all vehicles with VIN, name, model, and license plate
-
-
-
-Use these tools to read vehicle data:- `get_vehicle_info(vehicle_id)` - Basic vehicle information- **Parameters**: None
-
-- `get_vehicles()` - List all available vehicles (start here!)
-
-- `get_vehicle_info(vehicle_id)` - Basic vehicle information- `get_vehicle_state(vehicle_id)` - Complete vehicle state snapshot- **Example**: `resources/read("data://vehicles")`
-
-- `get_vehicle_state(vehicle_id)` - Complete vehicle state snapshot
-
-- `get_battery_status(vehicle_id)` - Battery status (BEV/PHEV only)- `get_battery_status(vehicle_id)` - Battery status (BEV/PHEV only)
-
-- `get_charging_status(vehicle_id)` - Detailed charging info (BEV/PHEV only)
-
-- `get_climate_status(vehicle_id)` - Climate control status- `get_charging_status(vehicle_id)` - Detailed charging info (BEV/PHEV only)### Vehicle Information
-
-- `get_vehicle_doors(vehicle_id)` - Door lock/open status
-
-- `get_vehicle_position(vehicle_id)` - GPS coordinates and heading- `get_climate_status(vehicle_id)` - Climate control status
-
-
-
-## ARCHITECTURE- `get_vehicle_doors(vehicle_id)` - Door lock/open status- **URI**: `data://vehicle/{vehicle_id}/info`
-
-
-
-This server provides:- `get_vehicle_position(vehicle_id)` - GPS coordinates and heading- **Description**: Basic info (manufacturer, model, software version, year, odometer, connection state)
-
-- **Read Tools**: Access vehicle data (cached server-side for 5 minutes to respect VW API rate limits)
-
-- **Control Tools**: Vehicle control commands (write operations that invalidate cache)- **Parameters**: `vehicle_id` - Vehicle name, VIN, or license plate
-
-
-
-## WORKFLOW## ARCHITECTURE- **Example**: `resources/read("data://vehicle/Golf/info")`
-
-
-
-1. **List vehicles first**: Call `get_vehicles()` to discover available vehicles
-
-2. Identify vehicles by **name or VIN** in subsequent tool calls (NOT license plate - see limitation above)
-
-3. Use read tools (get_*) for reading dataThis server provides:- **URI**: `data://vehicle/{vehicle_id}/state`
-
-4. Use control tools (start_*/stop_*/lock_*/unlock_*) for vehicle control
-
-- **Read Tools**: Access vehicle data (cached server-side for 5 minutes to respect VW API rate limits)- **Description**: Complete state snapshot (all systems combined)
-
-## VEHICLE IDENTIFICATION
-
-- **Control Tools**: Vehicle control commands (write operations that invalidate cache)
-
-- **Preferred**: Use vehicle name (e.g., "Golf", "ID.7", "T7")
-
-- **Alternative**: VIN (e.g., "WVWZZZED4SE003938")- **URI**: `data://vehicle/{vehicle_id}/type`
-
-- **NOT AVAILABLE**: License plate (VW API does not provide this data)
-
-- **System automatically resolves both name and VIN formats**## WORKFLOW- **Description**: Vehicle type (electric/BEV, combustion, hybrid/PHEV)en WeConnect vehicle data access via MCP.
-
-
-
-## AVAILABLE READ TOOLS
-
-
-
-All read tools return JSON data. Data is cached server-side for 5 minutes. Cache is automatically invalidated after any control command.1. **List vehicles first**: Call `get_vehicles()` to discover available vehicles## ARCHITECTURE
-
-
-
-### Discovery & Overview2. Identify vehicles by name (preferred), VIN, or license plate in subsequent tool calls
-
-
-
-**`get_vehicles()`**3. Use read tools (get_*) for reading dataThis server provides:
-
-- Returns: List of all vehicles with VIN, name, model (license_plate will be null)
-
-- Example: `get_vehicles()`4. Use control tools (start_*/stop_*/lock_*/unlock_*) for vehicle control- **Resources**: Read-only data access (cached server-side for 5 minutes to respect VW API rate limits)
-
-- Use this first to discover available vehicles
-
-- Note: license_plate field will always be null due to VW API limitation  - Use `resources/read` with the resource URI to access data
-
-
-
-**`get_vehicle_info(vehicle_id)`**## VEHICLE IDENTIFICATION  - Resource URIs use the format `data://vehicles` or `data://vehicle/{vehicle_id}/...`
-
-- Returns: Basic info (manufacturer, model, software version, year, odometer, connection state)
-
-- Example: `get_vehicle_info("Golf")`- **Tools**: Vehicle control commands (write operations that invalidate cache)
-
-
-
-**`get_vehicle_state(vehicle_id)`**- **Preferred**: Use vehicle name (e.g., "Golf", "ID.7")
-
-- Returns: Complete state snapshot (all systems combined)
-
-- Example: `get_vehicle_state("Golf")`- **Alternative**: VIN or license plate## WORKFLOW
-
-- Use for comprehensive overview
-
-- **System automatically resolves all three formats**
+**`get_vehicle_state(vehicle_id)`**
+- **Purpose**: Complete state snapshot (all systems combined)
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: Comprehensive overview of all vehicle systems
+- **When to use**: When you need everything at once, or user asks for "full status"
+- **Example**: `get_vehicle_state("Golf")` → `{doors: {...}, windows: {...}, battery: {...}, ...}`
 
 ### Physical Components
 
-1. **List vehicles first**: Use `resources/read` with URI `data://vehicles` to discover available vehicles
-
 **`get_vehicle_doors(vehicle_id)`**
-
-- Returns: Lock status and open/closed state for all doors## AVAILABLE READ TOOLS2. Identify vehicles by name (preferred), VIN, or license plate in all subsequent calls
-
-- Example: `get_vehicle_doors("Golf")`
-
-3. Use `resources/read` with appropriate URIs for reading data
+- **Purpose**: Door lock and open/closed status
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: Lock state (locked/unlocked) and open state for each door
+- **Example**: `get_vehicle_doors("Golf")` → `{"lock_state": "locked", "front_left": {"open": false, "locked": true}, ...}`
 
 ### Energy & Range
 
-All read tools return JSON data. Data is cached server-side for 5 minutes. Cache is automatically invalidated after any control command.4. Use tools for controlling the vehicle
-
 **`get_battery_status(vehicle_id)`**
-
-- Returns: Battery level, electric range, charging status
-
-- Vehicle types: BEV/PHEV only
-
-- Example: `get_battery_status("ID.7")`### Discovery & Overview## HOW TO USE RESOURCES
-
-- Use for quick battery check
-
-
+- **Purpose**: Quick battery check for electric vehicles
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Vehicle types**: BEV/PHEV only (returns error for combustion)
+- **Returns**: Battery level (%), electric range (km), charging status
+- **When to use**: Quick check before departure, or user asks "how much charge?"
+- **Example**: `get_battery_status("ID.7")` → `{"battery_level_percent": 85, "range_km": 320, "is_charging": false}`
 
 **`get_charging_status(vehicle_id)`**
-
-- Returns: Detailed charging info (power, remaining time, cable status, target SOC)**`get_vehicles()`**Resources provide read-only data access through the MCP protocol. To access a resource:
-
-- Vehicle types: BEV/PHEV only
-
-- Example: `get_charging_status("ID.7")`- Returns: List of all vehicles with VIN, name, model, and license plate
-
-- Use for detailed charging analysis
-
-- Example: `get_vehicles()`**Method**: Use the MCP `resources/read` operation with the resource URI
+- **Purpose**: Detailed charging analysis
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Vehicle types**: BEV/PHEV only
+- **Returns**: Power (kW), remaining time, cable status, target SOC, charging state
+- **When to use**: User asks about charging details, or monitoring active charging session
+- **Example**: `get_charging_status("ID.7")` → `{"is_charging": true, "charging_power_kw": 11.0, "remaining_time_minutes": 45, ...}`
 
 ### Climate & Comfort
 
-- Use this first to discover available vehicles
-
 **`get_climate_status(vehicle_id)`**
+- **Purpose**: Climate control system status
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: State (off/heating/cooling/ventilation), target temperature, estimated time
+- **Example**: `get_climate_status("Golf")` → `{"state": "heating", "target_temperature_celsius": 22.0, "is_active": true, ...}`
 
-- Returns: Climate control state, target temperature, estimated time**Example URIs**:
+### Location
 
-- States: off, heating, cooling, ventilation
+**`get_vehicle_position(vehicle_id)`**
+- **Purpose**: GPS location and heading
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: Latitude, longitude, heading (0°=North, 90°=East, 180°=South, 270°=West)
+- **Example**: `get_vehicle_position("Golf")` → `{"latitude": 48.1351, "longitude": 11.5820, "heading": 45.0}`
 
-- Example: `get_climate_status("Golf")`**`get_vehicle_info(vehicle_id)`**- `data://vehicles` - List all vehicles (no parameters needed)
+### Maintenance
 
+**`get_maintenance_info(vehicle_id)`**
+- **Purpose**: Service schedule information
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Returns**: Inspection and oil service due dates/distances
+- **Example**: `get_maintenance_info("Golf")` → `{"inspection_due_date": "2026-06-15", "inspection_due_distance_km": 5000, ...}`
 
+---
 
-### Location- Returns: Basic info (manufacturer, model, software version, year, odometer, connection state)- `data://vehicle/Golf/battery` - Battery status for vehicle named "Golf"
+## Control Commands (Write Operations)
 
+All control commands return `{"success": true/false, "message": "...", "error": "..."}` and automatically invalidate the cache.
 
+### Door Control
 
-**`get_vehicle_position(vehicle_id)`**- Example: `get_vehicle_info("Golf")`- `data://vehicle/WVWZZZAUZPW123456/doors` - Doors status using VIN
+**`lock_vehicle(vehicle_id)`**
+- **Action**: Lock all doors
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `lock_vehicle("Golf")` → `{"success": true, "message": "Vehicle locked"}`
 
-- Returns: GPS coordinates (lat, lon) and heading (0°=N, 90°=E, 180°=S, 270°=W)
+**`unlock_vehicle(vehicle_id)`**
+- **Action**: Unlock all doors
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `unlock_vehicle("Golf")` → `{"success": true, "message": "Vehicle unlocked"}`
 
-- Example: `get_vehicle_position("Golf")`- `data://vehicle/B-AB-1234/climate` - Climate status using license plate
-
-
-
-## AVAILABLE CONTROL TOOLS**`get_vehicle_state(vehicle_id)`**
-
-
-
-Control tools modify vehicle state and automatically invalidate the cache to ensure fresh data on next read.- Returns: Complete state snapshot (all systems combined)**Note**: All vehicle-specific resources require a `{vehicle_id}` parameter in the URI. Replace `{vehicle_id}` with the actual vehicle identifier (name, VIN, or license plate).
-
-
-
-### Door Control- Example: `get_vehicle_state("Golf")`
-
-
-
-**`lock_vehicle(vehicle_id)`**- Use for comprehensive overview## VEHICLE IDENTIFICATION
-
-- Action: Lock all doors
-
-- Example: `lock_vehicle("Golf")`
-
-
-
-**`unlock_vehicle(vehicle_id)`**### Physical Components- **Preferred**: Use vehicle name (e.g., "Golf", "ID.4")
-
-- Action: Unlock all doors
-
-- Example: `unlock_vehicle("Golf")`- **Alternative**: VIN or license plate
-
-
-
-### Climate Control**`get_vehicle_doors(vehicle_id)`**- **System automatically resolves all three formats**
-
-
+### Climate Control
 
 **`start_climatization(vehicle_id, target_temp_celsius=None)`**
-
-- Action: Start pre-heating/cooling
-- Parameters:
-  - `vehicle_id`: Vehicle name, VIN, or license plate
-  - `target_temp_celsius` (optional): Target temperature in Celsius (if supported by vehicle)
-- Example: `start_climatization("Golf")` or `start_climatization("Golf", 22.0)`
-
-
+- **Action**: Start pre-heating or pre-cooling
+- **Parameters**:
+  - `vehicle_id` - Vehicle name or VIN
+  - `target_temp_celsius` (optional) - Target temperature in Celsius (if supported by vehicle)
+- **Examples**:
+  - `start_climatization("Golf")` - Uses last temperature setting
+  - `start_climatization("Golf", 22.0)` - Sets target to 22°C
 
 **`stop_climatization(vehicle_id)`**
-
-- Action: Stop pre-heating/cooling### Energy & RangeAll resources are cached server-side for 5 minutes to avoid VW API rate limits. Cache is automatically invalidated after any control command.
-
-- Example: `stop_climatization("Golf")`
-
-
+- **Action**: Stop climate control
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `stop_climatization("Golf")`
 
 **`start_window_heating(vehicle_id)`**
-
-- Action: Activate window heating/defrosting**`get_battery_status(vehicle_id)`**### Vehicle List
-
-- Example: `start_window_heating("Golf")`
-
-- Returns: Battery level, electric range, charging status
+- **Action**: Activate window heating/defrosting
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `start_window_heating("Golf")`
 
 **`stop_window_heating(vehicle_id)`**
-
-- Action: Deactivate window heating- Vehicle types: BEV/PHEV only- `data://vehicles`: List all vehicles with VIN, name, model, license plate
-
-- Example: `stop_window_heating("Golf")`
-
-- Example: `get_battery_status("ID.7")`
+- **Action**: Deactivate window heating
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `stop_window_heating("Golf")`
 
 ### Charging Control (BEV/PHEV only)
 
-- Use for quick battery check### Vehicle Information
-
 **`start_charging(vehicle_id)`**
-
-- Action: Start charging session (vehicle must be plugged in)
-
-- Example: `start_charging("ID.7")`
-
-**`get_charging_status(vehicle_id)`**- `data://vehicle/{vehicle_id}/info`: Basic info (manufacturer, model, software version, year, odometer, connection state)
+- **Action**: Start charging session
+- **Requirements**: Vehicle must be plugged in
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `start_charging("ID.7")`
 
 **`stop_charging(vehicle_id)`**
-
-- Action: Stop charging session- Returns: Detailed charging info (power, remaining time, cable status, target SOC)- `data://vehicle/{vehicle_id}/state`: Complete state snapshot (all systems combined)
-
-- Example: `stop_charging("ID.7")`
-
-- Vehicle types: BEV/PHEV only- `data://vehicle/{vehicle_id}/type`: Vehicle type (electric/BEV, combustion, hybrid/PHEV)
+- **Action**: Stop charging session
+- **Parameters**: `vehicle_id` - Vehicle name or VIN
+- **Example**: `stop_charging("ID.7")`
 
 ### Locator Features
 
-- Example: `get_charging_status("ID.7")`
-
 **`flash_lights(vehicle_id, duration_seconds=None)`**
-
-- Action: Flash headlights to locate vehicle
-- Parameters: 
-  - `vehicle_id`: Vehicle name, VIN, or license plate
-  - `duration_seconds` (optional): Duration in seconds (if supported by vehicle)
-- Example: `flash_lights("Golf")` or `flash_lights("Golf", 10)`
+- **Action**: Flash headlights to locate vehicle in parking lot
+- **Parameters**:
+  - `vehicle_id` - Vehicle name or VIN
+  - `duration_seconds` (optional) - Flash duration in seconds (if supported by vehicle)
+- **Examples**:
+  - `flash_lights("Golf")` - Flash with default duration
+  - `flash_lights("Golf", 10)` - Flash for 10 seconds
 
 **`honk_and_flash(vehicle_id, duration_seconds=None)`**
-
-- Action: Honk horn and flash lights to locate vehicle
-- Parameters: 
-  - `vehicle_id`: Vehicle name, VIN, or license plate
-  - `duration_seconds` (optional): Duration in seconds (if supported by vehicle)
-- Example: `honk_and_flash("Golf")` or `honk_and_flash("Golf", 5)`
-
-**`get_climate_status(vehicle_id)`**
-
-## USAGE PATTERNS
-
-- Returns: Climate control state, target temperature, estimated time- **URI**: `data://vehicle/{vehicle_id}/windows`
-
-### Quick Status Check
-
-- States: off, heating, cooling, ventilation- **Description**: Open/closed status for all windows
-
-1. `get_vehicles()` - discover vehicles
-
-2. `get_battery_status("Golf")` - electric, or `get_vehicle_state("Golf")` - all types- Example: `get_climate_status("Golf")`
-
-3. `get_vehicle_doors("Golf")` - security check
-
-- **URI**: `data://vehicle/{vehicle_id}/tyres`
-
-### Full Status Report
-
-### Location- **Description**: Pressure and temperature readings
-
-1. `get_vehicles()` - discover vehicles
-
-2. `get_vehicle_state("Golf")` - comprehensive snapshot
-
-3. Optionally use specific tools for detailed data
-
-**`get_vehicle_position(vehicle_id)`**- **URI**: `data://vehicle/{vehicle_id}/lights`
-
-### Charging Session
-
-- Returns: GPS coordinates (lat, lon) and heading (0°=N, 90°=E, 180°=S, 270°=W)- **Description**: Left/right light status (safety check)
-
-1. `get_charging_status("ID.7")` - detailed charging info
-
-2. `get_battery_status("ID.7")` - quick overview- Example: `get_vehicle_position("Golf")`
-
-3. Use `start_charging("ID.7")` or `stop_charging("ID.7")` to control
-
-### Energy & Range (vehicle-type aware)
-
-### Remote Climate Control
-
-## AVAILABLE CONTROL TOOLS
-
-1. `get_climate_status("Golf")` - check current status
-2. `start_climatization("Golf")` - pre-heat/cool (uses last temperature setting)
-3. `get_climate_status("Golf")` - verify activation (cache auto-refreshed after command)
-
-Control tools modify vehicle state and automatically invalidate the cache to ensure fresh data on next read.- **Description**: Total range + electric/combustion breakdown with battery/tank levels
-
-### Vehicle Security
-
-
-
-1. `get_vehicle_doors("Golf")` - check lock status
-
-2. `lock_vehicle("Golf")` or `unlock_vehicle("Golf")` - as needed### Door Control- **URI**: `data://vehicle/{vehicle_id}/battery`
-
-3. `get_vehicle_doors("Golf")` - verify action (cache auto-refreshed after command)
-
-- **Description**: Quick check for electric vehicles (level, range, charging)
-
-### Pre-Trip Check
-
-**`lock_vehicle(vehicle_id)`**
-
-1. `get_battery_status("ID.7")` - sufficient charge?
-
-2. `get_vehicle_doors("Golf")` - all closed and locked?- Action: Lock all doors- **URI**: `data://vehicle/{vehicle_id}/charging`
-
-3. `get_vehicle_position("Golf")` - where is the vehicle?
-
-- Example: `lock_vehicle("Golf")`- **Description**: Detailed charging info (power, time, cable status, target SOC)
-
-### Find Vehicle in Parking Lot
-
-  - Only for BEV/PHEV vehicles
-
-1. `get_vehicle_position("Golf")` - get GPS coordinates
-2. `flash_lights("Golf")` - flash lights to locate vehicle
-3. Or: `honk_and_flash("Golf")` - honk and flash to locate vehicle
-
-- Action: Unlock all doors
-
-## BEST PRACTICES
-
-- Example: `unlock_vehicle("Golf")`### Climate & Comfort
-
-- **Always start** with `get_vehicles()` to discover available vehicles
-
-- **Use vehicle names** for better readability (e.g., "Golf" instead of VIN)
-
-- **Cannot use license plates** to identify vehicles (VW API limitation)
-
-- **For electric vehicles**, use `get_battery_status()` for quick checks### Climate Control- **URI**: `data://vehicle/{vehicle_id}/climate`
-
-- **For detailed charging analysis**, use `get_charging_status()`
-
-- **Data is cached** for 5 minutes - cache automatically refreshes after any control command- **Description**: Heating/cooling status, target temp, estimated time
-
-- **Combine read tools** for comprehensive reports
-- **Vehicle identifiers**: name or VIN (license plate NOT supported)
-
-## ERROR HANDLING
-
-- Next read tool call after a control command will fetch fresh data from VW servers
-
-- No manual cache management needed- **URI**: `data://vehicle/{vehicle_id}/maintenance`
-
-
-
-## KNOWN LIMITATIONS**`start_window_heating(vehicle_id)`**- **Description**: Service schedules
-
-
-
-### VW API Limitations (not fixable by this server)- Action: Activate window heating/defrosting  - Inspection due date and distance
-
-
-
-1. **No License Plate Data** (as of February 2026)- Example: `start_window_heating("Golf")`  - Oil service due date and distance (combustion/hybrid only)
-
-   - The VW API does not provide license plate information
-
-   - All vehicles will show `license_plate: null`
-
-   - Use vehicle name or VIN for identification instead
-
-**`stop_window_heating(vehicle_id)`**### Location
-
-2. **Rate Limiting**
-
-   - VW API has rate limits (handled by 5-minute cache)- Action: Deactivate window heating
-
-   - Too many requests may be temporarily blocked
-
-- Example: `stop_window_heating("Golf")`- **URI**: `data://vehicle/{vehicle_id}/position`
-
-3. **Token Expiration**
-
-   - After several hours, re-authentication is required- **Description**: GPS coordinates (lat, lon) and heading (0°=N, 90°=E, 180°=S, 270°=W)
-
-   - Server will automatically re-authenticate when needed
-
-### Charging Control (BEV/PHEV only)
-
-4. **API Availability**
-
-   - VW servers can be temporarily unavailable## AVAILABLE TOOLS (Vehicle Control Commands)
-
-   - First connection after server start can take 10-30 seconds
-
-**`start_charging(vehicle_id)`**
-
-## EXAMPLES
-
-- Action: Start charging session (vehicle must be plugged in)Tools modify vehicle state and automatically invalidate the cache to ensure fresh data on next read.
-
+- **Action**: Honk horn and flash lights simultaneously
+- **Parameters**:
+  - `vehicle_id` - Vehicle name or VIN
+  - `duration_seconds` (optional) - Duration in seconds (if supported by vehicle)
+- **Examples**:
+  - `honk_and_flash("Golf")` - Use default duration
+  - `honk_and_flash("Golf", 5)` - Honk and flash for 5 seconds
+
+---
+
+## Common Usage Patterns
+
+### Quick Battery Check (Electric Vehicle)
 ```python
-
-# Discover vehicles- Example: `start_charging("ID.7")`
-
+# 1. Discover vehicles
 get_vehicles()
 
-# Returns: [{"vin": "...", "name": "Golf", "model": "Golf 8", "license_plate": null}, ...]### Door Control
-
-# Note: license_plate will always be null due to VW API limitation
-
-**`stop_charging(vehicle_id)`**
-
-# Check battery
-
-get_battery_status("Golf")- Action: Stop charging session- `lock_vehicle`: Lock all doors
-
-# Returns: {"battery_level_percent": 85, "range_km": 320, "is_charging": false}
-
-- Example: `stop_charging("ID.7")`- `unlock_vehicle`: Unlock all doors
-
-# Start climate control
-
-start_climatization("Golf", 22.0)
-
-# Returns: {"success": true, "message": "Climatization started"}
-
-### Locator Features### Climate Control
-
-# Verify climate is running
-
-get_climate_status("Golf")
-
-# Returns: {"state": "heating", "target_temperature_celsius": 22.0, ...}
-
-**`flash_lights(vehicle_id, duration_seconds=None)`**- `start_climatization`: Start pre-heating/cooling
-
-# Lock vehicle
-
-lock_vehicle("Golf")- Action: Flash headlights- `stop_climatization`: Stop pre-heating/cooling
-
-# Returns: {"success": true, "message": "Vehicle locked"}
-
-- Optional: Duration in seconds- `start_window_heating`: Activate window heating
-
-# Verify doors are locked
-
-get_vehicle_doors("Golf")- Example: `flash_lights("Golf", 10)`- `stop_window_heating`: Deactivate window heating
-
-# Returns: {"lock_status": "locked", "front_left": "closed", ...}
-
+# 2. Check battery
+get_battery_status("ID.7")
+# Result: Battery at 85%, 320 km range, not charging
 ```
 
-
-**`honk_and_flash(vehicle_id, duration_seconds=None)`**### Charging Control (BEV/PHEV only)
-
-- Action: Honk horn and flash lights
-
-- Optional: Duration in seconds- `start_charging`: Start charging session
-
-- Example: `honk_and_flash("Golf", 5)`- `stop_charging`: Stop charging session
-
-
-
-## USAGE PATTERNS### Locator Features
-
-
-
-### Quick Status Check- `flash_lights`: Flash headlights (with optional duration)
-
-- `honk_and_flash`: Honk horn and flash lights (with optional duration)
-
-1. `get_vehicles()` - discover vehicles
-
-2. `get_battery_status("Golf")` - electric, or `get_vehicle_state("Golf")` - all types## USAGE PATTERNS
-
-3. `get_vehicle_doors("Golf")` - security check
-
-### Quick Status Check
-
 ### Full Status Report
+```python
+# 1. Discover vehicles
+get_vehicles()
 
-1. `resources/read("data://vehicles")` - discover vehicles
-
-1. `get_vehicles()` - discover vehicles2. `resources/read("data://vehicle/Golf/battery")` - electric, or `resources/read("data://vehicle/Golf/range")` - all types
-
-2. `get_vehicle_state("Golf")` - comprehensive snapshot3. `resources/read("data://vehicle/Golf/doors")` - security check
-
-3. Optionally use specific tools for detailed data
-
-### Full Status Report
-
-### Charging Session
-
-1. `resources/read("data://vehicles")` - discover vehicles
-
-1. `get_charging_status("ID.7")` - detailed charging info2. `resources/read("data://vehicle/Golf/state")` - comprehensive snapshot
-
-2. `get_battery_status("ID.7")` - quick overview3. Optionally drill down with specific resource URIs
-
-3. Use `start_charging("ID.7")` or `stop_charging("ID.7")` to control
-
-### Charging Session
-
-### Remote Climate Control
-
-1. `resources/read("data://vehicle/Golf/charging")` - detailed charging info
-
-1. `get_climate_status("Golf")` - check current status2. `resources/read("data://vehicle/Golf/battery")` - quick overview
-
-2. `start_climatization("Golf", 22.0)` - pre-heat/cool to 22°C3. Use `start_charging`/`stop_charging` tools to control
-
-3. `get_climate_status("Golf")` - verify activation (cache auto-refreshed after command)
-
-### Remote Climate Control
-
-### Vehicle Security
-
-1. `resources/read("data://vehicle/Golf/climate")` - check current status
-
-1. `get_vehicle_doors("Golf")` - check lock status2. `start_climatization` tool - pre-heat/cool
-
-2. `lock_vehicle("Golf")` or `unlock_vehicle("Golf")` - as needed3. `resources/read("data://vehicle/Golf/climate")` - verify activation (cache auto-refreshed after command)
-
-3. `get_vehicle_doors("Golf")` - verify action (cache auto-refreshed after command)
-
-### Vehicle Security
+# 2. Get comprehensive state
+get_vehicle_state("Golf")
+# Result: All systems status in one call
+```
 
 ### Pre-Trip Check
+```python
+# 1. Check battery/fuel
+get_battery_status("ID.7")  # or get_vehicle_state() for combustion
 
-1. `resources/read("data://vehicle/Golf/doors")` - check lock status
+# 2. Check doors are closed and locked
+get_vehicle_doors("ID.7")
 
-1. `get_battery_status("ID.7")` - sufficient charge?2. `lock_vehicle` or `unlock_vehicle` tool - as needed
-
-2. `get_vehicle_doors("Golf")` - all closed and locked?3. `resources/read("data://vehicle/Golf/doors")` - verify action (cache auto-refreshed after command)
-
-3. `get_vehicle_position("Golf")` - where is the vehicle?4. `resources/read("data://vehicle/Golf/climate")` - check if using external power
-
-
-
-### Find Vehicle in Parking Lot### Pre-Trip Check
-
-
-
-1. `get_vehicle_position("Golf")` - get GPS coordinates1. `resources/read("data://vehicle/Golf/range")` - sufficient range?
-
-2. `flash_lights("Golf", 10)` - flash lights for 10 seconds2. `resources/read("data://vehicle/Golf/doors")` - all closed and locked?
-
-3. Or: `honk_and_flash("Golf", 5)` - honk and flash for 5 seconds3. `resources/read("data://vehicle/Golf/tyres")` - pressure OK?
-
-4. `resources/read("data://vehicle/Golf/lights")` - any lights left on?
-
-## BEST PRACTICES
-
-### Maintenance Planning
-
-- **Always start** with `get_vehicles()` to discover available vehicles
-
-- **Use vehicle names** for better readability (e.g., "Golf" instead of VIN)1. `resources/read("data://vehicle/Golf/maintenance")` - when is service due?
-
-- **For electric vehicles**, use `get_battery_status()` for quick checks2. `resources/read("data://vehicle/Golf/info")` - current odometer reading
-
-- **For detailed charging analysis**, use `get_charging_status()`
-
-- **Data is cached** for 5 minutes - cache automatically refreshes after any control command## BEST PRACTICES
-
-- **Combine read tools** for comprehensive reports
-
-- **Vehicle identifiers**: name, VIN, or license plate all work- **Always start** with `resources/read("data://vehicles")` to discover available vehicles
-
-- **Use vehicle names** for better readability (e.g., "Golf" instead of VIN) in resource URIs
-
-## ERROR HANDLING- **For electric vehicles**, prefer `resources/read("data://vehicle/{name}/battery")` for quick checks
-
-- **For detailed charging analysis**, use `resources/read("data://vehicle/{name}/charging")`
-
-- Tools return `{"error": "..."}` JSON if vehicle not found or data unavailable- **Check vehicle type first** if unknown: `resources/read("data://vehicle/{name}/type")`
-
-- BEV/PHEV-only tools return errors for combustion vehicles- **Resources are cached** for 5 minutes - cache automatically refreshes after any tool command
-
-- Always verify vehicle exists with `get_vehicles()` first- **Combine resources** for comprehensive reports (e.g., battery + doors + climate)
-
-- Control tools return error dictionaries if operation fails- **Remember**: Resources use `resources/read(uri)`, Tools use direct function calls
-
-
-
-## CACHING BEHAVIOR## ERROR HANDLING
-
-
-
-- All read tools access cached data (5 minutes / 300 seconds)- Resources return `{"error": "..."}` JSON if vehicle not found or data unavailable
-
-- Cache prevents excessive VW API calls and respects rate limits- BEV/PHEV-only resources return errors for combustion vehicles
-
-- **Cache is automatically invalidated** after any control tool executes- Always verify vehicle_id from `resources/read("data://vehicles")` first
-
-- Next read tool call after a control command will fetch fresh data from VW servers- Tools return error dictionaries if operation fails
-
-- No manual cache management needed- If a resource URI is not found, check that `{vehicle_id}` is correctly replaced with actual identifier
-
-
-
-## EXAMPLES## CACHING BEHAVIOR
-
-
-
-```python- All resources are cached server-side for 5 minutes (300 seconds)
-
-# Discover vehicles- Cache prevents excessive VW API calls and respects rate limits
-
-get_vehicles()- **Cache is automatically invalidated** after any tool command executes
-
-# Returns: [{"vin": "...", "name": "Golf", "model": "Golf 8", "license_plate": "B-AB 1234"}, ...]- Next resource read after a command will fetch fresh data from VW servers
-
-- No manual cache management needed
-
-# Check battery
-get_battery_status("Golf")
-# Returns: {"battery_level_percent": 85, "range_km": 320, "is_charging": false}
-
-# Start climate control
-start_climatization("Golf", 22.0)
-# Returns: {"success": true, "message": "Climatization started"}
-
-# Verify climate is running
-get_climate_status("Golf")
-# Returns: {"state": "heating", "target_temperature_celsius": 22.0, ...}
-
-# Lock vehicle
-lock_vehicle("Golf")
-# Returns: {"success": true, "message": "Vehicle locked"}
-
-# Verify doors are locked
-get_vehicle_doors("Golf")
-# Returns: {"lock_status": "locked", "front_left": "closed", ...}
+# 3. Check location
+get_vehicle_position("ID.7")
 ```
+
+### Remote Climate Control
+```python
+# 1. Check current climate state
+get_climate_status("Golf")
+
+# 2. Start pre-heating to 22°C
+start_climatization("Golf", 22.0)
+
+# 3. Verify it started (cache auto-refreshes after command)
+get_climate_status("Golf")
+# Result: state = "heating", target = 22°C
+```
+
+### Charging Session Management
+```python
+# 1. Check detailed charging status
+get_charging_status("ID.7")
+
+# 2. Start or stop charging
+start_charging("ID.7")  # or stop_charging("ID.7")
+
+# 3. Monitor progress
+get_battery_status("ID.7")
+```
+
+### Vehicle Security
+```python
+# 1. Check lock status
+get_vehicle_doors("Golf")
+
+# 2. Lock vehicle if needed
+lock_vehicle("Golf")
+
+# 3. Verify it locked (cache auto-refreshes)
+get_vehicle_doors("Golf")
+```
+
+### Find Vehicle in Parking Lot
+```python
+# 1. Get GPS coordinates
+get_vehicle_position("Golf")
+
+# 2. Flash lights for 10 seconds
+flash_lights("Golf", 10)
+
+# Alternative: Honk and flash
+honk_and_flash("Golf", 5)
+```
+
+---
+
+## Best Practices (for AI Assistants)
+
+### 1. **Always Start with Discovery**
+- First command: `get_vehicles()` to see what's available
+- Validates vehicle exists before trying to access it
+
+### 2. **Use Readable Vehicle Names**
+- Prefer: `"Golf"`, `"ID.7"` (easier for humans)
+- Avoid: Long VINs unless necessary
+- Both work, but names are more readable
+
+### 3. **Choose the Right Tool**
+- **Quick check**: `get_battery_status()` for electric vehicles
+- **Detailed analysis**: `get_charging_status()` for charging details
+- **Everything**: `get_vehicle_state()` for comprehensive overview
+
+### 4. **Verify Vehicle Type**
+- Check vehicle type before using BEV/PHEV-only tools
+- `get_battery_status()` and `get_charging_status()` only work for electric/hybrid
+- Combustion vehicles will return errors for these tools
+
+### 5. **Trust the Cache**
+- Data is cached for 5 minutes automatically
+- Cache refreshes automatically after any control command
+- No need to manually manage cache
+
+### 6. **Handle Errors Gracefully**
+- All tools return JSON with `error` field if something fails
+- Common errors: vehicle not found, feature not supported, VW API unavailable
+- Always check for `error` field in responses
+
+---
+
+## Technical Details
+
+### Caching Behavior
+- **Duration**: 5 minutes (300 seconds)
+- **Purpose**: Respect VW API rate limits, improve response time
+- **Auto-refresh**: Cache invalidates automatically after any control command
+- **Transparent**: No manual cache management needed
+
+### Vehicle Identification
+The system automatically resolves both vehicle names and VINs:
+- **Name**: `"Golf"`, `"ID.7"`, `"T7"` - matched case-insensitively
+- **VIN**: `"WVWZZZAUZPW123456"` - exact match
+- **License Plate**: NOT SUPPORTED (VW API limitation)
+
+### Architecture (Internal)
+The server uses a modular mixin-based architecture:
+- **CacheMixin**: Handles data caching and invalidation
+- **VehicleResolutionMixin**: Resolves names/VINs to internal vehicle objects
+- **CommandMixin**: All 10 control commands (lock, climate, charging, lights)
+- **StateExtractionMixin**: Extracts state from carconnectivity vehicle objects
+- **Main Adapter**: Orchestrates mixins and provides public API
+
+---
+
+## Known Limitations
+
+### 1. No License Plate Data (VW API Limitation)
+- **Issue**: VW WeConnect API does not provide license plate information (as of February 2026)
+- **Impact**: All vehicles show `license_plate: null`
+- **Workaround**: Use vehicle name or VIN instead
+- **Not fixable**: This is a Volkswagen API limitation, not a bug in this server
+
+### 2. VW API Rate Limiting
+- **Issue**: VW servers limit request frequency
+- **Mitigation**: 5-minute cache reduces API calls
+- **Impact**: Rapid repeated requests may be temporarily blocked
+
+### 3. Token Expiration
+- **Issue**: Authentication tokens expire after several hours
+- **Mitigation**: Server automatically re-authenticates when needed
+- **Impact**: Occasional delays on first request after long idle periods
+
+### 4. API Availability
+- **Issue**: VW servers can be temporarily unavailable
+- **Impact**: First connection after server start can take 10-30 seconds
+- **Retry**: Usually resolves itself within a minute
+
+### 5. Command Execution Time
+- **Issue**: Control commands sent to VW API are not instant
+- **Impact**: Vehicle may take 5-30 seconds to execute command
+- **Best practice**: Check status again after 30 seconds if needed
+
+---
+
+## Error Handling
+
+All tools return consistent error format:
+
+```json
+{
+  "success": false,
+  "error": "Vehicle not found: Golf"
+}
+```
+
+### Common Errors
+
+**"Vehicle not found"**
+- Cause: Invalid vehicle_id
+- Solution: Use `get_vehicles()` to see available vehicles
+
+**"Vehicle does not support [feature]"**
+- Cause: Trying to use BEV/PHEV tool on combustion vehicle, or feature not available
+- Solution: Check vehicle type, try different tool
+
+**"VW API unavailable"** / **"Connection timeout"**
+- Cause: VW servers temporarily down
+- Solution: Wait 1-2 minutes and retry
+
+**"Authentication failed"**
+- Cause: Invalid credentials or token expired
+- Solution: Server will automatically re-authenticate, or restart server
+
+---
+
+## Examples (Copy-Paste Ready)
+
+### Example 1: Morning Vehicle Check
+```python
+# Discover vehicles
+vehicles = get_vehicles()
+# Result: [{"name": "ID.7", ...}]
+
+# Check battery level
+battery = get_battery_status("ID.7")
+# Result: {"battery_level_percent": 85, "range_km": 320}
+
+# Check doors are locked
+doors = get_vehicle_doors("ID.7")
+# Result: {"lock_state": "locked"}
+
+# All good! Ready to go.
+```
+
+### Example 2: Pre-Heat Before Departure
+```python
+# Check current climate state
+climate = get_climate_status("Golf")
+# Result: {"state": "off"}
+
+# Start heating to 22°C
+result = start_climatization("Golf", 22.0)
+# Result: {"success": true, "message": "Climatization started"}
+
+# Verify it's running (30 seconds later)
+climate = get_climate_status("Golf")
+# Result: {"state": "heating", "target_temperature_celsius": 22.0}
+```
+
+### Example 3: Charging Session
+```python
+# Check if vehicle is plugged in
+charging = get_charging_status("ID.7")
+# Result: {"is_plugged_in": true, "is_charging": false}
+
+# Start charging
+result = start_charging("ID.7")
+# Result: {"success": true}
+
+# Monitor progress
+charging = get_charging_status("ID.7")
+# Result: {"is_charging": true, "charging_power_kw": 11.0, "remaining_time_minutes": 45}
+```
+
+### Example 4: Find Car in Parking Lot
+```python
+# Get location
+position = get_vehicle_position("Golf")
+# Result: {"latitude": 48.1351, "longitude": 11.5820}
+
+# Flash lights for 10 seconds to locate it
+result = flash_lights("Golf", 10)
+# Result: {"success": true}
+```
+
+---
+
+## Summary (TL;DR for AI Assistants)
+
+1. **Always start** with `get_vehicles()` to discover available vehicles
+2. **Use vehicle names** (e.g., "Golf") instead of VINs for readability
+3. **License plates DON'T WORK** - VW API doesn't provide them (as of Feb 2026)
+4. **Electric vehicles**: Use `get_battery_status()` for quick checks
+5. **Charging details**: Use `get_charging_status()` for detailed analysis
+6. **Cache is automatic** - 5 minutes, refreshes after commands, no manual management
+7. **Errors are JSON** - Check for `error` field in responses
+8. **Control commands** invalidate cache automatically - next read gets fresh data
+
+**Most important**: Be helpful and proactive. If a user asks about their car, start with `get_vehicles()` to see what's available, then provide relevant information based on their question.
