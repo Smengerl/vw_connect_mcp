@@ -34,7 +34,7 @@ def main():
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     else:
-        config_path = Path(__file__).parent.parent / "src" / "config.json"
+        config_path = Path(__file__).parent.parent.parent / "src" / "config.json"
     
     print("=" * 60)
     print("LICENSE PLATE CHECK (direct carconnectivity API)")
@@ -123,6 +123,7 @@ def main():
         
     finally:
         # Cleanup
+        print("\nCleaning up...")
         if hasattr(car_conn, 'disconnect'):
             car_conn.disconnect()
 
