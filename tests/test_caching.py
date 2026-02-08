@@ -1,19 +1,73 @@
-"""Tests for carconnectivity_adapter caching mechanism.
+"""Tests for adapter caching mechanism.
 
-Tests verify that data fetching is properly cached to avoid VW API rate limits.
-These tests use the real CarConnectivityAdapter (not the mock).
+Tests verify that data fetching is properly cached to avoid VW API rate limits,
+and that cache is properly invalidated after command execution.
+
+These tests use both TestAdapter (for cache invalidation workflow) and 
+real CarConnectivityAdapter (for actual caching behavior).
 """
 
 import pytest
 import time
+import sys
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 from src.weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter, CACHE_DURATION_SECONDS
 
+sys.path.insert(0, 'tests')
+from test_adapter import TestAdapter
+
+
+# ==================== CACHE DURATION TESTS ====================
 
 def test_cache_duration_constant():
     """Test that cache duration constant is properly defined."""
-    assert CACHE_DURATION_SECONDS == 60, "Cache duration should be 60 seconds"
+    assert CACHE_DURATION_SECONDS == 300, "Cache duration should be 300 seconds (5 minutes)"
+
+
+# ==================== CACHE INVALIDATION TESTS ====================
+
+def test_cache_invalidation_method_exists_on_abstract():
+    """Test that invalidate_cache method exists on abstract adapter."""
+    from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
+    
+    # Verify method exists on abstract class
+    assert hasattr(AbstractAdapter, 'invalidate_cache'), "AbstractAdapter should have invalidate_cache method"
+
+
+def test_cache_invalidation_on_test_adapter():
+    """Test that TestAdapter has invalidate_cache method."""
+    adapter = TestAdapter()
+    
+    # Verify method exists
+    assert hasattr(adapter, 'invalidate_cache'), "Adapter should have invalidate_cache method"
+    assert callable(adapter.invalidate_cache), "invalidate_cache should be callable"
+    
+    # Call should not raise exception
+    adapter.invalidate_cache()
+
+
+def test_cache_invalidation_workflow():
+    """Test the complete cache invalidation workflow with TestAdapter."""
+    adapter = TestAdapter()
+    
+    # 1. Read data (should work normally)
+    vehicles = adapter.list_vehicles()
+    assert len(vehicles) == 2, "Should have 2 test vehicles"
+    
+    # 2. Execute a command (should invalidate cache)
+    result = adapter.execute_command("WVWZZZED4SE003938", "lock")
+    assert result["success"] is True
+    
+    # 3. Invalidate cache explicitly
+    adapter.invalidate_cache()
+    
+    # 4. Read data again (should fetch fresh data)
+    vehicles_after = adapter.list_vehicles()
+    assert len(vehicles_after) == 2, "Should still have 2 test vehicles after cache invalidation"
+
+
+# ==================== CACHE BEHAVIOR TESTS (Real Adapter) ====================
 
 
 @pytest.mark.carconnectivity
@@ -49,16 +103,18 @@ def test_cache_expires_after_duration(real_adapter):
 @pytest.mark.carconnectivity
 def test_list_vehicles_uses_cache(real_adapter):
     """Test that list_vehicles() reuses cached data within cache duration."""
+    # Note: real_adapter is module-scoped and may have been used by previous tests,
+    # so cache might be expired. We test that SUBSEQUENT calls use the cache.
     with patch.object(real_adapter.car_connectivity, 'fetch_all') as mock_fetch:
-        # First call - cache just initialized, should not fetch again
+        # First call - might fetch if cache is expired
         vehicles1 = real_adapter.list_vehicles()
         assert len(vehicles1) > 0
-        mock_fetch.assert_not_called()
+        first_call_count = mock_fetch.call_count
         
-        # Second call immediately after - should still use cache
+        # Second call immediately after - should use cache, no additional fetch
         vehicles2 = real_adapter.list_vehicles()
         assert vehicles1 == vehicles2
-        mock_fetch.assert_not_called()
+        assert mock_fetch.call_count == first_call_count, "Second call should not fetch again"
 
 
 @pytest.mark.carconnectivity
