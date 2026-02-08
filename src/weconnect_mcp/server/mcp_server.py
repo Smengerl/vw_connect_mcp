@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleListItem, ChargingModel
+from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter, VehicleListItem, ChargingModel, ClimatizationModel, MaintenanceModel, RangeModel, WindowHeatingsModel, LightsModel
 from carconnectivity.vehicle import GenericVehicle
 
 from pydantic import BaseModel
@@ -18,18 +18,37 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     # Register as TOOLS (not resources) so AI can call them
     @mcp.tool()
     def list_vehicles() -> List[Dict[str, Any]]:
-        """List all available vehicles. Returns a list of vehicle information including VIN, name, and model.
-        Use the VIN field to identify vehicles in other tool calls."""
+        """List all available vehicles. Returns a list of vehicle information including VIN, name, model, and license plate.
+        Use the VIN, name, or license plate to identify vehicles in other tool calls."""
         vehicles: List[VehicleListItem] = adapter.list_vehicles()
         logger.info("Listing %d vehicles", len(vehicles))
         return [v.model_dump() for v in vehicles]
+
+    @mcp.tool()
+    def get_vehicle_info(vehicle_id: str) -> Dict[str, Any]:
+        """Get basic vehicle information including software version, model year, and connection state.
+        
+        Args:
+            vehicle_id: Vehicle identifier - can be VIN, name, or license plate
+            
+        Returns:
+            Vehicle information including VIN, model, name, manufacturer, odometer, state, 
+            type, software version, model year, and connection state
+        """
+        logger.info("get vehicle info for id=%s", vehicle_id)
+        vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
+        if vehicle is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found"}
+
+        return vehicle.model_dump() if vehicle else {}
 
     @mcp.tool()
     def get_vehicle_state(vehicle_id: str) -> Dict[str, Any]:
         """Get the complete state of a specific vehicle.
         
         Args:
-            vehicle_id: The ID of the vehicle to query
+            vehicle_id: Vehicle identifier - can be VIN, name, or license plate
             
         Returns:
             Complete vehicle information including position, battery, doors, windows, climate, and tyres
@@ -47,7 +66,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         """Get the door status of a specific vehicle.
         
         Args:
-            vehicle_id: The ID of the vehicle to query
+            vehicle_id: Vehicle identifier - can be VIN, name, or license plate
             
         Returns:
             Door states including lock status and open/closed state for all doors
@@ -145,6 +164,194 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         
         return charging_state.model_dump()
 
+    @mcp.tool()
+    def get_climatization_state(vehicle_id: str) -> Dict[str, Any]:
+        """Get the current climate control status of a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Climate control information including:
+            - state: Current state (off, heating, cooling, ventilation)
+            - is_active: Whether climate control is currently active
+            - target_temperature_celsius: Target temperature in Celsius
+            - estimated_time_remaining_minutes: Time until target temperature reached
+            - window_heating_enabled: Is window heating enabled
+            - seat_heating_enabled: Is seat heating enabled
+            - climatization_at_unlock_enabled: Start climatization when unlocking
+            - using_external_power: Is using external power (not battery)
+        """
+        logger.info("get climatization state for id=%s", vehicle_id)
+        climate_status = adapter.get_climate_status(vehicle_id)
+        if climate_status is None or climate_status.climatization is None:
+            logger.warning("Vehicle '%s' not found or doesn't support climatization", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't support climatization"}
+        
+        return climate_status.climatization.model_dump()
+
+    @mcp.tool()
+    def get_maintenance_info(vehicle_id: str) -> Dict[str, Any]:
+        """Get the maintenance and service information for a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Maintenance information including:
+            - inspection_due_date: Next inspection due date (ISO format)
+            - inspection_due_distance_km: Remaining kilometers until inspection
+            - oil_service_due_date: Next oil service due date (ISO format)
+            - oil_service_due_distance_km: Remaining kilometers until oil service
+            
+        Note: Oil service information is only available for combustion and hybrid vehicles.
+        """
+        logger.info("get maintenance info for id=%s", vehicle_id)
+        maintenance_info = adapter.get_maintenance_info(vehicle_id)
+        if maintenance_info is None:
+            logger.warning("Vehicle '%s' not found or doesn't have maintenance info", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have maintenance info"}
+        
+        return maintenance_info.model_dump()
+
+    @mcp.tool()
+    def get_range_info(vehicle_id: str) -> Dict[str, Any]:
+        """Get the range and energy information for a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Range information including:
+            - total_range_km: Total remaining range in kilometers
+            - electric_range_km: Electric range (for BEV/PHEV)
+            - battery_level_percent: Battery charge percentage (for BEV/PHEV)
+            - combustion_range_km: Combustion range (for PHEV/ICE)
+            - tank_level_percent: Fuel tank level (for PHEV/ICE)
+        """
+        logger.info("get range info for id=%s", vehicle_id)
+        energy_status = adapter.get_energy_status(vehicle_id)
+        if energy_status is None:
+            logger.warning("Vehicle '%s' not found or doesn't have range info", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have range info"}
+        
+        # Extract range information from energy status
+        result = {
+            "total_range_km": energy_status.range.total_km if energy_status.range else None
+        }
+        
+        if energy_status.electric:
+            result["electric_range_km"] = energy_status.range.electric_km if energy_status.range else None
+            result["battery_level_percent"] = energy_status.electric.battery_level_percent
+        
+        if energy_status.combustion:
+            result["combustion_range_km"] = energy_status.range.combustion_km if energy_status.range else None
+            result["tank_level_percent"] = energy_status.combustion.tank_level_percent
+        
+        return result
+
+    @mcp.tool()
+    def get_window_heating_state(vehicle_id: str) -> Dict[str, Any]:
+        """Get the window heating status of a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Window heating information including:
+            - front: Front window heating status (on/off)
+            - rear: Rear window heating status (on/off)
+        """
+        logger.info("get window heating state for id=%s", vehicle_id)
+        climate_status = adapter.get_climate_status(vehicle_id)
+        if climate_status is None or climate_status.window_heating is None:
+            logger.warning("Vehicle '%s' not found or doesn't have window heating info", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have window heating info"}
+        
+        return climate_status.window_heating.model_dump()
+
+    @mcp.tool()
+    def get_lights_state(vehicle_id: str) -> Dict[str, Any]:
+        """Get the lights status of a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Lights information including:
+            - left: Left light status (on/off)
+            - right: Right light status (on/off)
+        """
+        logger.info("get lights state for id=%s", vehicle_id)
+        physical_status = adapter.get_physical_status(vehicle_id)
+        if physical_status is None or physical_status.lights is None:
+            logger.warning("Vehicle '%s' not found or doesn't have lights info", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have lights info"}
+        
+        return physical_status.lights.model_dump()
+
+    @mcp.tool()
+    def get_position(vehicle_id: str) -> Dict[str, Any]:
+        """Get the current GPS position of a vehicle.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Position information including:
+            - latitude: GPS latitude in decimal degrees
+            - longitude: GPS longitude in decimal degrees
+            - heading: Compass heading in degrees (0-360, 0=North, 90=East, 180=South, 270=West)
+        """
+        logger.info("get position for id=%s", vehicle_id)
+        position = adapter.get_position(vehicle_id)
+        if position is None:
+            logger.warning("Vehicle '%s' not found or doesn't have position info", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have position info"}
+        
+        return position.model_dump()
+
+    @mcp.tool()
+    def get_battery_status(vehicle_id: str) -> Dict[str, Any]:
+        """Get the battery status of an electric or hybrid vehicle.
+        
+        This is a simplified tool for quick battery and range checks.
+        For detailed charging information, use get_charging_state instead.
+        
+        Args:
+            vehicle_id: The ID of the vehicle to query
+            
+        Returns:
+            Battery status including:
+            - battery_level_percent: Current battery charge (0-100%)
+            - range_km: Remaining electric range in kilometers
+            - is_charging: Whether currently charging
+            - charging_power_kw: Charging power (only when charging)
+            - estimated_charge_time_minutes: Time to full charge (only when charging)
+            
+        Note: Only available for electric (BEV) and plug-in hybrid (PHEV) vehicles.
+        """
+        logger.info("get battery status for id=%s", vehicle_id)
+        energy_status = adapter.get_energy_status(vehicle_id)
+        if energy_status is None or energy_status.electric is None:
+            logger.warning("Vehicle '%s' not found or doesn't have a battery", vehicle_id)
+            return {"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"}
+        
+        # Extract battery information from energy status
+        result = {
+            "battery_level_percent": energy_status.electric.battery_level_percent,
+            "range_km": energy_status.range.electric_km if energy_status.range else None,
+            "is_charging": energy_status.electric.charging.is_charging if energy_status.electric.charging else False
+        }
+        
+        # Add charging details if currently charging
+        if energy_status.electric.charging and energy_status.electric.charging.is_charging:
+            result["charging_power_kw"] = energy_status.electric.charging.charging_power_kw
+            result["estimated_charge_time_minutes"] = energy_status.electric.charging.remaining_time_minutes
+        
+        return result
+
+
     # Also keep resources for direct data access
     @mcp.resource("data://list_vehicles")
     def list_vehicles_resource() -> List[Dict[str, Any]]:
@@ -181,22 +388,35 @@ def get_server(adapter: AbstractAdapter) -> FastMCP:
             This server provides access to Volkswagen vehicle data via MCP tools.
             
             Available tools:
-            - list_vehicles: Get a list of all available vehicles with VIN, name, and model
+            - list_vehicles: Get a list of all available vehicles with VIN, name, model, and license plate
+            - get_vehicle_info: Get basic vehicle information (software version, model year, connection state)
             - get_vehicle_state: Get complete state of a vehicle (battery, position, doors, windows, climate, tyres)
             - get_vehicle_doors: Get door lock and open/closed status
             - get_vehicle_windows: Get window open/closed status
             - get_vehicle_tyres: Get tyre pressure and temperature
             - get_vehicle_type: Get the vehicle type (electric/BEV, combustion, hybrid)
             - get_charging_state: Get detailed charging information for electric/hybrid vehicles
+            - get_climatization_state: Get climate control status (heating/cooling, temperature, settings)
+            - get_maintenance_info: Get maintenance schedules (inspection and oil service due dates/distances)
+            - get_range_info: Get range information (total, electric, and combustion ranges with battery/tank levels)
+            - get_window_heating_state: Get window heating status (front and rear windows)
+            - get_lights_state: Get vehicle lights status (left and right lights)
             
-            Start by calling list_vehicles to see available vehicles. When referring to vehicles, 
-            use their name if available (more user-friendly), but always use the VIN as the vehicle_id 
-            parameter when calling other tools.
+            Start by calling list_vehicles to see available vehicles. Vehicle can be identified by
+            name (preferred), VIN, or license plate in all tools.
             
-            For charging information, use get_charging_state to get details about:
-            - Whether the vehicle is currently charging
-            - Charging power and estimated completion time
-            - Battery level and target charge percentage
+            For electric/hybrid vehicles, you can use:
+            - get_charging_state for charging information
+            - get_range_info for battery level and electric range
+            
+            For climate control and comfort:
+            - get_climatization_state to check if heating/cooling is active and target temperature
+            - get_window_heating_state to check if window heating is on
+            
+            For safety:
+            - get_lights_state to check if any lights were left on
+            
+            For maintenance, use get_maintenance_info to see when the next service is due.
             
             All tools except list_vehicles require a vehicle_id parameter (which should be the VIN).
         """,
