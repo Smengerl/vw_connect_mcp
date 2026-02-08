@@ -56,7 +56,7 @@ def test_cache_invalidation_workflow():
     assert len(vehicles) == 2, "Should have 2 test vehicles"
     
     # 2. Execute a command (should invalidate cache)
-    result = adapter.execute_command("WVWZZZED4SE003938", "lock")
+    result = adapter.lock_vehicle("WVWZZZED4SE003938")
     assert result["success"] is True
     
     # 3. Invalidate cache explicitly

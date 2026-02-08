@@ -31,7 +31,7 @@ from test_data import (
 
 def test_lock_vehicle_by_vin(adapter):
     """Test locking vehicle by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "lock")
+    result = adapter.lock_vehicle(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -40,7 +40,7 @@ def test_lock_vehicle_by_vin(adapter):
 
 def test_lock_vehicle_by_name(adapter):
     """Test locking vehicle by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "lock")
+    result = adapter.lock_vehicle(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -48,7 +48,7 @@ def test_lock_vehicle_by_name(adapter):
 
 def test_lock_vehicle_invalid_vehicle(adapter):
     """Test locking non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "lock")
+    result = adapter.lock_vehicle(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -58,7 +58,7 @@ def test_lock_vehicle_invalid_vehicle(adapter):
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_lock_vehicle_all_identifiers(adapter, identifier):
     """Test that lock works with VIN, name, or license plate"""
-    result = adapter.execute_command(identifier, "lock")
+    result = adapter.lock_vehicle(identifier)
     
     assert result is not None
     assert result["success"] is True
@@ -68,7 +68,7 @@ def test_lock_vehicle_all_identifiers(adapter, identifier):
 
 def test_unlock_vehicle_by_vin(adapter):
     """Test unlocking vehicle by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "unlock")
+    result = adapter.unlock_vehicle(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -77,7 +77,7 @@ def test_unlock_vehicle_by_vin(adapter):
 
 def test_unlock_vehicle_by_name(adapter):
     """Test unlocking vehicle by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "unlock")
+    result = adapter.unlock_vehicle(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -85,7 +85,7 @@ def test_unlock_vehicle_by_name(adapter):
 
 def test_unlock_vehicle_invalid_vehicle(adapter):
     """Test unlocking non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "unlock")
+    result = adapter.unlock_vehicle(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -96,7 +96,7 @@ def test_unlock_vehicle_invalid_vehicle(adapter):
 
 def test_lock_electric_vehicle(adapter):
     """Test lock command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "lock")
+    result = adapter.lock_vehicle(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -104,7 +104,23 @@ def test_lock_electric_vehicle(adapter):
 
 def test_lock_combustion_vehicle(adapter):
     """Test lock command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "lock")
+    result = adapter.lock_vehicle(VIN_COMBUSTION)
+    
+    assert result is not None
+    assert result["success"] is True
+
+
+def test_unlock_electric_vehicle(adapter):
+    """Test unlock command on electric vehicle"""
+    result = adapter.unlock_vehicle(VIN_ELECTRIC)
+    
+    assert result is not None
+    assert result["success"] is True
+
+
+def test_unlock_combustion_vehicle(adapter):
+    """Test unlock command on combustion vehicle"""
+    result = adapter.unlock_vehicle(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True

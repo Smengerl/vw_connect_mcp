@@ -7,7 +7,7 @@ Comprehensive test suite for the WeConnect MCP server implementation.
 | Category | Tests | Files | Scope | Description |
 |----------|-------|-------|-------|-------------|
 | **Tools** | 76 | 7 | Unit | Data retrieval operations (adapter methods) |
-| **Commands** | 71 | 5 | Unit | Vehicle control operations (execute_command) |
+| **Commands** | 71 | 5 | Unit | Vehicle control operations (lock, unlock, start_charging, etc.) |
 | **Resources** | 22 | 2 | Integration | MCP resource protocol (read_resource) |
 | **MCP Server** | 8 | 1 | Integration | MCP protocol layer (call_tool) |
 | **Real API** | ~13 | 2 | E2E | Real VW API & full roundtrip tests |

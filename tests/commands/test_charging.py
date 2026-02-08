@@ -35,16 +35,16 @@ from test_data import (
 
 def test_start_charging_by_vin(adapter):
     """Test starting charging by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_charging")
+    result = adapter.start_charging(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "start_charging" in result["message"].lower()
+    assert "charging" in result["message"].lower()
 
 
 def test_start_charging_by_name(adapter):
     """Test starting charging by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "start_charging")
+    result = adapter.start_charging(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -52,7 +52,7 @@ def test_start_charging_by_name(adapter):
 
 def test_start_charging_invalid_vehicle(adapter):
     """Test starting charging on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "start_charging")
+    result = adapter.start_charging(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -62,7 +62,7 @@ def test_start_charging_invalid_vehicle(adapter):
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_start_charging_all_identifiers(adapter, identifier):
     """Test that start charging works with VIN, name, or license plate"""
-    result = adapter.execute_command(identifier, "start_charging")
+    result = adapter.start_charging(identifier)
     
     assert result is not None
     assert result["success"] is True
@@ -72,16 +72,16 @@ def test_start_charging_all_identifiers(adapter, identifier):
 
 def test_stop_charging_by_vin(adapter):
     """Test stopping charging by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "stop_charging")
+    result = adapter.stop_charging(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "stop_charging" in result["message"].lower()
+    assert "charging" in result["message"].lower()
 
 
 def test_stop_charging_by_name(adapter):
     """Test stopping charging by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "stop_charging")
+    result = adapter.stop_charging(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -89,7 +89,7 @@ def test_stop_charging_by_name(adapter):
 
 def test_stop_charging_invalid_vehicle(adapter):
     """Test stopping charging on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "stop_charging")
+    result = adapter.stop_charging(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -100,7 +100,7 @@ def test_stop_charging_invalid_vehicle(adapter):
 
 def test_start_charging_electric_vehicle(adapter):
     """Test start charging command on electric vehicle (primary use case)"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_charging")
+    result = adapter.start_charging(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -108,7 +108,7 @@ def test_start_charging_electric_vehicle(adapter):
 
 def test_stop_charging_electric_vehicle(adapter):
     """Test stop charging command on electric vehicle (primary use case)"""
-    result = adapter.execute_command(VIN_ELECTRIC, "stop_charging")
+    result = adapter.stop_charging(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True

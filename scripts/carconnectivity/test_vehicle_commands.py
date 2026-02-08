@@ -124,8 +124,13 @@ def unlock_vehicle(vehicle):
         return False
 
 
-def start_climatization(vehicle):
-    """Start climate control."""
+def start_climatization(vehicle, target_temp_celsius=None):
+    """Start climate control.
+    
+    Args:
+        vehicle: The vehicle object
+        target_temp_celsius: Optional target temperature in Celsius
+    """
     if not hasattr(vehicle, 'climatization') or vehicle.climatization is None or vehicle.climatization.commands is None:
         print("❌ Vehicle does not support climatization commands")
         return False
@@ -135,8 +140,17 @@ def start_climatization(vehicle):
         return False
     
     try:
-        vehicle.climatization.commands.commands["start-stop"].value = ClimatizationStartStopCommand.Command.START
-        print("✅ Climatization started successfully")
+        # Build command dict with temperature if provided
+        command_dict = {"command": ClimatizationStartStopCommand.Command.START}
+        if target_temp_celsius is not None:
+            command_dict["target_temperature"] = target_temp_celsius
+            command_dict["target_temperature_unit"] = "C"
+        
+        vehicle.climatization.commands.commands["start-stop"].value = command_dict
+        msg = "✅ Climatization started successfully"
+        if target_temp_celsius is not None:
+            msg += f" (target: {target_temp_celsius}°C)"
+        print(msg)
         return True
     except Exception as e:
         print(f"❌ Failed to start climatization: {e}")
@@ -200,8 +214,13 @@ def stop_charging(vehicle):
         return False
 
 
-def flash_lights(vehicle):
-    """Flash the vehicle lights."""
+def flash_lights(vehicle, duration_seconds=None):
+    """Flash the vehicle lights.
+    
+    Args:
+        vehicle: The vehicle object
+        duration_seconds: Optional duration in seconds
+    """
     if not hasattr(vehicle, 'controls') or vehicle.controls is None or vehicle.controls.commands is None:
         print("❌ Vehicle does not support control commands")
         return False
@@ -211,16 +230,29 @@ def flash_lights(vehicle):
         return False
     
     try:
-        vehicle.controls.commands.commands["honk-and-flash"].value = HonkAndFlashCommand.Command.FLASH
-        print("✅ Lights flashed successfully")
+        # Build command dict with duration if provided
+        command_dict = {"command": HonkAndFlashCommand.Command.FLASH}
+        if duration_seconds is not None:
+            command_dict["duration"] = duration_seconds
+        
+        vehicle.controls.commands.commands["honk-and-flash"].value = command_dict
+        msg = "✅ Lights flashed successfully"
+        if duration_seconds is not None:
+            msg += f" (duration: {duration_seconds}s)"
+        print(msg)
         return True
     except Exception as e:
         print(f"❌ Failed to flash lights: {e}")
         return False
 
 
-def honk_and_flash(vehicle):
-    """Honk and flash the vehicle."""
+def honk_and_flash(vehicle, duration_seconds=None):
+    """Honk and flash the vehicle.
+    
+    Args:
+        vehicle: The vehicle object
+        duration_seconds: Optional duration in seconds
+    """
     if not hasattr(vehicle, 'controls') or vehicle.controls is None or vehicle.controls.commands is None:
         print("❌ Vehicle does not support control commands")
         return False
@@ -230,8 +262,16 @@ def honk_and_flash(vehicle):
         return False
     
     try:
-        vehicle.controls.commands.commands["honk-and-flash"].value = HonkAndFlashCommand.Command.HONK_AND_FLASH
-        print("✅ Honk and flash executed successfully")
+        # Build command dict with duration if provided
+        command_dict = {"command": HonkAndFlashCommand.Command.HONK_AND_FLASH}
+        if duration_seconds is not None:
+            command_dict["duration"] = duration_seconds
+        
+        vehicle.controls.commands.commands["honk-and-flash"].value = command_dict
+        msg = "✅ Honk and flash executed successfully"
+        if duration_seconds is not None:
+            msg += f" (duration: {duration_seconds}s)"
+        print(msg)
         return True
     except Exception as e:
         print(f"❌ Failed to honk and flash: {e}")

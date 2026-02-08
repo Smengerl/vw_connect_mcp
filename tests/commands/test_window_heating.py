@@ -31,16 +31,16 @@ from test_data import (
 
 def test_start_window_heating_by_vin(adapter):
     """Test starting window heating by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_window_heating")
+    result = adapter.start_window_heating(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "start_window_heating" in result["message"].lower()
+    assert "window" in result["message"].lower() or "heating" in result["message"].lower()
 
 
 def test_start_window_heating_by_name(adapter):
     """Test starting window heating by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "start_window_heating")
+    result = adapter.start_window_heating(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -48,7 +48,7 @@ def test_start_window_heating_by_name(adapter):
 
 def test_start_window_heating_invalid_vehicle(adapter):
     """Test starting window heating on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "start_window_heating")
+    result = adapter.start_window_heating(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -58,7 +58,7 @@ def test_start_window_heating_invalid_vehicle(adapter):
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_start_window_heating_all_identifiers(adapter, identifier):
     """Test that start window heating works with VIN, name, or license plate"""
-    result = adapter.execute_command(identifier, "start_window_heating")
+    result = adapter.start_window_heating(identifier)
     
     assert result is not None
     assert result["success"] is True
@@ -68,16 +68,16 @@ def test_start_window_heating_all_identifiers(adapter, identifier):
 
 def test_stop_window_heating_by_vin(adapter):
     """Test stopping window heating by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "stop_window_heating")
+    result = adapter.stop_window_heating(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "stop_window_heating" in result["message"].lower()
+    assert "window" in result["message"].lower() or "heating" in result["message"].lower()
 
 
 def test_stop_window_heating_by_name(adapter):
     """Test stopping window heating by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "stop_window_heating")
+    result = adapter.stop_window_heating(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -85,7 +85,7 @@ def test_stop_window_heating_by_name(adapter):
 
 def test_stop_window_heating_invalid_vehicle(adapter):
     """Test stopping window heating on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "stop_window_heating")
+    result = adapter.stop_window_heating(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -96,7 +96,7 @@ def test_stop_window_heating_invalid_vehicle(adapter):
 
 def test_start_window_heating_electric_vehicle(adapter):
     """Test start window heating command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_window_heating")
+    result = adapter.start_window_heating(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -104,7 +104,7 @@ def test_start_window_heating_electric_vehicle(adapter):
 
 def test_start_window_heating_combustion_vehicle(adapter):
     """Test start window heating command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "start_window_heating")
+    result = adapter.start_window_heating(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True
@@ -112,7 +112,7 @@ def test_start_window_heating_combustion_vehicle(adapter):
 
 def test_stop_window_heating_electric_vehicle(adapter):
     """Test stop window heating command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "stop_window_heating")
+    result = adapter.stop_window_heating(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -120,7 +120,7 @@ def test_stop_window_heating_electric_vehicle(adapter):
 
 def test_stop_window_heating_combustion_vehicle(adapter):
     """Test stop window heating command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "stop_window_heating")
+    result = adapter.stop_window_heating(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True

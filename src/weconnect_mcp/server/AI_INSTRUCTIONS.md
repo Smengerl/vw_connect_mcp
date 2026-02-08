@@ -238,13 +238,13 @@ Control tools modify vehicle state and automatically invalidate the cache to ens
 
 
 
-**`start_climatization(vehicle_id, target_temperature_celsius=None)`**- Returns: Lock status and open/closed state for all doors
+**`start_climatization(vehicle_id, target_temp_celsius=None)`**
 
 - Action: Start pre-heating/cooling
-
-- Optional: Set target temperature (otherwise uses last setting)- Example: `get_vehicle_doors("Golf")`## AVAILABLE RESOURCES (Read-Only Data)
-
-- Example: `start_climatization("Golf", 22.0)`
+- Parameters:
+  - `vehicle_id`: Vehicle name, VIN, or license plate
+  - `target_temp_celsius` (optional): Target temperature in Celsius (if supported by vehicle)
+- Example: `start_climatization("Golf")` or `start_climatization("Golf", 22.0)`
 
 
 
@@ -298,21 +298,19 @@ Control tools modify vehicle state and automatically invalidate the cache to ens
 
 **`flash_lights(vehicle_id, duration_seconds=None)`**
 
-- Action: Flash headlights- Use for detailed charging analysis### Physical Components
+- Action: Flash headlights to locate vehicle
+- Parameters: 
+  - `vehicle_id`: Vehicle name, VIN, or license plate
+  - `duration_seconds` (optional): Duration in seconds (if supported by vehicle)
+- Example: `flash_lights("Golf")` or `flash_lights("Golf", 10)`
 
-- Optional: Duration in seconds
+**`honk_and_flash(vehicle_id, duration_seconds=None)`**
 
-- Example: `flash_lights("Golf", 10)`
-
-
-
-**`honk_and_flash(vehicle_id, duration_seconds=None)`**### Climate & Comfort- **URI**: `data://vehicle/{vehicle_id}/doors`
-
-- Action: Honk horn and flash lights
-
-- Optional: Duration in seconds- **Description**: Lock status and open/closed state for all doors
-
-- Example: `honk_and_flash("Golf", 5)`
+- Action: Honk horn and flash lights to locate vehicle
+- Parameters: 
+  - `vehicle_id`: Vehicle name, VIN, or license plate
+  - `duration_seconds` (optional): Duration in seconds (if supported by vehicle)
+- Example: `honk_and_flash("Golf")` or `honk_and_flash("Golf", 5)`
 
 **`get_climate_status(vehicle_id)`**
 
@@ -361,9 +359,7 @@ Control tools modify vehicle state and automatically invalidate the cache to ens
 ## AVAILABLE CONTROL TOOLS
 
 1. `get_climate_status("Golf")` - check current status
-
-2. `start_climatization("Golf", 22.0)` - pre-heat/cool to 22°C- **URI**: `data://vehicle/{vehicle_id}/range`
-
+2. `start_climatization("Golf")` - pre-heat/cool (uses last temperature setting)
 3. `get_climate_status("Golf")` - verify activation (cache auto-refreshed after command)
 
 Control tools modify vehicle state and automatically invalidate the cache to ensure fresh data on next read.- **Description**: Total range + electric/combustion breakdown with battery/tank levels
@@ -397,10 +393,8 @@ Control tools modify vehicle state and automatically invalidate the cache to ens
   - Only for BEV/PHEV vehicles
 
 1. `get_vehicle_position("Golf")` - get GPS coordinates
-
-2. `flash_lights("Golf", 10)` - flash lights for 10 seconds**`unlock_vehicle(vehicle_id)`**  - Includes: is_charging, is_plugged_in, charging_power_kw, remaining_time_minutes
-
-3. Or: `honk_and_flash("Golf", 5)` - honk and flash for 5 seconds
+2. `flash_lights("Golf")` - flash lights to locate vehicle
+3. Or: `honk_and_flash("Golf")` - honk and flash to locate vehicle
 
 - Action: Unlock all doors
 
@@ -421,36 +415,9 @@ Control tools modify vehicle state and automatically invalidate the cache to ens
 - **Data is cached** for 5 minutes - cache automatically refreshes after any control command- **Description**: Heating/cooling status, target temp, estimated time
 
 - **Combine read tools** for comprehensive reports
+- **Vehicle identifiers**: name or VIN (license plate NOT supported)
 
-- **Vehicle identifiers**: name or VIN (license plate NOT supported)**`start_climatization(vehicle_id, target_temperature_celsius=None)`**  - States: off, heating, cooling, ventilation
-
-
-
-## ERROR HANDLING- Action: Start pre-heating/cooling  - Settings: window heating, seat heating, unlock behavior
-
-
-
-- Tools return `{"error": "..."}` JSON if vehicle not found or data unavailable- Optional: Set target temperature (otherwise uses last setting)
-
-- BEV/PHEV-only tools return errors for combustion vehicles
-
-- Always verify vehicle exists with `get_vehicles()` first- Example: `start_climatization("Golf", 22.0)`- **URI**: `data://vehicle/{vehicle_id}/window-heating`
-
-- Control tools return error dictionaries if operation fails
-
-- If vehicle cannot be found by name, try using the VIN instead- **Description**: Front/rear window heating status
-
-
-
-## CACHING BEHAVIOR**`stop_climatization(vehicle_id)`**
-
-
-
-- All read tools access cached data (5 minutes / 300 seconds)- Action: Stop pre-heating/cooling### Maintenance & Service
-
-- Cache prevents excessive VW API calls and respects rate limits
-
-- **Cache is automatically invalidated** after any control tool executes- Example: `stop_climatization("Golf")`
+## ERROR HANDLING
 
 - Next read tool call after a control command will fetch fresh data from VW servers
 

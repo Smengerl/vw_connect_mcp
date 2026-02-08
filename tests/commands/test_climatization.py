@@ -31,16 +31,24 @@ from test_data import (
 
 def test_start_climatization_by_vin(adapter):
     """Test starting climatization by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_climatization")
+    result = adapter.start_climatization(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "start_climatization" in result["message"].lower()
+    assert "climatization" in result["message"].lower()
 
 
 def test_start_climatization_by_name(adapter):
     """Test starting climatization by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "start_climatization")
+    result = adapter.start_climatization(NAME_ELECTRIC)
+    
+    assert result is not None
+    assert result["success"] is True
+
+
+def test_start_climatization_with_temperature(adapter):
+    """Test starting climatization with target temperature"""
+    result = adapter.start_climatization(VIN_ELECTRIC, target_temp_celsius=22.0)
     
     assert result is not None
     assert result["success"] is True
@@ -48,7 +56,7 @@ def test_start_climatization_by_name(adapter):
 
 def test_start_climatization_invalid_vehicle(adapter):
     """Test starting climatization on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "start_climatization")
+    result = adapter.start_climatization(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -58,7 +66,7 @@ def test_start_climatization_invalid_vehicle(adapter):
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_start_climatization_all_identifiers(adapter, identifier):
     """Test that start climatization works with VIN, name, or license plate"""
-    result = adapter.execute_command(identifier, "start_climatization")
+    result = adapter.start_climatization(identifier)
     
     assert result is not None
     assert result["success"] is True
@@ -68,16 +76,16 @@ def test_start_climatization_all_identifiers(adapter, identifier):
 
 def test_stop_climatization_by_vin(adapter):
     """Test stopping climatization by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "stop_climatization")
+    result = adapter.stop_climatization(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "stop_climatization" in result["message"].lower()
+    assert "climatization" in result["message"].lower()
 
 
 def test_stop_climatization_by_name(adapter):
     """Test stopping climatization by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "stop_climatization")
+    result = adapter.stop_climatization(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -85,7 +93,7 @@ def test_stop_climatization_by_name(adapter):
 
 def test_stop_climatization_invalid_vehicle(adapter):
     """Test stopping climatization on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "stop_climatization")
+    result = adapter.stop_climatization(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -96,7 +104,7 @@ def test_stop_climatization_invalid_vehicle(adapter):
 
 def test_start_climatization_electric_vehicle(adapter):
     """Test start climatization command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "start_climatization")
+    result = adapter.start_climatization(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -104,7 +112,7 @@ def test_start_climatization_electric_vehicle(adapter):
 
 def test_start_climatization_combustion_vehicle(adapter):
     """Test start climatization command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "start_climatization")
+    result = adapter.start_climatization(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True

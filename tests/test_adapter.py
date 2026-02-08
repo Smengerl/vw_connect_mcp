@@ -315,28 +315,81 @@ class TestAdapter(AbstractAdapter):
                     )
         return None
 
-    def execute_command(self, vehicle_id: str, command: str, **kwargs) -> Dict[str, Any]:
-        """Mock implementation of execute_command for testing."""
-        
-        # Resolve identifier to VIN
+    def lock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock lock vehicle."""
         vin = self._resolve_to_vin(vehicle_id)
-        
-        # Check if vehicle exists
-        vehicle_exists = any(v.vin == vin for v in self.vehicles)
-        if not vehicle_exists:
+        if not any(v.vin == vin for v in self.vehicles):
             return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        
-        # List of supported commands
-        supported_commands = [
-            "lock", "unlock",
-            "start_climatization", "stop_climatization",
-            "start_charging", "stop_charging",
-            "flash", "honk_and_flash",
-            "start_window_heating", "stop_window_heating"
-        ]
-        
-        if command not in supported_commands:
-            return {"success": False, "error": f"Unknown command: {command}"}
-        
-        # Mock successful execution
-        return {"success": True, "message": f"Command {command} executed"}
+        return {"success": True, "message": "Vehicle locked"}
+
+    def unlock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock unlock vehicle."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Vehicle unlocked"}
+
+    def start_climatization(self, vehicle_id: str, target_temp_celsius: Optional[float] = None) -> Dict[str, Any]:
+        """Mock start climatization."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        msg = "Climatization started"
+        if target_temp_celsius is not None:
+            msg += f" at {target_temp_celsius}°C"
+        return {"success": True, "message": msg}
+
+    def stop_climatization(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock stop climatization."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Climatization stopped"}
+
+    def start_charging(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock start charging."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Charging started"}
+
+    def stop_charging(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock stop charging."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Charging stopped"}
+
+    def flash_lights(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Mock flash lights."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        msg = "Lights flashed"
+        if duration_seconds is not None:
+            msg += f" for {duration_seconds} seconds"
+        return {"success": True, "message": msg}
+
+    def honk_and_flash(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Mock honk and flash."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        msg = "Honk and flash executed"
+        if duration_seconds is not None:
+            msg += f" for {duration_seconds} seconds"
+        return {"success": True, "message": msg}
+
+    def start_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock start window heating."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Window heating started"}
+
+    def stop_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
+        """Mock stop window heating."""
+        vin = self._resolve_to_vin(vehicle_id)
+        if not any(v.vin == vin for v in self.vehicles):
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        return {"success": True, "message": "Window heating stopped"}

@@ -546,7 +546,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("lock vehicle for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "lock")
+        return adapter.lock_vehicle(vehicle_id)
 
     @mcp.tool(
         name="unlock_vehicle",
@@ -557,19 +557,19 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("unlock vehicle for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "unlock")
+        return adapter.unlock_vehicle(vehicle_id)
 
     @mcp.tool(
         name="start_climatization",
         title="Start Climate Control",
-        description="Start vehicle climate control (heating/cooling). Optionally specify target temperature, otherwise uses last setting"
+        description="Start vehicle climate control (heating/cooling). Optional target temperature in Celsius."
     )
     def start_climatization(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
-        target_temperature_celsius: Annotated[Optional[float], "Target temperature in Celsius (optional, uses last setting if not provided)"] = None
+        target_temp_celsius: Annotated[Optional[float], "Target temperature in Celsius (if supported by vehicle)"] = None
     ) -> Dict[str, Any]:
-        logger.info("start climatization for id=%s, temp=%s", vehicle_id, target_temperature_celsius)
-        return adapter.execute_command(vehicle_id, "start_climatization", target_temperature=target_temperature_celsius)
+        logger.info("start climatization for id=%s, temp=%s", vehicle_id, target_temp_celsius)
+        return adapter.start_climatization(vehicle_id, target_temp_celsius)
 
     @mcp.tool(
         name="stop_climatization",
@@ -580,7 +580,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("stop climatization for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "stop_climatization")
+        return adapter.stop_climatization(vehicle_id)
 
     @mcp.tool(
         name="start_charging",
@@ -591,7 +591,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("start charging for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "start_charging")
+        return adapter.start_charging(vehicle_id)
 
     @mcp.tool(
         name="stop_charging",
@@ -602,31 +602,31 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("stop charging for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "stop_charging")
+        return adapter.stop_charging(vehicle_id)
 
     @mcp.tool(
         name="flash_lights",
         title="Flash Lights",
-        description="Flash the vehicle lights to help locate the vehicle in a parking lot"
+        description="Flash the vehicle lights to help locate the vehicle in a parking lot. Optional duration in seconds."
     )
     def flash_lights(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
-        duration_seconds: Annotated[Optional[int], "Duration in seconds (optional, if supported by vehicle)"] = None
+        duration_seconds: Annotated[Optional[int], "Duration in seconds (if supported by vehicle)"] = None
     ) -> Dict[str, Any]:
-        logger.info("flash lights for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "flash", duration=duration_seconds)
+        logger.info("flash lights for id=%s, duration=%s", vehicle_id, duration_seconds)
+        return adapter.flash_lights(vehicle_id, duration_seconds)
 
     @mcp.tool(
         name="honk_and_flash",
         title="Honk and Flash",
-        description="Honk the horn and flash the lights to help locate the vehicle"
+        description="Honk the horn and flash the lights to help locate the vehicle. Optional duration in seconds."
     )
     def honk_and_flash(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
-        duration_seconds: Annotated[Optional[int], "Duration in seconds (optional, if supported by vehicle)"] = None
+        duration_seconds: Annotated[Optional[int], "Duration in seconds (if supported by vehicle)"] = None
     ) -> Dict[str, Any]:
-        logger.info("honk and flash for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "honk_and_flash", duration=duration_seconds)
+        logger.info("honk and flash for id=%s, duration=%s", vehicle_id, duration_seconds)
+        return adapter.honk_and_flash(vehicle_id, duration_seconds)
 
     @mcp.tool(
         name="start_window_heating",
@@ -637,7 +637,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("start window heating for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "start_window_heating")
+        return adapter.start_window_heating(vehicle_id)
 
     @mcp.tool(
         name="stop_window_heating",
@@ -648,7 +648,7 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> Dict[str, Any]:
         logger.info("stop window heating for id=%s", vehicle_id)
-        return adapter.execute_command(vehicle_id, "stop_window_heating")
+        return adapter.stop_window_heating(vehicle_id)
 
 
 def _load_ai_instructions() -> str:

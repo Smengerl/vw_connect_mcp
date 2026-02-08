@@ -32,7 +32,7 @@ from test_data import (
 
 def test_flash_lights_by_vin(adapter):
     """Test flashing lights by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "flash")
+    result = adapter.flash_lights(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -41,7 +41,7 @@ def test_flash_lights_by_vin(adapter):
 
 def test_flash_lights_by_name(adapter):
     """Test flashing lights by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "flash")
+    result = adapter.flash_lights(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -49,15 +49,16 @@ def test_flash_lights_by_name(adapter):
 
 def test_flash_lights_with_duration(adapter):
     """Test flashing lights with duration parameter"""
-    result = adapter.execute_command(VIN_ELECTRIC, "flash", duration=5)
+    result = adapter.flash_lights(VIN_ELECTRIC, duration_seconds=5)
     
     assert result is not None
     assert result["success"] is True
+    assert "5 seconds" in result["message"]
 
 
 def test_flash_lights_invalid_vehicle(adapter):
     """Test flashing lights on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "flash")
+    result = adapter.flash_lights(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -67,7 +68,7 @@ def test_flash_lights_invalid_vehicle(adapter):
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_flash_lights_all_identifiers(adapter, identifier):
     """Test that flash works with VIN, name, or license plate"""
-    result = adapter.execute_command(identifier, "flash")
+    result = adapter.flash_lights(identifier)
     
     assert result is not None
     assert result["success"] is True
@@ -77,16 +78,16 @@ def test_flash_lights_all_identifiers(adapter, identifier):
 
 def test_honk_and_flash_by_vin(adapter):
     """Test honk and flash by VIN"""
-    result = adapter.execute_command(VIN_ELECTRIC, "honk_and_flash")
+    result = adapter.honk_and_flash(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
-    assert "honk_and_flash" in result["message"].lower()
+    assert "honk" in result["message"].lower() or "flash" in result["message"].lower()
 
 
 def test_honk_and_flash_by_name(adapter):
     """Test honk and flash by name"""
-    result = adapter.execute_command(NAME_ELECTRIC, "honk_and_flash")
+    result = adapter.honk_and_flash(NAME_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -94,15 +95,16 @@ def test_honk_and_flash_by_name(adapter):
 
 def test_honk_and_flash_with_duration(adapter):
     """Test honk and flash with duration parameter"""
-    result = adapter.execute_command(VIN_ELECTRIC, "honk_and_flash", duration=10)
+    result = adapter.honk_and_flash(VIN_ELECTRIC, duration_seconds=10)
     
     assert result is not None
     assert result["success"] is True
+    assert "10 seconds" in result["message"]
 
 
 def test_honk_and_flash_invalid_vehicle(adapter):
     """Test honk and flash on non-existent vehicle returns error"""
-    result = adapter.execute_command(VIN_INVALID, "honk_and_flash")
+    result = adapter.honk_and_flash(VIN_INVALID)
     
     assert result is not None
     assert result["success"] is False
@@ -113,7 +115,7 @@ def test_honk_and_flash_invalid_vehicle(adapter):
 
 def test_flash_lights_electric_vehicle(adapter):
     """Test flash lights command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "flash")
+    result = adapter.flash_lights(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -121,7 +123,7 @@ def test_flash_lights_electric_vehicle(adapter):
 
 def test_flash_lights_combustion_vehicle(adapter):
     """Test flash lights command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "flash")
+    result = adapter.flash_lights(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True
@@ -129,7 +131,7 @@ def test_flash_lights_combustion_vehicle(adapter):
 
 def test_honk_and_flash_electric_vehicle(adapter):
     """Test honk and flash command on electric vehicle"""
-    result = adapter.execute_command(VIN_ELECTRIC, "honk_and_flash")
+    result = adapter.honk_and_flash(VIN_ELECTRIC)
     
     assert result is not None
     assert result["success"] is True
@@ -137,7 +139,7 @@ def test_honk_and_flash_electric_vehicle(adapter):
 
 def test_honk_and_flash_combustion_vehicle(adapter):
     """Test honk and flash command on combustion vehicle"""
-    result = adapter.execute_command(VIN_COMBUSTION, "honk_and_flash")
+    result = adapter.honk_and_flash(VIN_COMBUSTION)
     
     assert result is not None
     assert result["success"] is True

@@ -278,17 +278,71 @@ class AbstractAdapter(ABC):
         pass
 
     @abstractmethod
-    def execute_command(self, vehicle_id: str, command: str, **kwargs) -> Dict[str, Any]:
-        """Execute a vehicle command.
+    def lock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
+        """Lock the vehicle doors."""
+        pass
+
+    @abstractmethod
+    def unlock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
+        """Unlock the vehicle doors."""
+        pass
+
+    @abstractmethod
+    def start_climatization(self, vehicle_id: str, target_temp_celsius: Optional[float] = None) -> Dict[str, Any]:
+        """Start climate control.
         
         Args:
             vehicle_id: VIN, name, or license plate
-            command: Command name (lock, unlock, start_climatization, etc.)
-            **kwargs: Command-specific parameters
-        
+            target_temp_celsius: Optional target temperature in Celsius (if supported by vehicle)
+            
         Returns:
             Result dict with success/error status
         """
+        pass
+
+    @abstractmethod
+    def stop_climatization(self, vehicle_id: str) -> Dict[str, Any]:
+        """Stop climate control."""
+        pass
+
+    @abstractmethod
+    def start_charging(self, vehicle_id: str) -> Dict[str, Any]:
+        """Start charging."""
+        pass
+
+    @abstractmethod
+    def stop_charging(self, vehicle_id: str) -> Dict[str, Any]:
+        """Stop charging."""
+        pass
+
+    @abstractmethod
+    def flash_lights(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Flash the vehicle lights.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            duration_seconds: Optional duration in seconds (if supported by vehicle)
+        """
+        pass
+
+    @abstractmethod
+    def honk_and_flash(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Honk and flash the vehicle.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            duration_seconds: Optional duration in seconds (if supported by vehicle)
+        """
+        pass
+
+    @abstractmethod
+    def start_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
+        """Start window heating."""
+        pass
+
+    @abstractmethod
+    def stop_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
+        """Stop window heating."""
         pass
 
     def invalidate_cache(self) -> None:
