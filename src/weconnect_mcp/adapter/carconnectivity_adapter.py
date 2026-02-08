@@ -1,8 +1,8 @@
-"""Adapter that wires the carconnectivity library into the generic MCP server.
+"""CarConnectivity adapter for VW vehicles via WeConnect.
 
-This file depends on the third-party `carconnectivity` library; its responsibilities are:
-- initialize CarConnectivity 
-- provide a vehicles_getter callable returning the list of vehicles
+Depends on third-party carconnectivity library for:
+- CarConnectivity initialization
+- vehicles_getter callable
 """
 
 import json
@@ -15,7 +15,6 @@ from weconnect_mcp.adapter.abstract_adapter import (
     MaintenanceModel, RangeModel, DriveModel, WindowHeatingsModel, WindowHeatingModel, 
     LightsModel, LightModel, PositionModel, BatteryStatusModel, DoorsModel, DoorModel, 
     WindowsModel, WindowModel, TyreModel, TyresModel,
-    # New consolidated models
     VehicleDetailLevel, PhysicalStatusModel, EnergyStatusModel, ClimateStatusModel,
     RangeInfo, ElectricDriveInfo, CombustionDriveInfo
 )
@@ -24,8 +23,7 @@ from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.attributes import GenericAttribute
 
-
-# Configure logging to use stderr to avoid interfering with MCP stdio communication
+# Configure logging to stderr for MCP stdio compatibility
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -38,32 +36,28 @@ from pydantic import BaseModel
 
 
 class CarConnectivityAdapter(AbstractAdapter):
-    """Adapter for Volkswagen vehicles using the carconnectivity library.
+    """Adapter for VW vehicles using carconnectivity library.
     
-    This adapter provides access to vehicle data from Volkswagen's WeConnect service
-    through the carconnectivity third-party library. It handles authentication,
-    data fetching, and transformation into standardized models.
+    Provides access to VW WeConnect service data via third-party library.
     """
 
     def __init__(self, config_path: str, tokenstore_file: Optional[str] = None):
-        """Initialize the CarConnectivity adapter.
+        """Initialize adapter.
         
         Args:
-            config_path: Path to JSON config file containing VW account credentials
-            tokenstore_file: Optional path to store authentication tokens
+            config_path: JSON config file with VW credentials
+            tokenstore_file: Optional token storage path
         """
         self.tokenstore_file = tokenstore_file
         self.config_path = config_path
         self.vehicles: List[Any] = []
         self.car_connectivity = None
         
-        # Import carconnectivity lazily to allow tests without the library installed
         try:
             from carconnectivity import carconnectivity as _carconnectivity
         except Exception:
-            raise  # Re-raise to provide original import error
+            raise
             
-        # Load configuration and initialize connection
         with open(config_path, 'r', encoding='utf-8') as fh:
             config_dict = json.load(fh)
         self.car_connectivity = _carconnectivity.CarConnectivity(
@@ -73,12 +67,12 @@ class CarConnectivityAdapter(AbstractAdapter):
         self.car_connectivity.fetch_all()
 
     def shutdown(self):
-        """Clean up resources and close connections."""
+        """Clean up resources."""
         if self.car_connectivity is not None:
             try:
                 self.car_connectivity.shutdown()
             except Exception:
-                pass  # Ignore errors during shutdown
+                pass
 
     async def __aenter__(self) -> CarConnectivityAdapter:
         return self
@@ -93,11 +87,7 @@ class CarConnectivityAdapter(AbstractAdapter):
         self.shutdown()
 
     def list_vehicles(self) -> list[VehicleListItem]:
-        """Get list of all vehicles with VIN, name, model, and license plate.
-        
-        Returns:
-            List of VehicleListItem objects containing basic vehicle information
-        """
+        """Get list of vehicles with VIN, name, model, license plate."""
         if self.car_connectivity is None:
             return []
             
@@ -119,23 +109,11 @@ class CarConnectivityAdapter(AbstractAdapter):
                     license_plate=license_plate_val
                 ))
             else:
-                # Fallback: only VIN available if vehicle data can't be retrieved
                 vehicle_list.append(VehicleListItem(vin=vin))
         
         return vehicle_list
-
-    # New consolidated methods (optimized tool structure)
-    
     def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
-        """Get vehicle information with configurable detail level.
-        
-        Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            details: Detail level (BASIC, FULL, or ALL)
-            
-        Returns:
-            Vehicle information with requested detail level, or None if not found
-        """
+        """Get vehicle info with configurable detail level."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
@@ -146,7 +124,6 @@ class CarConnectivityAdapter(AbstractAdapter):
         manufacturer_val = vehicle.manufacturer.value if vehicle.manufacturer is not None else None
         type_val = vehicle.type.value if vehicle.type is not None else None
         
-        # BASIC level: just essential identifiers
         if details == VehicleDetailLevel.BASIC:
             return VehicleModel(
                 vin=vin_val,
@@ -156,7 +133,7 @@ class CarConnectivityAdapter(AbstractAdapter):
                 type=type_val,
             )
         
-        # FULL and ALL levels include additional data
+        # FULL and ALL include additional data
         odometer_val = vehicle.odometer.value if vehicle.odometer is not None else None
         state_val = vehicle.state.value if vehicle.state is not None else None
         software_version_val = vehicle.software.version.value if vehicle.software is not None and vehicle.software.version is not None else None
@@ -177,21 +154,11 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
     
     def get_physical_status(self, vehicle_id: str, components: Optional[List[str]] = None) -> Optional[PhysicalStatusModel]:
-        """Get physical component status (doors, windows, tyres, lights).
-        
-        Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            components: Optional list to filter components (e.g., ["doors", "windows"])
-                       If None, returns all available components
-        
-        Returns:
-            Physical status with requested components, or None if vehicle not found
-        """
+        """Get physical components: doors, windows, tyres, lights."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
         
-        # Determine which components to include
         include_all = components is None
         include_doors = include_all or "doors" in components
         include_windows = include_all or "windows" in components
@@ -206,24 +173,13 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
     
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
-        """Get consolidated energy and range information.
-        
-        Combines battery status, charging state, and range info into a single,
-        vehicle-type-aware response.
-        
-        Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            
-        Returns:
-            Energy status appropriate for vehicle type, or None if not found
-        """
+        """Get energy and range info (vehicle-type-aware)."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
         
         vehicle_type = vehicle.type.value if vehicle.type is not None else "unknown"
         
-        # Get range information using existing helper
         range_info = self._get_range_info(vehicle)
         electric_km = None
         combustion_km = None
@@ -239,7 +195,7 @@ class CarConnectivityAdapter(AbstractAdapter):
             combustion_km=combustion_km,
         )
         
-        # Electric/PHEV-specific data
+        # Electric/PHEV
         electric_info = None
         if isinstance(vehicle, ElectricVehicle):
             charging_state = self._get_charging_state(vehicle)
@@ -252,7 +208,7 @@ class CarConnectivityAdapter(AbstractAdapter):
                 charging=charging_state,
             )
         
-        # Combustion-specific data  
+        # Combustion
         combustion_info = None
         if isinstance(vehicle, CombustionVehicle):
             tank_level = None
@@ -273,14 +229,7 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
     
     def get_climate_status(self, vehicle_id: str) -> Optional[ClimateStatusModel]:
-        """Get climate control status (climatization + window heating).
-        
-        Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            
-        Returns:
-            Climate status, or None if vehicle not found
-        """
+        """Get climate control: climatization + window heating."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
@@ -290,20 +239,8 @@ class CarConnectivityAdapter(AbstractAdapter):
             window_heating=self._get_window_heating_state(vehicle),
         )
 
-    # Internal helper methods
-
     def _get_vehicle_for_vin(self, vehicle_id: str) -> Optional[GenericVehicle]:
-        """Internal helper to retrieve a vehicle object by identifier.
-        
-        Accepts vehicle name, VIN, or license plate. Will automatically resolve
-        to the correct VIN using resolve_vehicle_id().
-        
-        Args:
-            vehicle_id: Vehicle name, VIN, or license plate
-            
-        Returns:
-            GenericVehicle object or None if not found
-        """
+        """Get vehicle by identifier (VIN, name, or license plate)."""
         if self.car_connectivity is None:
             return None
             
@@ -311,23 +248,14 @@ class CarConnectivityAdapter(AbstractAdapter):
         if garage is None or not hasattr(garage, "get_vehicle"):
             return None
         
-        # Resolve identifier to VIN (supports name, VIN, license plate)
         vin = self.resolve_vehicle_id(vehicle_id)
         if vin is None:
-            # Fallback: try direct VIN lookup in case resolve failed
             vin = vehicle_id
             
         return garage.get_vehicle(vin)
 
     def _get_doors_state(self, vehicle: GenericVehicle) -> Optional[DoorsModel]:
-        """Extract door states from vehicle object.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            DoorsModel with lock and open states for all doors, or None
-        """
+        """Extract door states from vehicle."""
         doors = vehicle.doors
         if doors is None:
             return None
@@ -382,14 +310,7 @@ class CarConnectivityAdapter(AbstractAdapter):
             )
 
     def _get_windows_state(self, vehicle: GenericVehicle) -> Optional[WindowsModel]:
-        """Extract window states from vehicle object.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            WindowsModel with open/closed state for all windows, or None
-        """
+        """Extract window states from vehicle."""
         windows = vehicle.windows
         if windows is None:
             return None
@@ -416,14 +337,7 @@ class CarConnectivityAdapter(AbstractAdapter):
 
 
     def _get_tyres_state(self, vehicle: GenericVehicle) -> Optional[TyresModel]:
-        """Extract tyre pressure and temperature data from vehicle object.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            TyresModel with pressure and temperature for all tyres, or None
-        """
+        """Extract tyre pressure and temperature."""
         tyres = getattr(vehicle, 'tyres', None)
         if tyres is None or not hasattr(tyres, 'tyres'):
             return None
@@ -444,21 +358,8 @@ class CarConnectivityAdapter(AbstractAdapter):
             rear_right=tyre_models.get('rearRight'),
         )
 
-
-
     def _get_charging_state(self, vehicle: GenericVehicle) -> Optional[ChargingModel]:
-        """Extract charging information from electric or hybrid vehicle.
-        
-        Retrieves detailed charging state including charging status, power,
-        estimated completion time, battery level, and target charge level.
-        
-        Args:
-            vehicle: GenericVehicle object (must be ElectricVehicle for charging data)
-            
-        Returns:
-            ChargingModel with charging details, or None for non-electric vehicles
-        """
-        # Only electric and hybrid vehicles have charging capability
+        """Extract charging info from electric/hybrid vehicle."""
         if not isinstance(vehicle, ElectricVehicle):
             return None
         
@@ -466,7 +367,6 @@ class CarConnectivityAdapter(AbstractAdapter):
         if charging is None:
             return None
         
-        # Extract charging state
         is_charging = None
         charging_state_str = None
         if charging.state is not None and charging.state.value is not None:
@@ -486,7 +386,6 @@ class CarConnectivityAdapter(AbstractAdapter):
             else:
                 charging_state_str = str(charging.state.value.value) if hasattr(charging.state.value, 'value') else str(charging.state.value)
         
-        # Check if plugged in via connector
         is_plugged_in = None
         connector = getattr(charging, 'connector', None)
         if connector is not None:
@@ -498,12 +397,10 @@ class CarConnectivityAdapter(AbstractAdapter):
                 elif connection_state.value == ChargingConnector.ChargingConnectorConnectionState.DISCONNECTED:
                     is_plugged_in = False
         
-        # Get charging power
         charging_power_kw = None
         if charging.power is not None and charging.power.value is not None:
             charging_power_kw = float(charging.power.value)
         
-        # Get estimated completion time
         remaining_time_minutes = None
         if charging.estimated_date_reached is not None and charging.estimated_date_reached.value is not None:
             from datetime import datetime, timezone
@@ -516,7 +413,6 @@ class CarConnectivityAdapter(AbstractAdapter):
             except Exception:
                 pass
         
-        # Get target SOC and current SOC
         target_soc_percent = None
         settings = getattr(charging, 'settings', None)
         if settings is not None:
@@ -531,10 +427,7 @@ class CarConnectivityAdapter(AbstractAdapter):
             if level is not None and level.value is not None:
                 current_soc_percent = float(level.value)
         
-        # Get charge mode (if available)
         charge_mode = None
-        # The charge mode might be in different locations depending on the vehicle
-        # This is a simplified implementation
         
         return ChargingModel(
             is_charging=is_charging,
@@ -548,22 +441,11 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
     
     def _get_climatization_state(self, vehicle: GenericVehicle) -> Optional[ClimatizationModel]:
-        """Extract climatization state and settings from vehicle.
-        
-        Retrieves current climatization status (heating/cooling/ventilation/off),
-        target temperature, estimated completion time, and various climate settings.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            ClimatizationModel with climate control state and settings, or None
-        """
+        """Extract climatization state and settings."""
         climatization = getattr(vehicle, 'climatization', None)
         if climatization is None:
             return None
         
-        # Extract climatization state
         state_str = None
         is_active = None
         if climatization.state is not None and climatization.state.value is not None:
@@ -585,7 +467,6 @@ class CarConnectivityAdapter(AbstractAdapter):
                 state_str = str(state_value.value) if hasattr(state_value, 'value') else str(state_value)
                 is_active = (state_str != 'off')
         
-        # Get settings
         target_temperature = None
         window_heating_enabled = None
         seat_heating_enabled = None
@@ -594,33 +475,26 @@ class CarConnectivityAdapter(AbstractAdapter):
         
         settings = getattr(climatization, 'settings', None)
         if settings is not None:
-            # Target temperature
             target_temp_attr = getattr(settings, 'target_temperature', None)
             if target_temp_attr is not None and target_temp_attr.value is not None:
                 target_temperature = float(target_temp_attr.value)
             
-            # Window heating
             window_heating_attr = getattr(settings, 'window_heating', None)
             if window_heating_attr is not None and window_heating_attr.value is not None:
                 window_heating_enabled = bool(window_heating_attr.value)
             
-            # Seat heating
             seat_heating_attr = getattr(settings, 'seat_heating', None)
             if seat_heating_attr is not None and seat_heating_attr.value is not None:
                 seat_heating_enabled = bool(seat_heating_attr.value)
             
-            # Climatization at unlock
             at_unlock_attr = getattr(settings, 'climatization_at_unlock', None)
             if at_unlock_attr is not None and at_unlock_attr.value is not None:
                 climatization_at_unlock_enabled = bool(at_unlock_attr.value)
             
-            # External power
             external_power_attr = getattr(settings, 'climatization_without_external_power', None)
             if external_power_attr is not None and external_power_attr.value is not None:
-                # Note: this setting is "without" external power, so we invert it
                 using_external_power = not bool(external_power_attr.value)
         
-        # Get estimated time remaining
         estimated_time_remaining_minutes = None
         estimated_date = getattr(climatization, 'estimated_date_reached', None)
         if estimated_date is not None and estimated_date.value is not None:
@@ -646,22 +520,11 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
 
     def _get_maintenance_info(self, vehicle: GenericVehicle) -> Optional[MaintenanceModel]:
-        """Extract maintenance schedule information from vehicle.
-        
-        Retrieves inspection and oil service due dates/distances, and calculates
-        days/kilometers remaining until next service.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            MaintenanceModel with service schedule details, or None
-        """
+        """Extract maintenance schedule."""
         maintenance = getattr(vehicle, 'maintenance', None)
         if maintenance is None:
             return None
         
-        # Inspection due date
         inspection_due_date = None
         inspection_due_at = getattr(maintenance, 'inspection_due_at', None)
         if inspection_due_at is not None and inspection_due_at.value is not None:
@@ -670,17 +533,14 @@ class CarConnectivityAdapter(AbstractAdapter):
             except Exception:
                 inspection_due_date = str(inspection_due_at.value)
         
-        # Inspection due distance
         inspection_due_distance_km = None
         inspection_due_after = getattr(maintenance, 'inspection_due_after', None)
         if inspection_due_after is not None and inspection_due_after.value is not None:
             try:
-                # Convert to km if needed (value might be in different units)
                 inspection_due_distance_km = int(inspection_due_after.value)
             except Exception:
                 pass
         
-        # Oil service due date
         oil_service_due_date = None
         oil_service_due_at = getattr(maintenance, 'oil_service_due_at', None)
         if oil_service_due_at is not None and oil_service_due_at.value is not None:
@@ -689,7 +549,6 @@ class CarConnectivityAdapter(AbstractAdapter):
             except Exception:
                 oil_service_due_date = str(oil_service_due_at.value)
         
-        # Oil service due distance
         oil_service_due_distance_km = None
         oil_service_due_after = getattr(maintenance, 'oil_service_due_after', None)
         if oil_service_due_after is not None and oil_service_due_after.value is not None:
@@ -706,34 +565,21 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
 
     def _get_range_info(self, vehicle: GenericVehicle) -> Optional[RangeModel]:
-        """Extract range information for electric and/or combustion drives.
-        
-        Retrieves total driving range, electric range with battery level,
-        and combustion range with fuel tank level for hybrid vehicles.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            RangeModel with range details for available drive types, or None
-        """
+        """Extract range for electric and/or combustion drives."""
         drives = getattr(vehicle, 'drives', None)
         if drives is None:
             return None
         
-        # Get total range
         total_range_km = None
         total_range_attr = getattr(drives, 'total_range', None)
         if total_range_attr is not None and total_range_attr.value is not None:
             total_range_km = float(total_range_attr.value)
         
-        # Get individual drives
         electric_drive = None
         combustion_drive = None
         
         drives_dict = getattr(drives, 'drives', {})
         
-        # Electric drive
         if 'electric' in drives_dict:
             electric = drives_dict['electric']
             electric_range = None
@@ -743,7 +589,6 @@ class CarConnectivityAdapter(AbstractAdapter):
             if range_attr is not None and range_attr.value is not None:
                 electric_range = float(range_attr.value)
             
-            # Get battery level
             battery = getattr(electric, 'battery', None)
             if battery is not None:
                 level_attr = getattr(battery, 'level', None)
@@ -755,7 +600,6 @@ class CarConnectivityAdapter(AbstractAdapter):
                 battery_level_percent=battery_level
             )
         
-        # Combustion drive
         if 'combustion' in drives_dict:
             combustion = drives_dict['combustion']
             combustion_range = None
@@ -765,7 +609,6 @@ class CarConnectivityAdapter(AbstractAdapter):
             if range_attr is not None and range_attr.value is not None:
                 combustion_range = float(range_attr.value)
             
-            # Get tank level
             tank = getattr(combustion, 'tank', None)
             if tank is not None:
                 level_attr = getattr(tank, 'level', None)
@@ -784,16 +627,7 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
 
     def _get_window_heating_state(self, vehicle: GenericVehicle) -> Optional[WindowHeatingsModel]:
-        """Extract window heating state for front and rear windows.
-        
-        Retrieves heating status (on/off) for front and rear window defrosters.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            WindowHeatingsModel with front/rear heating states, or None
-        """
+        """Extract window heating state."""
         window_heating = getattr(vehicle, 'window_heating', None)
         if window_heating is None:
             return None
@@ -801,14 +635,11 @@ class CarConnectivityAdapter(AbstractAdapter):
         front_heating = None
         rear_heating = None
         
-        # Get heating state
         heating_state_attr = getattr(window_heating, 'heating_state', None)
         if heating_state_attr is not None and heating_state_attr.value is not None:
             from carconnectivity.window_heating import WindowHeatings
-            # The global state might indicate if any window heating is on
             pass
         
-        # Get individual window heatings
         window_heatings_dict = getattr(window_heating, 'window_heatings', {})
         
         for location, heating in window_heatings_dict.items():
@@ -835,16 +666,7 @@ class CarConnectivityAdapter(AbstractAdapter):
         )
 
     def _get_lights_state(self, vehicle: GenericVehicle) -> Optional[LightsModel]:
-        """Extract exterior lights state (left and right).
-        
-        Retrieves current status (on/off) of left and right exterior lights.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            LightsModel with left/right light states, or None
-        """
+        """Extract exterior lights state."""
         lights = getattr(vehicle, 'lights', None)
         if lights is None:
             return None
@@ -852,7 +674,6 @@ class CarConnectivityAdapter(AbstractAdapter):
         left_light = None
         right_light = None
         
-        # Get individual lights
         lights_dict = getattr(lights, 'lights', {})
         
         for light_id, light in lights_dict.items():
@@ -877,35 +698,22 @@ class CarConnectivityAdapter(AbstractAdapter):
             left=left_light,
             right=right_light
         )
-
-
-
-
     def get_maintenance_info(self, vehicle_id: str) -> Optional[MaintenanceModel]:
-        """Get maintenance schedule and service information."""
+        """Get maintenance schedule."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
         return self._get_maintenance_info(vehicle)
 
     def get_position(self, vehicle_id: str) -> Optional[PositionModel]:
-        """Get current vehicle position (GPS coordinates and heading)."""
+        """Get GPS position."""
         vehicle = self._get_vehicle_for_vin(vehicle_id)
         if vehicle is None:
             return None
         return self._get_position(vehicle)
 
     def _get_position(self, vehicle: GenericVehicle) -> Optional[PositionModel]:
-        """Extract GPS position from vehicle object.
-        
-        Retrieves current GPS coordinates (latitude, longitude) and heading direction.
-        
-        Args:
-            vehicle: GenericVehicle object
-            
-        Returns:
-            PositionModel with GPS coordinates and heading, or None if unavailable
-        """
+        """Extract GPS position."""
         pos = vehicle.position
         if pos is None:
             return None
@@ -914,7 +722,6 @@ class CarConnectivityAdapter(AbstractAdapter):
         longitude = pos.longitude.value if pos.longitude is not None else None
         heading = pos.heading.value if pos.heading is not None else None
         
-        # Only return position if we have at least coordinates
         if latitude is None and longitude is None:
             return None
         

@@ -1,7 +1,6 @@
-"""Adapter that wires the carconnectivity library into the generic MCP server.
+"""Abstract adapter interface for vehicle data providers.
 
-Adapters should implement a small surface used by the MCP server. Types
-are annotated so the server can rely on concrete return types.
+Adapters implement a small surface for the MCP server with concrete types.
 """
 
 from abc import ABC, abstractmethod
@@ -25,71 +24,71 @@ class BatteryModel(BaseModel):
     charging_power: Optional[float]
 
 class ChargingModel(BaseModel):
-    """Detailed charging information for electric/hybrid vehicles"""
-    is_charging: Optional[bool] = None  # True if currently charging
-    is_plugged_in: Optional[bool] = None  # True if charging cable is connected
-    charging_power_kw: Optional[float] = None  # Current charging power in kW
-    charging_state: Optional[str] = None  # e.g., 'charging', 'complete', 'error', 'notReady'
-    remaining_time_minutes: Optional[int] = None  # Estimated time to full charge in minutes
-    target_soc_percent: Optional[int] = None  # Target state of charge percentage
-    current_soc_percent: Optional[float] = None  # Current state of charge percentage
-    charge_mode: Optional[str] = None  # e.g., 'manual', 'timer', 'preferredTime'
+    """Charging info for electric/hybrid vehicles"""
+    is_charging: Optional[bool] = None
+    is_plugged_in: Optional[bool] = None
+    charging_power_kw: Optional[float] = None
+    charging_state: Optional[str] = None
+    remaining_time_minutes: Optional[int] = None
+    target_soc_percent: Optional[int] = None
+    current_soc_percent: Optional[float] = None
+    charge_mode: Optional[str] = None
 
 class ClimatizationModel(BaseModel):
-    """Climate control and heating information"""
-    state: Optional[str] = None  # Current state: 'off', 'heating', 'cooling', 'ventilation'
-    is_active: Optional[bool] = None  # True if climatization is currently active
-    target_temperature_celsius: Optional[float] = None  # Target temperature in Celsius
-    estimated_time_remaining_minutes: Optional[int] = None  # Time until target temperature reached
-    window_heating_enabled: Optional[bool] = None  # Is window heating enabled
-    seat_heating_enabled: Optional[bool] = None  # Is seat heating enabled
-    climatization_at_unlock_enabled: Optional[bool] = None  # Start climatization when unlocking
-    using_external_power: Optional[bool] = None  # Is using external power (not battery)
+    """Climate control and heating"""
+    state: Optional[str] = None
+    is_active: Optional[bool] = None
+    target_temperature_celsius: Optional[float] = None
+    estimated_time_remaining_minutes: Optional[int] = None
+    window_heating_enabled: Optional[bool] = None
+    seat_heating_enabled: Optional[bool] = None
+    climatization_at_unlock_enabled: Optional[bool] = None
+    using_external_power: Optional[bool] = None
 
 class MaintenanceModel(BaseModel):
-    """Vehicle maintenance and service information"""
-    inspection_due_date: Optional[str] = None  # Next inspection due date (ISO format)
-    inspection_due_distance_km: Optional[int] = None  # Remaining km until inspection
-    oil_service_due_date: Optional[str] = None  # Next oil service due date (ISO format)
-    oil_service_due_distance_km: Optional[int] = None  # Remaining km until oil service
+    """Maintenance and service info"""
+    inspection_due_date: Optional[str] = None
+    inspection_due_distance_km: Optional[int] = None
+    oil_service_due_date: Optional[str] = None
+    oil_service_due_distance_km: Optional[int] = None
 
 class DriveModel(BaseModel):
     """Individual drive system (electric or combustion)"""
-    range_km: Optional[float] = None  # Remaining range in kilometers
-    battery_level_percent: Optional[float] = None  # Battery level (for electric)
-    tank_level_percent: Optional[float] = None  # Tank level (for combustion)
+    range_km: Optional[float] = None
+    battery_level_percent: Optional[float] = None  # electric only
+    tank_level_percent: Optional[float] = None  # combustion only
 
 class RangeModel(BaseModel):
-    """Vehicle range and energy information"""
-    total_range_km: Optional[float] = None  # Total remaining range
-    electric_drive: Optional[DriveModel] = None  # Electric drive info (BEV/PHEV)
-    combustion_drive: Optional[DriveModel] = None  # Combustion drive info (PHEV/Combustion)
+    """Range and energy info"""
+    total_range_km: Optional[float] = None
+    electric_drive: Optional[DriveModel] = None  # BEV/PHEV
+    combustion_drive: Optional[DriveModel] = None  # PHEV/Combustion
 
 class WindowHeatingModel(BaseModel):
     """Individual window heating status"""
-    state: Optional[str] = None  # 'on' or 'off'
+    state: Optional[str] = None
 
 class WindowHeatingsModel(BaseModel):
-    """Window heating information for all windows"""
-    front: Optional[WindowHeatingModel] = None  # Front window heating
-    rear: Optional[WindowHeatingModel] = None  # Rear window heating
+    """Window heating for all windows"""
+    front: Optional[WindowHeatingModel] = None
+    rear: Optional[WindowHeatingModel] = None
 
 class LightModel(BaseModel):
     """Individual light status"""
-    state: Optional[str] = None  # 'on' or 'off'
+    state: Optional[str] = None
 
 class LightsModel(BaseModel):
     """Vehicle lights status"""
-    left: Optional[LightModel] = None  # Left light
-    right: Optional[LightModel] = None  # Right light
+    left: Optional[LightModel] = None
+    right: Optional[LightModel] = None
 
 class BatteryStatusModel(BaseModel):
-    """Simplified battery and range information for quick access"""
-    battery_level_percent: Optional[float] = None  # Current battery charge percentage (0-100)
-    range_km: Optional[float] = None  # Remaining electric range in kilometers
-    is_charging: Optional[bool] = None  # True if currently charging
-    charging_power_kw: Optional[float] = None  # Current charging power (only when charging)
-    estimated_charge_time_minutes: Optional[int] = None  # Time to full charge (only when charging)
+    """Simplified battery and range for quick access"""
+    battery_level_percent: Optional[float] = None
+    range_km: Optional[float] = None
+    is_charging: Optional[bool] = None
+    charging_power_kw: Optional[float] = None
+    estimated_charge_time_minutes: Optional[int] = None
 
 class DoorModel(BaseModel):
     locked: Optional[bool]
@@ -145,154 +144,122 @@ class VehicleModel(BaseModel):
     climate: Optional[ClimateModel] = None
 
 class VehicleListItem(BaseModel):
-    """Simplified vehicle information for listing"""
+    """Simplified vehicle info for listing"""
     vin: str
     name: Optional[str] = None
     model: Optional[str] = None
     license_plate: Optional[str] = None
 
-# New models for consolidated tools
-
 class VehicleDetailLevel(str, Enum):
     """Detail level for vehicle information."""
     BASIC = "basic"      # VIN, name, model, type, manufacturer
     FULL = "full"        # BASIC + state, connection_state, odometer, year, software
-    ALL = "all"          # Everything (reserved for future expansion)
+    ALL = "all"          # Everything
 
 class PhysicalStatusModel(BaseModel):
-    """Consolidated physical component status."""
+    """Consolidated physical component status"""
     doors: Optional[DoorsModel] = None
     windows: Optional[WindowsModel] = None
     tyres: Optional[TyresModel] = None
     lights: Optional[LightsModel] = None
 
 class RangeInfo(BaseModel):
-    """Consolidated range information."""
+    """Consolidated range info"""
     total_km: Optional[float] = None
-    electric_km: Optional[float] = None  # BEV/PHEV only
-    combustion_km: Optional[float] = None  # PHEV/Combustion only
+    electric_km: Optional[float] = None  # BEV/PHEV
+    combustion_km: Optional[float] = None  # PHEV/Combustion
 
 class ElectricDriveInfo(BaseModel):
-    """Electric drive information."""
+    """Electric drive info"""
     battery_level_percent: Optional[float] = None
     charging: Optional[ChargingModel] = None
 
 class CombustionDriveInfo(BaseModel):
-    """Combustion drive information."""
+    """Combustion drive info"""
     tank_level_percent: Optional[float] = None
     fuel_type: Optional[str] = None
 
 class EnergyStatusModel(BaseModel):
-    """Consolidated energy and range information."""
+    """Consolidated energy and range info"""
     vehicle_type: str  # electric, hybrid, combustion
     range: RangeInfo
-    electric: Optional[ElectricDriveInfo] = None  # BEV/PHEV only
-    combustion: Optional[CombustionDriveInfo] = None  # PHEV/Combustion only
+    electric: Optional[ElectricDriveInfo] = None  # BEV/PHEV
+    combustion: Optional[CombustionDriveInfo] = None  # PHEV/Combustion
 
 class ClimateStatusModel(BaseModel):
-    """Consolidated climate control information."""
+    """Consolidated climate control info"""
     climatization: Optional[ClimatizationModel] = None
     window_heating: Optional[WindowHeatingsModel] = None
 
 class AbstractAdapter(ABC):
     """Base adapter interface for vehicle data providers."""
     
-    # New consolidated methods (optimized tool structure)
-    
     @abstractmethod
     def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
-        """Get vehicle information with configurable detail level.
+        """Get vehicle info with configurable detail level.
         
         Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            details: Detail level (BASIC, FULL, or ALL)
-            
-        Returns:
-            Vehicle information with requested detail level, or None if not found
+            vehicle_id: VIN, name, or license plate
+            details: BASIC, FULL, or ALL
         """
         pass
     
     @abstractmethod
     def get_physical_status(self, vehicle_id: str, components: Optional[List[str]] = None) -> Optional[PhysicalStatusModel]:
-        """Get physical component status (doors, windows, tyres, lights).
+        """Get physical components: doors, windows, tyres, lights.
         
         Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            components: Optional list to filter components (e.g., ["doors", "windows"])
-                       If None, returns all available components
-        
-        Returns:
-            Physical status with requested components, or None if vehicle not found
+            vehicle_id: VIN, name, or license plate
+            components: Filter e.g., ["doors", "windows"] or None for all
         """
         pass
     
     @abstractmethod
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
-        """Get consolidated energy and range information.
-        
-        Combines battery status, charging state, and range info into a single,
-        vehicle-type-aware response.
+        """Get energy and range info (vehicle-type-aware).
         
         Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            
-        Returns:
-            Energy status appropriate for vehicle type, or None if not found
+            vehicle_id: VIN, name, or license plate
         """
         pass
     
     @abstractmethod
     def get_climate_status(self, vehicle_id: str) -> Optional[ClimateStatusModel]:
-        """Get climate control status (climatization + window heating).
+        """Get climate control: climatization + window heating.
         
         Args:
-            vehicle_id: Vehicle identifier (VIN, name, or license plate)
-            
-        Returns:
-            Climate status, or None if vehicle not found
+            vehicle_id: VIN, name, or license plate
         """
         pass
-    
-    # Infrastructure methods
     
     @abstractmethod
     def shutdown(self) -> None:
-        """Perform any cleanup required by the adapter."""
+        """Cleanup resources."""
 
     @abstractmethod
     def list_vehicles(self) -> list[VehicleListItem]:
-        """Return a list of vehicle dicts. Each dict should include an 'id' key."""
+        """Return list of vehicles with VIN, name, model, license plate."""
         pass
 
     def resolve_vehicle_id(self, identifier: str) -> Optional[str]:
-        """
-        Resolve a vehicle identifier (name, VIN, or license plate) to a VIN.
+        """Resolve identifier (name, VIN, license plate) to VIN.
         
-        Search priority:
-        1. Name (case-insensitive, partial match)
-        2. VIN (exact match)
-        3. License plate (case-insensitive, exact match)
-        
-        Args:
-            identifier: Vehicle name, VIN, or license plate
-            
-        Returns:
-            VIN of the matched vehicle, or None if not found
+        Search priority: 1) Name (partial), 2) VIN (exact), 3) License plate (exact)
         """
         vehicles = self.list_vehicles()
         identifier_lower = identifier.lower().strip()
         
-        # Priority 1: Search by name (case-insensitive, partial match)
+        # Priority 1: Name (case-insensitive, partial)
         for vehicle in vehicles:
             if vehicle.name and identifier_lower in vehicle.name.lower():
                 return vehicle.vin
         
-        # Priority 2: Search by VIN (exact match)
+        # Priority 2: VIN (exact)
         for vehicle in vehicles:
             if vehicle.vin.lower() == identifier_lower:
                 return vehicle.vin
         
-        # Priority 3: Search by license plate (case-insensitive, exact match)
+        # Priority 3: License plate (exact)
         for vehicle in vehicles:
             if vehicle.license_plate and vehicle.license_plate.lower() == identifier_lower:
                 return vehicle.vin
@@ -301,18 +268,10 @@ class AbstractAdapter(ABC):
 
     @abstractmethod
     def get_maintenance_info(self, vehicle_id: str) -> Optional[MaintenanceModel]:
-        """Return the maintenance information for the given vehicle_id.
-        
-        Returns inspection and service due dates/distances.
-        If the vehicle is not found, return None.
-        """
+        """Get maintenance: inspection and service schedules."""
         pass
 
     @abstractmethod
     def get_position(self, vehicle_id: str) -> Optional[PositionModel]:
-        """Return the current position for the given vehicle_id.
-        
-        Returns GPS coordinates (latitude, longitude) and heading.
-        If the vehicle is not found or position is unavailable, return None.
-        """
+        """Get GPS position: latitude, longitude, heading."""
         pass
