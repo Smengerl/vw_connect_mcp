@@ -10,6 +10,7 @@ import os
 import sys
 import logging
 from typing import List, Any, Optional
+from datetime import datetime, timedelta
 from weconnect_mcp.adapter.abstract_adapter import (
     AbstractAdapter, VehicleModel, VehicleListItem, ChargingModel, ClimatizationModel, 
     MaintenanceModel, RangeModel, DriveModel, WindowHeatingsModel, WindowHeatingModel, 
@@ -22,6 +23,10 @@ from carconnectivity.vehicle import GenericVehicle, Length, ElectricVehicle, Com
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.attributes import GenericAttribute
+
+# Cache duration to avoid VW API rate limits
+# Data will be cached for this duration before fetching new data from server
+CACHE_DURATION_SECONDS = 300  # in seconds 
 
 # Configure logging to stderr for MCP stdio compatibility
 logging.basicConfig(
@@ -53,6 +58,10 @@ class CarConnectivityAdapter(AbstractAdapter):
         self.vehicles: List[Any] = []
         self.car_connectivity = None
         
+        # Caching to avoid VW API rate limits
+        self._last_fetch_time: Optional[datetime] = None
+        self._cache_duration = timedelta(seconds=CACHE_DURATION_SECONDS)
+        
         try:
             from carconnectivity import carconnectivity as _carconnectivity
         except Exception:
@@ -64,7 +73,36 @@ class CarConnectivityAdapter(AbstractAdapter):
             config=config_dict, 
             tokenstore_file=tokenstore_file
         )
+        self._fetch_data()  # Initial fetch
+
+    def _fetch_data(self) -> None:
+        """Fetch data from VW servers and update cache timestamp."""
+        if self.car_connectivity is None:
+            return
+        
         self.car_connectivity.fetch_all()
+        self._last_fetch_time = datetime.now()
+        logger.info("Fetched fresh data from VW servers")
+
+    def _is_cache_expired(self) -> bool:
+        """Check if cached data has expired and needs refresh."""
+        if self._last_fetch_time is None:
+            return True
+        
+        time_since_fetch = datetime.now() - self._last_fetch_time
+        is_expired = time_since_fetch >= self._cache_duration
+        
+        if is_expired:
+            logger.info(f"Cache expired ({time_since_fetch.total_seconds():.1f}s since last fetch)")
+        else:
+            logger.debug(f"Using cached data ({time_since_fetch.total_seconds():.1f}s old)")
+        
+        return is_expired
+
+    def _ensure_fresh_data(self) -> None:
+        """Ensure data is fresh, fetching from server if cache expired."""
+        if self._is_cache_expired():
+            self._fetch_data()
 
     def shutdown(self):
         """Clean up resources."""
@@ -90,6 +128,9 @@ class CarConnectivityAdapter(AbstractAdapter):
         """Get list of vehicles with VIN, name, model, license plate."""
         if self.car_connectivity is None:
             return []
+        
+        # Ensure we have fresh data before accessing garage
+        self._ensure_fresh_data()
             
         garage = self.car_connectivity.get_garage()
         if garage is None or not hasattr(garage, "list_vehicle_vins"):
@@ -121,6 +162,7 @@ class CarConnectivityAdapter(AbstractAdapter):
         vin_val = vehicle.vin.value if vehicle.vin is not None else None
         model_val = vehicle.model.value if vehicle.model is not None else None
         name_val = vehicle.name.value if vehicle.name is not None else None
+        license_plate_val = vehicle.license_plate.value if vehicle.license_plate is not None else None
         manufacturer_val = vehicle.manufacturer.value if vehicle.manufacturer is not None else None
         type_val = vehicle.type.value if vehicle.type is not None else None
         
@@ -129,6 +171,7 @@ class CarConnectivityAdapter(AbstractAdapter):
                 vin=vin_val,
                 model=model_val,
                 name=name_val,
+                license_plate=license_plate_val,
                 manufacturer=manufacturer_val,
                 type=type_val,
             )
@@ -144,6 +187,7 @@ class CarConnectivityAdapter(AbstractAdapter):
             vin=vin_val,
             model=model_val,
             name=name_val,
+            license_plate=license_plate_val,
             manufacturer=manufacturer_val,
             odometer=odometer_val,
             state=state_val,
@@ -243,6 +287,9 @@ class CarConnectivityAdapter(AbstractAdapter):
         """Get vehicle by identifier (VIN, name, or license plate)."""
         if self.car_connectivity is None:
             return None
+        
+        # Ensure we have fresh data before accessing vehicle
+        self._ensure_fresh_data()
             
         garage = self.car_connectivity.get_garage()
         if garage is None or not hasattr(garage, "get_vehicle"):
