@@ -440,7 +440,6 @@ For detailed test documentation, see [tests/README.md](tests/README.md)
 ⚠️ HTTP mode should only be used in trusted networks  
 ⚠️ Consider additional authentication for production deployments
 
-
 ---
 
 ## Contributing
@@ -455,8 +454,13 @@ This project is licensed under the terms of the MIT License. See `LICENSE.txt` f
 
 ---
 
+## Credits
+
+This project is built on top of the excellent **[CarConnectivity](https://github.com/tillsteinbach/CarConnectivity)** library by [Till Steinbach](https://github.com/tillsteinbach). CarConnectivity provides the core functionality for connecting to Volkswagen's WeConnect API and handling vehicle data retrieval.
+
+---
+
 ## Additional Resources
 
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
 - [FastMCP Documentation](https://github.com/jlowin/fastmcp)
-- [Carconnectivity Library](https://github.com/tillsteinbach/CarConnectivity)
