@@ -9,6 +9,7 @@ from typing import Optional
 from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionVehicle
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
+from carconnectivity.drive import ElectricDrive, CombustionDrive, DieselDrive
 
 from weconnect_mcp.adapter.abstract_adapter import (
     DoorsModel, DoorModel, WindowsModel, WindowModel,
@@ -257,11 +258,19 @@ class StateExtractionMixin:
         )
     
     def _get_range_info(self, vehicle: GenericVehicle) -> Optional[RangeModel]:
-        """Extract range for electric and/or combustion drives."""
+        """Extract range for electric and/or combustion drives.
+        
+        Drives are accessed via 'primary' and 'secondary' keys, not 'electric'/'combustion'.
+        Drive type is determined by isinstance() checks:
+        - ElectricDrive: has battery, battery_level, battery_temperature
+        - DieselDrive: has tank, adblue_range, adblue_level (subclass of CombustionDrive)
+        - CombustionDrive: has tank only
+        """
         drives = getattr(vehicle, 'drives', None)
         if drives is None:
             return None
         
+        # Total range across all drives
         total_range_km = None
         total_range_attr = getattr(drives, 'total_range', None)
         if total_range_attr is not None and total_range_attr.value is not None:
@@ -272,45 +281,82 @@ class StateExtractionMixin:
         
         drives_dict = getattr(drives, 'drives', {})
         
-        if 'electric' in drives_dict:
-            electric = drives_dict['electric']
-            electric_range = None
-            battery_level = None
-            
-            range_attr = getattr(electric, 'range', None)
+        # Process all drives (primary, secondary, etc.)
+        for drive_key, drive in drives_dict.items():
+            if drive is None:
+                continue
+                
+            # Extract common attributes
+            drive_range = None
+            range_attr = getattr(drive, 'range', None)
             if range_attr is not None and range_attr.value is not None:
-                electric_range = float(range_attr.value)
+                drive_range = float(range_attr.value)
             
-            battery = getattr(electric, 'battery', None)
-            if battery is not None:
-                level_attr = getattr(battery, 'level', None)
+            # Check drive type and extract type-specific attributes
+            if isinstance(drive, ElectricDrive):
+                # Electric drive: has battery with level and temperature
+                battery_level = None
+                battery_temperature = None
+                
+                # Battery level from drive.level
+                level_attr = getattr(drive, 'level', None)
                 if level_attr is not None and level_attr.value is not None:
                     battery_level = float(level_attr.value)
+                
+                # Battery temperature from drive.battery.temperature
+                battery = getattr(drive, 'battery', None)
+                if battery is not None:
+                    temp_attr = getattr(battery, 'temperature', None)
+                    if temp_attr is not None and temp_attr.value is not None:
+                        battery_temperature = float(temp_attr.value)
+                
+                electric_drive = DriveModel(
+                    range_km=drive_range,
+                    battery_level_percent=battery_level,
+                    battery_temperature_kelvin=battery_temperature
+                )
             
-            electric_drive = DriveModel(
-                range_km=electric_range,
-                battery_level_percent=battery_level
-            )
-        
-        if 'combustion' in drives_dict:
-            combustion = drives_dict['combustion']
-            combustion_range = None
-            tank_level = None
-            
-            range_attr = getattr(combustion, 'range', None)
-            if range_attr is not None and range_attr.value is not None:
-                combustion_range = float(range_attr.value)
-            
-            tank = getattr(combustion, 'tank', None)
-            if tank is not None:
-                level_attr = getattr(tank, 'level', None)
+            elif isinstance(drive, DieselDrive):
+                # Diesel drive: has tank + AdBlue attributes
+                tank_level = None
+                adblue_range = None
+                adblue_level = None
+                
+                # Tank level from drive.level
+                level_attr = getattr(drive, 'level', None)
                 if level_attr is not None and level_attr.value is not None:
                     tank_level = float(level_attr.value)
+                
+                # AdBlue range
+                adblue_range_attr = getattr(drive, 'adblue_range', None)
+                if adblue_range_attr is not None and adblue_range_attr.value is not None:
+                    adblue_range = float(adblue_range_attr.value)
+                
+                # AdBlue level
+                adblue_level_attr = getattr(drive, 'adblue_level', None)
+                if adblue_level_attr is not None and adblue_level_attr.value is not None:
+                    adblue_level = float(adblue_level_attr.value)
+                
+                combustion_drive = DriveModel(
+                    range_km=drive_range,
+                    tank_level_percent=tank_level,
+                    adblue_range_km=adblue_range,
+                    adblue_level_percent=adblue_level
+                )
             
-            combustion_drive = DriveModel(
-                range_km=combustion_range,
-                tank_level_percent=tank_level
-            )
+            elif isinstance(drive, CombustionDrive):
+                # Generic combustion drive: has tank only (no AdBlue)
+                tank_level = None
+                
+                # Tank level from drive.level
+                level_attr = getattr(drive, 'level', None)
+                if level_attr is not None and level_attr.value is not None:
+                    tank_level = float(level_attr.value)
+                
+                combustion_drive = DriveModel(
+                    range_km=drive_range,
+                    tank_level_percent=tank_level
+                )
         
         return RangeModel(
             total_range_km=total_range_km,

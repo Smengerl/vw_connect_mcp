@@ -216,47 +216,63 @@ class CarConnectivityAdapter(
         
         vehicle_type = vehicle.type.value if vehicle.type is not None else "unknown"
         
-        range_info = self._get_range_info(vehicle)
+        range_info = self._get_range_info(vehicle)        
+        
+        # Electric/PHEV
         electric_km = None
-        combustion_km = None
-        if range_info:
-            if range_info.electric_drive:
+        electric_info = None
+        if isinstance(vehicle, ElectricVehicle):
+            charging_state = self._get_charging_state(vehicle)
+            battery_level = None
+            battery_temperature = None
+            
+            # Try to get battery level from drives first (primary source)
+            if range_info and range_info.electric_drive:
                 electric_km = range_info.electric_drive.range_km
-            if range_info.combustion_drive:
+                battery_level = range_info.electric_drive.battery_level_percent
+            
+            # Fallback: use battery level from charging state if not available from drives
+            if battery_level is None and charging_state and charging_state.current_soc_percent is not None:
+                battery_level = charging_state.current_soc_percent
+
+            # Try to get battery temp from drives first 
+            if range_info and range_info.electric_drive and range_info.electric_drive.battery_temperature_kelvin:
+                battery_temperature = range_info.electric_drive.battery_temperature_kelvin
+
+            electric_info = ElectricDriveInfo(
+                battery_level_percent=battery_level,
+                charging=charging_state,
+                battery_temperature_kelvin=battery_temperature
+            )
+        
+        # Combustion
+        combustion_info = None
+        combustion_km = None
+        if isinstance(vehicle, CombustionVehicle):
+            tank_level = None
+            fuel_type = None
+            adblue_range = None
+            adblue_level = None
+            
+            if range_info and range_info.combustion_drive:
+                tank_level = range_info.combustion_drive.tank_level_percent
+                adblue_range = range_info.combustion_drive.adblue_range_km
+                adblue_level = range_info.combustion_drive.adblue_level_percent
                 combustion_km = range_info.combustion_drive.range_km
+            
+            combustion_info = CombustionDriveInfo(
+                tank_level_percent=tank_level,
+                fuel_type=fuel_type,
+                adblue_range_km=adblue_range,
+                adblue_level_percent=adblue_level,
+            )
         
         range_model = RangeInfo(
             total_km=range_info.total_range_km if range_info else None,
             electric_km=electric_km,
             combustion_km=combustion_km,
         )
-        
-        # Electric/PHEV
-        electric_info = None
-        if isinstance(vehicle, ElectricVehicle):
-            charging_state = self._get_charging_state(vehicle)
-            battery_level = None
-            if range_info and range_info.electric_drive:
-                battery_level = range_info.electric_drive.battery_level_percent
-            
-            electric_info = ElectricDriveInfo(
-                battery_level_percent=battery_level,
-                charging=charging_state,
-            )
-        
-        # Combustion
-        combustion_info = None
-        if isinstance(vehicle, CombustionVehicle):
-            tank_level = None
-            fuel_type = None
-            if range_info and range_info.combustion_drive:
-                tank_level = range_info.combustion_drive.tank_level_percent
-            
-            combustion_info = CombustionDriveInfo(
-                tank_level_percent=tank_level,
-                fuel_type=fuel_type,
-            )
-        
+
         return EnergyStatusModel(
             vehicle_type=vehicle_type or "unknown",
             range=range_model,

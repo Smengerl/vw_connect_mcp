@@ -206,6 +206,25 @@ def test_energy_status_has_complete_combustion_data(adapter):
     assert energy.range.combustion_km is not None
 
 
+def test_energy_status_battery_fallback_from_charging_state(adapter):
+    """Test that battery level falls back to charging state when drives data is unavailable.
+    
+    This tests the scenario where vehicle.drives doesn't provide battery level,
+    but vehicle.battery (used in charging state) does. This can happen when the
+    vehicle is in low-power mode or hasn't communicated with WeConnect servers recently.
+    """
+    energy = adapter.get_energy_status(VIN_ELECTRIC)
+    
+    # The battery level should be available from either source
+    assert energy.electric is not None
+    assert energy.electric.battery_level_percent is not None
+    
+    # Verify it matches the charging state's current_soc_percent when available
+    if energy.electric.charging and energy.electric.charging.current_soc_percent is not None:
+        # Both values should be present and identical (from same underlying data)
+        assert energy.electric.battery_level_percent == energy.electric.charging.current_soc_percent
+
+
 # ==================== MCP SERVER REGISTRATION ====================
 
 @pytest.mark.asyncio

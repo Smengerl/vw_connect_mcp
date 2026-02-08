@@ -57,6 +57,9 @@ class DriveModel(BaseModel):
     range_km: Optional[float] = None
     battery_level_percent: Optional[float] = None  # electric only
     tank_level_percent: Optional[float] = None  # combustion only
+    battery_temperature_kelvin: Optional[float] = None  # electric only
+    adblue_range_km: Optional[float] = None  # diesel only
+    adblue_level_percent: Optional[float] = None  # diesel only
 
 class RangeModel(BaseModel):
     """Range and energy info"""
@@ -81,14 +84,6 @@ class LightsModel(BaseModel):
     """Vehicle lights status"""
     left: Optional[LightModel] = None
     right: Optional[LightModel] = None
-
-class BatteryStatusModel(BaseModel):
-    """Simplified battery and range for quick access"""
-    battery_level_percent: Optional[float] = None
-    range_km: Optional[float] = None
-    is_charging: Optional[bool] = None
-    charging_power_kw: Optional[float] = None
-    estimated_charge_time_minutes: Optional[int] = None
 
 class DoorModel(BaseModel):
     locked: Optional[bool]
@@ -173,12 +168,15 @@ class RangeInfo(BaseModel):
 class ElectricDriveInfo(BaseModel):
     """Electric drive info"""
     battery_level_percent: Optional[float] = None
+    battery_temperature_kelvin: Optional[float] = None  
     charging: Optional[ChargingModel] = None
 
 class CombustionDriveInfo(BaseModel):
     """Combustion drive info"""
     tank_level_percent: Optional[float] = None
     fuel_type: Optional[str] = None
+    adblue_range_km: Optional[float] = None  # Diesel only
+    adblue_level_percent: Optional[float] = None  # Diesel only
 
 class EnergyStatusModel(BaseModel):
     """Consolidated energy and range info"""
