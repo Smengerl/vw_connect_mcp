@@ -244,6 +244,142 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         
         return result
 
+    # Commands - Vehicle Control
+    @mcp.tool()
+    def lock_vehicle(vehicle_id: str) -> Dict[str, Any]:
+        """Lock the vehicle doors.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("lock vehicle for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "lock")
+
+    @mcp.tool()
+    def unlock_vehicle(vehicle_id: str) -> Dict[str, Any]:
+        """Unlock the vehicle doors.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("unlock vehicle for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "unlock")
+
+    @mcp.tool()
+    def start_climatization(vehicle_id: str, target_temperature_celsius: Optional[float] = None) -> Dict[str, Any]:
+        """Start climate control/heating/cooling.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            target_temperature_celsius: Target temperature (optional, uses last setting if not provided)
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("start climatization for id=%s, temp=%s", vehicle_id, target_temperature_celsius)
+        return adapter.execute_command(vehicle_id, "start_climatization", target_temperature=target_temperature_celsius)
+
+    @mcp.tool()
+    def stop_climatization(vehicle_id: str) -> Dict[str, Any]:
+        """Stop climate control/heating/cooling.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("stop climatization for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "stop_climatization")
+
+    @mcp.tool()
+    def start_charging(vehicle_id: str) -> Dict[str, Any]:
+        """Start charging the vehicle (BEV/PHEV only).
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        
+        Note: Vehicle must be plugged in
+        """
+        logger.info("start charging for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "start_charging")
+
+    @mcp.tool()
+    def stop_charging(vehicle_id: str) -> Dict[str, Any]:
+        """Stop charging the vehicle (BEV/PHEV only).
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("stop charging for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "stop_charging")
+
+    @mcp.tool()
+    def flash_lights(vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Flash the vehicle lights (helpful for locating vehicle).
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            duration_seconds: Optional duration (if supported by vehicle)
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("flash lights for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "flash", duration=duration_seconds)
+
+    @mcp.tool()
+    def honk_and_flash(vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
+        """Honk horn and flash lights (helpful for locating vehicle).
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            duration_seconds: Optional duration (if supported by vehicle)
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("honk and flash for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "honk_and_flash", duration=duration_seconds)
+
+    @mcp.tool()
+    def start_window_heating(vehicle_id: str) -> Dict[str, Any]:
+        """Start window heating/defrosting.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("start window heating for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "start_window_heating")
+
+    @mcp.tool()
+    def stop_window_heating(vehicle_id: str) -> Dict[str, Any]:
+        """Stop window heating/defrosting.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+        
+        Returns:
+            Confirmation or error message
+        """
+        logger.info("stop window heating for id=%s", vehicle_id)
+        return adapter.execute_command(vehicle_id, "stop_window_heating")
+
     @mcp.resource("data://list_vehicles")
     def list_vehicles_resource() -> List[Dict[str, Any]]:
         """Return list of vehicles."""
@@ -252,13 +388,13 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return [v.model_dump() for v in vehicles]
 
     @mcp.resource("data://state/{vehicle_id}")
-    def get_vehicle_state_resource(vehicle_id: str) -> BaseModel:
-        """Return vehicle state or empty if not found."""
+    def get_vehicle_state_resource(vehicle_id: str) -> Optional[BaseModel]:
+        """Return vehicle state or None if not found."""
         logger.info("get vehicle state via resource for id=%s", vehicle_id)
         vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
         if vehicle is None:
             logger.warning("Vehicle '%s' not found", vehicle_id)
-            return BaseModel()
+            return None
         return vehicle
 
 
@@ -317,6 +453,18 @@ Maintenance & Service:
 Location:
 - get_position: GPS coordinates (lat, lon) and heading (0°=N, 90°=E, 180°=S, 270°=W)
 
+Vehicle Control Commands:
+- lock_vehicle: Lock all doors
+- unlock_vehicle: Unlock all doors
+- start_climatization: Start pre-heating/cooling
+- stop_climatization: Stop pre-heating/cooling
+- start_charging: Start charging session (BEV/PHEV only)
+- stop_charging: Stop charging session (BEV/PHEV only)
+- flash_lights: Flash headlights (with optional duration)
+- honk_and_flash: Honk horn and flash lights (with optional duration)
+- start_window_heating: Activate window heating
+- stop_window_heating: Deactivate window heating
+
 USAGE PATTERNS:
 
 Quick Status Check:
@@ -332,6 +480,16 @@ Full Status Report:
 Charging Session:
 1. get_charging_state (detailed charging info)
 2. get_battery_status (quick overview)
+
+Remote Climate Control:
+1. get_climatization_state (check current status)
+2. start_climatization (pre-heat/cool)
+3. get_climatization_state (verify activation)
+
+Vehicle Security:
+1. get_vehicle_doors (check lock status)
+2. lock_vehicle or unlock_vehicle (as needed)
+3. get_vehicle_doors (verify action)
 3. get_climatization_state (check if using external power)
 
 Pre-Trip Check:

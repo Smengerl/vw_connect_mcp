@@ -39,7 +39,7 @@ from weconnect_mcp.adapter.abstract_adapter import (
 from weconnect_mcp.adapter.carconnectivity_adapter import VehicleModel
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 
@@ -311,3 +311,29 @@ class TestAdapter(AbstractAdapter):
                         heading=90
                     )
         return None
+
+    def execute_command(self, vehicle_id: str, command: str, **kwargs) -> Dict[str, Any]:
+        """Mock implementation of execute_command for testing."""
+        
+        # Resolve identifier to VIN
+        vin = self._resolve_to_vin(vehicle_id)
+        
+        # Check if vehicle exists
+        vehicle_exists = any(v.vin == vin for v in self.vehicles)
+        if not vehicle_exists:
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        
+        # List of supported commands
+        supported_commands = [
+            "lock", "unlock",
+            "start_climatization", "stop_climatization",
+            "start_charging", "stop_charging",
+            "flash", "honk_and_flash",
+            "start_window_heating", "stop_window_heating"
+        ]
+        
+        if command not in supported_commands:
+            return {"success": False, "error": f"Unknown command: {command}"}
+        
+        # Mock successful execution
+        return {"success": True, "message": f"Command {command} executed"}

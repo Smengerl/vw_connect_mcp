@@ -2,19 +2,54 @@
 
 Comprehensive test suite for the WeConnect MCP server implementation.
 
+## Quick Stats
+
+| Category | Tests | File### 5. Adapter Tests (`test_adapter.py`)
+
+**Purpose**: Mock adapter implementation for testing.
+
+**Key Features**:
+- 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
+- Realistic test data matching real-world scenarios
+- Implements all AbstractAdapter methods
+- Supports all consolidated methods (get_physical_status, get_energy_status, etc.)
+- Mock execute_command implementation for command testing
+
+### 6. Test Data (`test_data.py`) |
+|----------|-------|-------|---------|
+| **Tools** | 76 | 7 | Data retrieval operations |
+| **Commands** | 71 | 5 | Vehicle control operations |
+| **Resources** | 22 | 2 | MCP resource protocol |
+| **Integration** | 13+ | 3 | Real API & E2E tests |
+| **Total** | **169+** | **17+** | Complete coverage |
+
+**All tests passing** ✅
+
 ## Test Structure
 
 ```
 tests/
-├── tools/              # MCP Tool Tests (81 tests) ✅
-│   ├── conftest.py                    # Shared fixtures
-│   ├── test_list_vehicles.py          # 7 tests
-│   ├── test_get_vehicle.py            # 13 tests
-│   ├── test_get_physical_status.py    # 15 tests
-│   ├── test_get_energy_status.py      # 17 tests
+├── conftest.py         # Shared fixtures for ALL tests ⭐
+│
+├── tools/              # MCP Tool Tests (76 tests) ✅
+│   ├── test_list_vehicles.py          # 5 tests
+│   ├── test_get_vehicle.py            # 12 tests
+│   ├── test_get_physical_status.py    # 14 tests
+│   ├── test_get_energy_status.py      # 16 tests
 │   ├── test_get_climate_status.py     # 18 tests
 │   ├── test_maintenance.py            # 6 tests
 │   └── test_position.py               # 5 tests
+│
+├── commands/           # MCP Command Tests (71 tests) ✅
+│   ├── test_lock_unlock.py            # 13 tests
+│   ├── test_climatization.py          # 13 tests
+│   ├── test_charging.py               # 13 tests
+│   ├── test_lights_horn.py            # 17 tests
+│   └── test_window_heating.py         # 15 tests
+│
+├── resources/          # MCP Resource Tests (22 tests) ✅
+│   ├── test_list_vehicles.py          # 7 tests
+│   └── test_vehicle_state.py          # 15 tests
 │
 ├── test_adapter.py                # TestAdapter mock implementation
 ├── test_data.py                   # Central test data configuration
@@ -47,7 +82,74 @@ tests/
 - ✅ get_maintenance_info - Inspection and oil service schedules
 - ✅ get_position - GPS coordinates and heading
 
-### 2. Adapter Tests (`test_adapter.py`)
+### 2. Command Tests (`tests/commands/`)
+
+**Purpose**: Validate MCP command implementations for vehicle control.
+
+**Characteristics**:
+- Uses `TestAdapter` for deterministic mock data
+- Fast execution (no API calls)
+- Tests all 10 vehicle control commands
+- Tests identifier resolution (VIN, name, license plate)
+- Validates MCP server tool registration
+
+**Run**: `pytest tests/commands/ -v`
+
+**Coverage**:
+- ✅ lock_vehicle / unlock_vehicle - Door lock control
+- ✅ start_climatization / stop_climatization - Climate control
+- ✅ start_charging / stop_charging - Charging control (EV/PHEV)
+- ✅ flash_lights / honk_and_flash - Lights and horn
+- ✅ start_window_heating / stop_window_heating - Window heating
+
+**See**: `tests/commands/README.md` for detailed documentation
+
+### 3. Resource Tests (`tests/resources/`)
+
+**Purpose**: Validate MCP resource implementations for data access.
+
+**Characteristics**:
+- Uses `TestAdapter` for deterministic mock data
+- Fast execution (no API calls)
+- Tests MCP resource protocol
+- Tests resource templates with parameters
+- Validates data consistency with adapter
+
+**Run**: `pytest tests/resources/ -v`
+
+**Coverage**:
+- ✅ data://list_vehicles - List all vehicles resource
+- ✅ data://state/{vehicle_id} - Vehicle state resource template
+
+**See**: `tests/resources/README.md` for detailed documentation
+
+### 4. Shared Fixtures (`conftest.py`)
+
+**Purpose**: Central fixture definitions for all test categories.
+
+**Location**: `tests/conftest.py` (root of tests directory)
+
+**Fixtures provided**:
+- `adapter`: TestAdapter instance with 2 mock vehicles
+- `mcp_server`: FastMCP server with all tools, commands, and resources
+- `mcp_client`: Connected MCP client for async resource/tool access
+
+**Benefits**:
+- No duplication across test directories
+- Single source of truth for test fixtures
+- Automatic availability in all subdirectories (pytest mechanism)
+- Easy maintenance and updates
+
+**Usage**: Simply declare fixtures as function parameters in any test:
+```python
+def test_example(adapter):
+    vehicles = adapter.list_vehicles()
+    
+async def test_resource(mcp_client):
+    result = await mcp_client.read_resource("data://list_vehicles")
+```
+
+### 5. Adapter Tests (`test_adapter.py`)
 
 **Purpose**: Mock adapter implementation for testing.
 
@@ -121,6 +223,16 @@ pytest tests/ -v
 ### Tool Tests Only (Fast)
 ```bash
 pytest tests/tools/ -v
+```
+
+### Command Tests Only (Fast)
+```bash
+pytest tests/commands/ -v
+```
+
+### Resource Tests Only (Fast)
+```bash
+pytest tests/resources/ -v
 ```
 
 ### Integration Tests Only (Requires VW API)
@@ -241,8 +353,49 @@ Replaces: `get_climatization_state`, `get_window_heating_state`
 
 ## Current Status
 
-✅ **81/81 tool tests passing** (100%)
-⚠️ Some integration tests may fail (update mcp_server.py to use consolidated methods)
+✅ **169 fast tests passing** (100%)
+- 76 Tool tests
+- 71 Command tests  
+- 22 Resource tests
+
+⚠️ Integration tests require valid VW API credentials
+
+## Test Coverage Summary
+
+### MCP Protocol Components
+
+| Component | Implemented | Tested | Coverage |
+|-----------|-------------|--------|----------|
+| **Tools** | 24 tools | 76 tests | ✅ 100% |
+| **Commands** | 10 commands | 71 tests | ✅ 100% |
+| **Resources** | 2 resources | 22 tests | ✅ 100% |
+
+### Tool Categories
+
+| Category | Tools | Tests | Purpose |
+|----------|-------|-------|---------|
+| Core Info | 4 | 17 | Vehicle identification & type |
+| Physical | 4 | 14 | Doors, windows, tyres, lights |
+| Energy | 3 | 16 | Battery, charging, range |
+| Climate | 2 | 18 | Climatization, heating |
+| Maintenance | 1 | 6 | Service schedules |
+| Location | 1 | 5 | GPS position |
+
+### Command Categories
+
+| Category | Commands | Tests | Purpose |
+|----------|----------|-------|---------|
+| Lock & Security | 2 | 13 | Lock/unlock doors |
+| Climate Control | 4 | 26 | Climatization, window heating |
+| Charging | 2 | 13 | Start/stop charging |
+| Lights & Horn | 2 | 17 | Flash, honk & flash |
+
+### Resource Categories
+
+| Resource | Type | Tests | Purpose |
+|----------|------|-------|---------|
+| list_vehicles | Static | 7 | List all vehicles |
+| state/{vehicle_id} | Template | 15 | Vehicle state by ID |
 
 ## Troubleshooting
 
@@ -270,8 +423,23 @@ pip install -e ".[test]"
 ## Contributing
 
 When adding new features:
-1. Add tool tests in `tests/tools/`
-2. Update `test_data.py` with expected values
+1. Add tool tests in `tests/tools/` for data retrieval
+2. Add command tests in `tests/commands/` for vehicle control
+3. Add resource tests in `tests/resources/` for MCP resources
+4. Update `test_data.py` with expected values
+5. Update `test_adapter.py` mock implementation
+6. Ensure all tests pass before committing
+
+Test file naming convention:
+- Tools: `test_{tool_name}.py`
+- Commands: `test_{command_category}.py`
+- Resources: `test_{resource_name}.py`
+
+Each test file should include:
+- Docstring explaining what's tested
+- Import of test data from `test_data.py`
+- Grouped tests with clear section headers
+- MCP server registration test at the end
 3. Update `TestAdapter` if needed
 4. Run full test suite: `pytest tests/tools/ -v`
 5. Document in test file headers

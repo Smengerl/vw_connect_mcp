@@ -730,3 +730,66 @@ class CarConnectivityAdapter(AbstractAdapter):
             longitude=longitude,
             heading=heading
         )
+
+    def execute_command(self, vehicle_id: str, command: str, **kwargs) -> dict[str, Any]:
+        """Execute a vehicle command.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            command: Command name (lock, unlock, start_climatization, etc.)
+            **kwargs: Command-specific parameters
+        
+        Returns:
+            Result dict with success/error status
+        """
+        from carconnectivity.command_impl import (
+            LockUnlockCommand,
+            ClimatizationStartStopCommand,
+            ChargingStartStopCommand,
+            HonkAndFlashCommand,
+            WindowHeatingStartStopCommand,
+        )
+        
+        vehicle = self._get_vehicle_for_vin(vehicle_id)
+        if vehicle is None:
+            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
+        
+        if not hasattr(vehicle, 'commands') or vehicle.commands is None:
+            return {"success": False, "error": "Vehicle does not support commands"}
+        
+        # Map command names to command enums
+        command_mapping = {
+            "lock": (LockUnlockCommand.Command.LOCK, {}),
+            "unlock": (LockUnlockCommand.Command.UNLOCK, {}),
+            "start_climatization": (ClimatizationStartStopCommand.Command.START, {}),
+            "stop_climatization": (ClimatizationStartStopCommand.Command.STOP, {}),
+            "start_charging": (ChargingStartStopCommand.Command.START, {}),
+            "stop_charging": (ChargingStartStopCommand.Command.STOP, {}),
+            "flash": (HonkAndFlashCommand.Command.FLASH, kwargs),
+            "honk_and_flash": (HonkAndFlashCommand.Command.HONK_AND_FLASH, kwargs),
+            "start_window_heating": (WindowHeatingStartStopCommand.Command.START, {}),
+            "stop_window_heating": (WindowHeatingStartStopCommand.Command.STOP, {}),
+        }
+        
+        if command not in command_mapping:
+            return {"success": False, "error": f"Unknown command: {command}"}
+        
+        cmd_enum, cmd_kwargs = command_mapping[command]
+        
+        # Check if command is available
+        command_name = cmd_enum.__class__.__name__.replace("Command", "").lower()
+        if not vehicle.commands.contains_command(command_name):
+            return {"success": False, "error": f"Command {command} not available for this vehicle"}
+        
+        # Build command dict
+        command_dict = {"command": cmd_enum}
+        command_dict.update(cmd_kwargs)
+        
+        try:
+            # Execute command via carconnectivity
+            vehicle.commands.commands[command_name].value = command_dict
+            return {"success": True, "message": f"Command {command} executed"}
+        except Exception as e:
+            logger.error(f"Failed to execute command {command}: {e}")
+            return {"success": False, "error": str(e)}
+

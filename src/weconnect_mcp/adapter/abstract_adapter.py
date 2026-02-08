@@ -6,7 +6,7 @@ Adapters implement a small surface for the MCP server with concrete types.
 from abc import ABC, abstractmethod
 from carconnectivity.vehicle import GenericVehicle
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
@@ -274,4 +274,18 @@ class AbstractAdapter(ABC):
     @abstractmethod
     def get_position(self, vehicle_id: str) -> Optional[PositionModel]:
         """Get GPS position: latitude, longitude, heading."""
+        pass
+
+    @abstractmethod
+    def execute_command(self, vehicle_id: str, command: str, **kwargs) -> Dict[str, Any]:
+        """Execute a vehicle command.
+        
+        Args:
+            vehicle_id: VIN, name, or license plate
+            command: Command name (lock, unlock, start_climatization, etc.)
+            **kwargs: Command-specific parameters
+        
+        Returns:
+            Result dict with success/error status
+        """
         pass
