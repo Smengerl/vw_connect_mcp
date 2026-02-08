@@ -104,6 +104,15 @@ class CarConnectivityAdapter(AbstractAdapter):
         if self._is_cache_expired():
             self._fetch_data()
 
+    def invalidate_cache(self) -> None:
+        """Invalidate cache to force fresh data fetch on next access.
+        
+        Should be called after state-changing operations (commands) to ensure
+        subsequent reads get updated data reflecting the new state.
+        """
+        logger.info("Cache invalidated - next data access will fetch fresh data from server")
+        self._last_fetch_time = None
+
     def shutdown(self):
         """Clean up resources."""
         if self.car_connectivity is not None:
@@ -835,6 +844,12 @@ class CarConnectivityAdapter(AbstractAdapter):
         try:
             # Execute command via carconnectivity
             vehicle.commands.commands[command_name].value = command_dict
+            
+            # Invalidate cache after successful command execution
+            # This ensures next data read gets fresh state reflecting the change
+            self.invalidate_cache()
+            logger.info(f"Command {command} executed successfully, cache invalidated")
+            
             return {"success": True, "message": f"Command {command} executed"}
         except Exception as e:
             logger.error(f"Failed to execute command {command}: {e}")

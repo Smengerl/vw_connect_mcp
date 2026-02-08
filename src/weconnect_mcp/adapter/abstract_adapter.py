@@ -290,3 +290,13 @@ class AbstractAdapter(ABC):
             Result dict with success/error status
         """
         pass
+
+    def invalidate_cache(self) -> None:
+        """Invalidate cached data to force fresh fetch on next access.
+        
+        Should be called after state-changing operations (commands) to ensure
+        subsequent reads get updated data reflecting the new state.
+        
+        Default implementation does nothing (for adapters without caching).
+        """
+        pass
