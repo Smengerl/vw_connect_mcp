@@ -43,77 +43,14 @@ Note: Tests may fail if server still uses old API methods like get_vehicle_info.
 """
 import pytest
 import json
-from src.weconnect_mcp.server.mcp_server import get_server
-from fastmcp import Client
-from src.weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
-import asyncio
-from pathlib import Path
-from collections.abc import AsyncIterator
 
 import logging
 logger = logging.getLogger(__name__)
 
-from tests.test_carconnectivity_adapter import config_path, tokenstore_file, adapter
 
+# ==================== TESTS ====================
 
-# ==================== FIXTURES ====================
-
-@pytest.fixture(scope="module")
-async def mcp_server(config_path: Path, adapter: CarConnectivityAdapter):
-    """Provides a FastMCP server running with real CarConnectivityAdapter.
-    
-    Module-scoped: Server is created once and runs in background for all tests.
-    
-    Lifecycle:
-    1. Creates server with real VW API adapter
-    2. Starts server in background asyncio task
-    3. Runs stdio transport for MCP protocol
-    4. Yields server to tests
-    5. Cancels task and waits for clean shutdown
-    
-    Note: Server runs continuously; clients connect/disconnect per test.
-    """
-    logger.debug("2/7 Entering server fixture")
-    server = get_server(adapter)
-    finished = asyncio.Event()
-
-    # Wrap server run in a task that signals when finished for clean shutdown when task is cancelled
-    async def run_and_signal():
-        try:
-            await server.run_stdio_async(show_banner=False)
-        finally:
-            finished.set()
-
-    task = asyncio.create_task(run_and_signal())
-    await asyncio.sleep(1)  # Give server time to start
-    try:
-        yield server
-    finally:
-        logger.debug("5/7 Exiting server fixture - start")
-        task.cancel()
-        await finished.wait()  
-        logger.debug("6/7 Exiting server fixture")
-
-
-@pytest.fixture(scope="function")
-async def mcp_client(mcp_server):
-    """Provides a connected MCP client for testing server communication.
-    
-    Function-scoped: Fresh client per test to ensure isolated test state.
-    
-    Uses async context manager for automatic connection and disconnection.
-    Each test gets a new client connected to the long-running server.
-    """
-    logger.debug("3/7 Entering mcp_client fixture")
-    async with Client(mcp_server) as mcp_client:
-        yield mcp_client
-    logger.debug("4/7 Exiting mcp_client fixture")
-
-
-
-
-
-def test_config_json_is_valid(config_path: Path):
+def test_config_json_is_valid(config_path):
     # Ensure the file exists
     assert config_path.exists(), f"Config file does not exist: {config_path}"
     assert config_path.is_file(), f"Path is not a file: {config_path}"
@@ -132,9 +69,9 @@ def test_config_json_is_valid(config_path: Path):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_list_vehicles(mcp_client):
+async def test_mcp_list_vehicles(real_mcp_client):
     """ Tests that the MCP client can list vehicles via the server. """
-    result = await mcp_client.read_resource("data://list_vehicles")
+    result = await real_mcp_client.read_resource("data://list_vehicles")
     logger.debug(f"Resource read: {result}")
     assert result is not None, "Result from read_resource should not be None"
     assert result.__len__() == 1, f"Expected 1 result, got {result.__len__()}"
@@ -152,7 +89,7 @@ async def test_mcp_list_vehicles(mcp_client):
         vin = vehicle_info["vin"]
         logger.debug(f"Reading details for vehicle: {vin}")
 
-        result = await mcp_client.read_resource(f"data://state/{vin}")
+        result = await real_mcp_client.read_resource(f"data://state/{vin}")
         assert result is not None, f"Result for vehicle {vin} should not be None"
         assert result.__len__() == 1, f"Expected 1 result for vehicle {vin}, got {result.__len__()}"
         assert hasattr(result[0], "text"), f"Result[0] for vehicle {vin} should have attribute 'text'"

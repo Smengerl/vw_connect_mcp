@@ -26,10 +26,10 @@ Test characteristics:
 - Tests run against first vehicle in account
 - May fail if vehicle doesn't support certain features
 
-Fixture setup:
-1. config_path: Locates src/config.json with VW credentials
-2. tokenstore_file: OAuth token cache in tmp/tokenstore
-3. adapter: CarConnectivityAdapter instance with real API connection
+Fixtures (from conftest.py):
+- config_path: Locates src/config.json with VW credentials
+- tokenstore_file: OAuth token cache in tmp/tokenstore
+- real_adapter: CarConnectivityAdapter instance with real API connection
 
 Run with: pytest tests/test_carconnectivity_adapter.py -v
 """
@@ -37,77 +37,14 @@ import os
 import pytest
 from weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
 from weconnect_mcp.adapter.abstract_adapter import VehicleModel, VehicleDetailLevel
-from pathlib import Path
-from collections.abc import AsyncIterator
 
 import logging
 logger = logging.getLogger(__name__)
 
 
-# ==================== FIXTURES ====================
-
-@pytest.fixture(scope="module")
-def config_path() -> Path:
-    """Provides path to VW account credentials configuration.
-    
-    Returns path to src/config.json containing:
-    - VW account username
-    - VW account password
-    - Other CarConnectivity settings
-    
-    Located at: ../src/config.json (relative to this test file)
-    """
-    current_dir = Path(__file__).resolve().parent
-    return (current_dir / "../src/config.json").resolve()
-
-
-@pytest.fixture(scope="module")
-def tokenstore_file() -> Path:
-    """Provides path to OAuth token cache file.
-    
-    Returns path to tokenstore file for caching VW API OAuth tokens.
-    Avoids repeated logins across test runs.
-    
-    Located at: ../tmp/tokenstore (relative to this test file)
-    """
-    current_dir = Path(__file__).resolve().parent
-    return (current_dir / "../tmp/tokenstore").resolve()
-
-
-@pytest.fixture(scope="module")
-async def adapter(
-    config_path: Path,
-    tokenstore_file: Path,
-) -> AsyncIterator[CarConnectivityAdapter]:
-    """Provides a CarConnectivityAdapter connected to real VW API.
-    
-    Module-scoped: Logs in once per test session, reuses connection.
-    
-    Lifecycle:
-    1. Reads credentials from config_path
-    2. Connects to VW API (uses tokenstore if available)
-    3. Yields authenticated adapter to tests
-    4. Automatically disconnects on teardown
-    
-    Requires:
-    - Valid VW credentials in config.json
-    - Internet connection
-    - VW API availability
-    
-    Debug output shows lifecycle: "1/7 Entering" → tests run → "7/7 Exiting"
-    """
-    logger.debug("1/7 Entering adapter fixture")
-    async with CarConnectivityAdapter(
-        config_path.as_posix(),
-        tokenstore_file.as_posix(),
-    ) as adapter:
-        yield adapter
-    logger.debug("7/7 Exiting adapter fixture")
-
-
 # ==================== TESTS ====================
 
-def test_adapter_list_vehicles(adapter: CarConnectivityAdapter):
+def test_adapter_list_vehicles(real_adapter: CarConnectivityAdapter):
     """Test that list_vehicles returns valid vehicle data"""
     vehicles = adapter.list_vehicles()
     
@@ -116,7 +53,7 @@ def test_adapter_list_vehicles(adapter: CarConnectivityAdapter):
     assert all(isinstance(v, VehicleListItem) for v in vehicles)
 
 
-def test_adapter_get_vehicle_basic_info(adapter: CarConnectivityAdapter):    
+def test_adapter_get_vehicle_basic_info(real_adapter: CarConnectivityAdapter):    
     """Test getting basic vehicle information for all vehicles"""
     vehicles = adapter.list_vehicles()
     
@@ -132,7 +69,7 @@ def test_adapter_get_vehicle_basic_info(adapter: CarConnectivityAdapter):
         assert hasattr(vehicle, "type")  # Changed from vehicle_type to type
 
 
-def test_adapter_get_vehicle_full_info(adapter: CarConnectivityAdapter):
+def test_adapter_get_vehicle_full_info(real_adapter: CarConnectivityAdapter):
     """Test getting full vehicle information including state and software"""
     vehicles = adapter.list_vehicles()
     
@@ -151,7 +88,7 @@ def test_adapter_get_vehicle_full_info(adapter: CarConnectivityAdapter):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_physical_status_doors(adapter, vin):
+async def test_get_physical_status_doors(real_adapter, vin):
     """Test getting door status via get_physical_status"""
     status = adapter.get_physical_status(vin, components=["doors"])
     
@@ -168,7 +105,7 @@ async def test_get_physical_status_doors(adapter, vin):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_physical_status_windows(adapter, vin):
+async def test_get_physical_status_windows(real_adapter, vin):
     """Test getting window status via get_physical_status"""
     status = adapter.get_physical_status(vin, components=["windows"])
     
@@ -182,7 +119,7 @@ async def test_get_physical_status_windows(adapter, vin):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_physical_status_tyres(adapter, vin):
+async def test_get_physical_status_tyres(real_adapter, vin):
     """Test getting tyre status via get_physical_status"""
     status = adapter.get_physical_status(vin, components=["tyres"])
     
@@ -195,7 +132,7 @@ async def test_get_physical_status_tyres(adapter, vin):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_physical_status_all_components(adapter, vin):
+async def test_get_physical_status_all_components(real_adapter, vin):
     """Test getting all physical components at once"""
     status = adapter.get_physical_status(vin)
     
@@ -207,7 +144,7 @@ async def test_get_physical_status_all_components(adapter, vin):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_energy_status(adapter, vin):
+async def test_get_energy_status(real_adapter, vin):
     """Test getting energy status for electric vehicle"""
     energy = adapter.get_energy_status(vin)
     
@@ -223,7 +160,7 @@ async def test_get_energy_status(adapter, vin):
 
 
 @pytest.mark.parametrize("vin", ["WVWZZZED4SE003938"])
-async def test_get_climate_status(adapter, vin):
+async def test_get_climate_status(real_adapter, vin):
     """Test getting climate status"""
     climate = adapter.get_climate_status(vin)
     

@@ -17,10 +17,10 @@ Test architecture:
 - Async tests with @pytest.mark.asyncio
 - 10-second timeout per test
 
-Fixtures:
-- mockdata_adapter: TestAdapter with 2 mock vehicles
-- mockdata_mcp_server: FastMCP server instance with registered tools
-- mockdata_mcp_client: Connected MCP client for protocol testing
+Fixtures (from conftest.py):
+- adapter: TestAdapter with 2 mock vehicles
+- mcp_server: FastMCP server instance with registered tools
+- mcp_client: Connected MCP client for protocol testing
 
 Note: 
 - Resource tests are in tests/resources/ (not duplicated here)
@@ -29,61 +29,29 @@ Note:
 """
 import pytest
 import json
-from src.weconnect_mcp.server.mcp_server import get_server
-from .test_adapter import TestAdapter
 from weconnect_mcp.adapter.carconnectivity_adapter import VehicleModel
-from fastmcp import Client
-from typing import Any
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-# ==================== FIXTURES ====================
-
-@pytest.fixture(scope="module")
-def mockdata_adapter():
-    """Provides a TestAdapter instance with 2 mock vehicles for testing."""
-    return TestAdapter()
-
-
-@pytest.fixture(scope="module")
-def mockdata_mcp_server(mockdata_adapter):
-    """Provides a FastMCP server instance with TestAdapter.
-    
-    Module-scoped: created once and reused across all tests.
-    """
-    return get_server(mockdata_adapter)
-
-
-@pytest.fixture(scope="function")
-async def mockdata_mcp_client(mockdata_mcp_server):
-    """Provides a connected MCP client for protocol testing.
-    
-    Function-scoped: fresh client per test to avoid state pollution.
-    Automatically connects and disconnects via async context manager.
-    """
-    async with Client(mockdata_mcp_server) as mockdata_mcp_client:
-        yield mockdata_mcp_client
 
 
 # ==================== MCP CLIENT CONNECTION TESTS ====================
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_client_connects(mockdata_mcp_client):
+async def test_mcp_client_connects(mcp_client):
     """ Test that the MCP client can connect to the server. """
-    assert mockdata_mcp_client.is_connected(), "MCP client should be connected"
+    assert mcp_client.is_connected(), "MCP client should be connected"
 
 
 # ==================== MCP TOOL INVOCATION TESTS ====================
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_climatization_state(mockdata_mcp_client):
+async def test_mcp_get_climatization_state(mcp_client):
     """Test that the MCP client can get climatization state via the server."""
     # Test with ID7 (should have active heating)
-    result = await mockdata_mcp_client.call_tool("get_climatization_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_climatization_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Climatization state result: {result}")
     
     assert result is not None
@@ -101,10 +69,10 @@ async def test_mcp_get_climatization_state(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_maintenance_info(mockdata_mcp_client):
+async def test_mcp_get_maintenance_info(mcp_client):
     """Test that the MCP client can get maintenance info via the server."""
     # Test with T7 (combustion vehicle with oil service)
-    result = await mockdata_mcp_client.call_tool("get_maintenance_info", arguments={"vehicle_id": "WV2ZZZSTZNH009136"})
+    result = await mcp_client.call_tool("get_maintenance_info", arguments={"vehicle_id": "WV2ZZZSTZNH009136"})
     logger.debug(f"Maintenance info result: {result}")
     
     assert result is not None
@@ -123,10 +91,10 @@ async def test_mcp_get_maintenance_info(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_range_info(mockdata_mcp_client):
+async def test_mcp_get_range_info(mcp_client):
     """Test that the MCP client can get range info via the server."""
     # Test with ID7 (electric vehicle)
-    result = await mockdata_mcp_client.call_tool("get_range_info", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_range_info", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Range info result: {result}")
     
     assert result is not None
@@ -147,10 +115,10 @@ async def test_mcp_get_range_info(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_window_heating_state(mockdata_mcp_client):
+async def test_mcp_get_window_heating_state(mcp_client):
     """Test that the MCP client can get window heating state via the server."""
     # Test with ID7 (should have both heaters on)
-    result = await mockdata_mcp_client.call_tool("get_window_heating_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_window_heating_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Window heating result: {result}")
     
     assert result is not None
@@ -167,10 +135,10 @@ async def test_mcp_get_window_heating_state(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_lights_state(mockdata_mcp_client):
+async def test_mcp_get_lights_state(mcp_client):
     """Test that the MCP client can get lights state via the server."""
     # Test with ID7
-    result = await mockdata_mcp_client.call_tool("get_lights_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_lights_state", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Lights result: {result}")
     
     assert result is not None
@@ -187,10 +155,10 @@ async def test_mcp_get_lights_state(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_position(mockdata_mcp_client):
+async def test_mcp_get_position(mcp_client):
     """Test that the MCP client can get vehicle position via the server."""
     # Test with ID7 (Munich position)
-    result = await mockdata_mcp_client.call_tool("get_position", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_position", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Position result: {result}")
     
     assert result is not None
@@ -210,10 +178,10 @@ async def test_mcp_get_position(mockdata_mcp_client):
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_mcp_get_battery_status(mockdata_mcp_client):
+async def test_mcp_get_battery_status(mcp_client):
     """Test that the MCP client can get battery status via the server."""
     # Test with ID7 (electric vehicle)
-    result = await mockdata_mcp_client.call_tool("get_battery_status", arguments={"vehicle_id": "WVWZZZED4SE003938"})
+    result = await mcp_client.call_tool("get_battery_status", arguments={"vehicle_id": "WVWZZZED4SE003938"})
     logger.debug(f"Battery status result: {result}")
     
     assert result is not None
