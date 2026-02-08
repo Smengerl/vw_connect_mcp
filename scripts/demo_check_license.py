@@ -102,12 +102,20 @@ def main():
                 if license_plate:
                     print(f"  ✅ License plate IS available: {license_plate}")
                 else:
-                    print(f"  ❌ License plate is NOT available")
+                    print(f"  ❌ License plate is NOT available (VW API does not provide this data)")
             
             # Debug: Show some available attributes
             attrs = [attr for attr in dir(vehicle) if not attr.startswith('_')]
             print(f"  Available attributes ({len(attrs)} total): {', '.join(attrs[:8])}...")
             print()
+        
+        print("=" * 60)
+        print("ℹ️  NOTE: VW WeConnect API Limitation")
+        print("=" * 60)
+        print("The VW API currently does NOT provide license plate data.")
+        print("This is a limitation of Volkswagen's API, not this library.")
+        print("License plates shown in test data are for demonstration only.")
+        print("=" * 60)
         
         print("=" * 60)
         print("CHECK COMPLETE")
