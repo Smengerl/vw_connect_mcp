@@ -1,37 +1,13 @@
-"""
-CarConnectivityAdapter Integration Tests
-=========================================
+"""CarConnectivityAdapter Integration Tests with Real VW API.
 
-This test suite validates the CarConnectivityAdapter implementation using REAL VW API calls.
+⚠️ Requires valid VW credentials in src/config.json and internet connection.
 
-⚠️ IMPORTANT: These are integration tests that require:
-- Valid VW account credentials in src/config.json
-- Internet connection to VW API servers
-- Real vehicle(s) associated with the account
-- Valid OAuth tokenstore
+Tests list_vehicles(), get_vehicle(), get_physical_status(), get_energy_status(),
+get_climate_status(), get_maintenance_info(), and get_position() with real data.
 
-What is tested:
-- list_vehicles() with real API data
-- get_vehicle() with BASIC and FULL detail levels
-- get_physical_status() for all components
-- get_energy_status() for battery/range/charging
-- get_climate_status() for climatization and window heating
-- get_maintenance_info() for service schedules
-- get_position() for GPS coordinates
-- Real-world data validation and error handling
-
-Test characteristics:
-- Uses @pytest.mark.asyncio for async operations
-- Module-scoped fixtures (login happens once per test session)
-- Tests run against first vehicle in account
-- May fail if vehicle doesn't support certain features
-
-Fixtures (from conftest.py):
-- config_path: Locates src/config.json with VW credentials
-- tokenstore_file: OAuth token cache in tmp/tokenstore
-- real_adapter: CarConnectivityAdapter instance with real API connection
-
-Run with: pytest tests/test_carconnectivity_adapter.py -v
+Usage:
+    pytest tests/real_api/test_real_api_carconnectivity_adapter.py -v  # Run with real API
+    pytest tests/ -m "not real_api"  # Skip in normal runs
 """
 import os
 import pytest
@@ -40,6 +16,9 @@ from weconnect_mcp.adapter.abstract_adapter import VehicleModel, VehicleDetailLe
 
 import logging
 logger = logging.getLogger(__name__)
+
+# Mark all tests in this file as real_api and slow
+pytestmark = [pytest.mark.real_api, pytest.mark.slow]
 
 
 # ==================== TESTS ====================

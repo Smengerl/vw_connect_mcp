@@ -1,51 +1,25 @@
-"""
-Full Roundtrip Integration Tests
-=================================
+"""Full Roundtrip Integration Tests with Real VW API.
 
-This test suite validates the complete MCP stack with REAL API integration.
-
-⚠️ CRITICAL: End-to-end tests combining:
+End-to-end tests validating complete MCP stack:
 - Real VW API (via CarConnectivityAdapter)
 - FastMCP server
 - MCP client protocol
 - Complete request/response cycle
 
-What is tested:
-- MCP server initialization with real adapter
-- Client connection to server
-- MCP resource listing (data://list_vehicles)
-- MCP resource reading (data://state/{vehicle_id})
-- JSON serialization/deserialization
-- Real vehicle data validation
+⚠️ Requires valid VW credentials in src/config.json and internet connection.
 
-Test flow:
-1. CarConnectivityAdapter connects to VW API (module scope, once per session)
-2. MCP server is created with real adapter (module scope)
-3. Server runs in background task with stdio transport
-4. MCP client connects to server (function scope, fresh per test)
-5. Client makes MCP protocol requests
-6. Server calls adapter methods → VW API
-7. Response flows back: API → Adapter → Server → Client
-
-Fixtures (with lifecycle):
-- config_path (module): Path to VW credentials
-- tokenstore_file (module): OAuth token cache
-- adapter (module): CarConnectivityAdapter with VW API connection
-- mcp_server (module): FastMCP server running in background
-- mcp_client (function): Fresh client per test
-
-Requirements:
-- Valid VW account in src/config.json
-- Internet connection
-- Real vehicle(s) in account
-
-Note: Tests may fail if server still uses old API methods like get_vehicle_info.
+Usage:
+    pytest tests/real_api/test_real_api_full_roundtrip.py -v  # Run with real API
+    pytest tests/ -m "not real_api"  # Skip in normal runs
 """
 import pytest
 import json
 
 import logging
 logger = logging.getLogger(__name__)
+
+# Mark all tests in this file as real_api and slow
+pytestmark = [pytest.mark.real_api, pytest.mark.slow]
 
 
 # ==================== TESTS ====================
