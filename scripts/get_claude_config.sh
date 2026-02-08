@@ -4,7 +4,12 @@
 echo "🔍 Finding Python paths for Claude Desktop configuration..."
 echo ""
 
-PROJECT_DIR="/Users/simon/Coding/weconnect_mvp"
+# Auto-detect project directory (script is in scripts/ subdirectory)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "Project directory: $PROJECT_DIR"
+echo ""
 
 if [ -d "$PROJECT_DIR/.venv" ]; then
     echo "Virtual environment found!"

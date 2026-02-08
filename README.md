@@ -1,6 +1,11 @@
 
 # weconnect_mvp
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](tests/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 **MCP Server for Volkswagen Vehicles**  
 A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
 
@@ -12,7 +17,7 @@ Get up and running in 3 steps:
 
 1. **Install**
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/Smengerl/weconnect_mvp.git
    cd weconnect_mvp
    ./scripts/setup.sh
    ```
@@ -51,7 +56,7 @@ For detailed instructions, see sections below.
 
 1. **Clone the repository**  
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/Smengerl/weconnect_mvp.git
    cd weconnect_mvp
    ```
 
@@ -71,9 +76,22 @@ For detailed instructions, see sections below.
 ### Configuration
 
 The server requires a configuration file (default: `src/config.json`).  
-**You must edit this file to provide your VW credentials and adjust settings as needed.**
+**You must create this file based on the provided example and add your VW credentials.**
 
-Example (`src/config.json`):
+**Step 1: Copy the example configuration**
+```bash
+cp src/config.example.json src/config.json
+```
+
+**Step 2: Edit the configuration with your VW credentials**
+```bash
+# Use your preferred editor
+nano src/config.json
+# or
+code src/config.json
+```
+
+Example configuration structure (from `src/config.example.json`):
 ```json
 {
 	"carConnectivity": {
@@ -85,9 +103,9 @@ Example (`src/config.json`):
 				"config": {
 					"log_level": "error",
 					"interval": 300,
-					"username": "your@email.com",
-					"password": "your_password",
-					"spin": "your_spin",
+					"username": "your_email@example.com",
+					"password": "your_password_here",
+					"spin": "1234",
 					"api_log_level": "debug",
 					"max_age": 300,
 					"force_enable_access": false
@@ -98,8 +116,17 @@ Example (`src/config.json`):
 	}
 }
 ```
-**Do not commit your credentials!**  
-Copy and edit `src/config.json` as needed.
+
+**Configuration Parameters:**
+- `username`: Your VW WeConnect account email
+- `password`: Your VW WeConnect account password
+- `spin`: Your VW S-PIN (4 digits, required for some vehicle commands)
+- `interval`: Data refresh interval in seconds (default: 300 = 5 minutes)
+- `max_age`: Maximum age of cached data in seconds
+
+**Security Notice:**  
+⚠️ **NEVER commit `src/config.json` to version control!**  
+This file is automatically excluded via `.gitignore` to protect your credentials.
 
 ---
 

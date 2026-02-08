@@ -1,13 +1,36 @@
+# Configuration files with sensitive data
 src/config.json
 claude_desktop_config.json
+
+# Python cache
 __pycache__/
 src/__pycache__/
 tests/__pycache__/
+*.pyc
+*.pyo
+
+# Logs and temporary files
 logs/
-.vscode/
-src/weconnect_mvp.egg-info/
-.pytest_cache/
-.venv/
-logs/
+*.log
 tmp/
+tokenstore*
+
+# IDE and editor files
+.vscode/
 .DS_Store
+
+# Build and distribution
+src/weconnect_mvp.egg-info/
+dist/
+build/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environment
+.venv/
+venv/
+env/

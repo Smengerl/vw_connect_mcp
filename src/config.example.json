@@ -1,0 +1,22 @@
+{
+    "carConnectivity": {
+        "log_level": "debug",
+        "connectors": [
+            {
+                "type": "volkswagen",
+                "disabled": false,
+                "config": {
+                    "log_level": "error",
+                    "interval": 300,
+                    "username": "your_email@example.com",
+                    "password": "your_password_here",
+                    "spin": "1234",
+                    "api_log_level": "debug",
+                    "max_age": 300,
+                    "force_enable_access": false
+                }
+            }
+        ],
+        "plugins": []
+    }
+}

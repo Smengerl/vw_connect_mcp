@@ -44,10 +44,31 @@ echo "Upgrading pip inside venv..."
 echo "Installing requirements from $REQ_FILE"
 "$VENV_PIP" install -r "$REQ_FILE"
 
+# Setup configuration file
+CONFIG_EXAMPLE="$ROOT_DIR/src/config.example.json"
+CONFIG_FILE="$ROOT_DIR/src/config.json"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  if [ -f "$CONFIG_EXAMPLE" ]; then
+    echo ""
+    echo "Creating config.json from example..."
+    cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
+    echo "⚠️  IMPORTANT: Edit src/config.json with your VW WeConnect credentials!"
+    echo "   - username: Your VW account email"
+    echo "   - password: Your VW account password"
+    echo "   - spin: Your VW S-PIN (4 digits)"
+  else
+    echo "Warning: config.example.json not found, skipping config file creation" >&2
+  fi
+else
+  echo "Config file already exists at $CONFIG_FILE (not overwriting)"
+fi
+
+echo ""
 echo "Done. To activate the venv, run:"
 echo "  source $VENV_DIR/bin/activate"
 echo "Or run scripts via the venv python directly, e.g.:"
 echo "  $VENV_PYTHON -m pytest"
-echo "  $VENV_PYTHON -m camera_follower_bot.run_camera --help"
+echo "  $VENV_PYTHON -m weconnect_mcp.cli.mcp_server_cli src/config.json"
 
 exit 0
