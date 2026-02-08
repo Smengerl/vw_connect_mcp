@@ -22,9 +22,8 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         "data://vehicles",
         name="list_vehicles",
-        title="List Vehicles",
         description="List all available vehicles with VIN, name, model, and license plate",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "List Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
     def list_vehicles() -> str:
         vehicles: List[VehicleListItem] = adapter.list_vehicles()
@@ -34,9 +33,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         "data://vehicle/{vehicle_id}/info",
         name="get_vehicle_info",
-        title="Get Vehicle Info",
-        description="Get basic vehicle information including VIN, model, manufacturer, software version, odometer reading, and connection state",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state",
+        tags={"vehicle-info", "read"},
+        annotations={"title": "Get Vehicle Info", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_info(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -51,9 +50,8 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         "data://vehicle/{vehicle_id}/state",
         name="get_vehicle_state",
-        title="Get Vehicle State",
         description="Get complete vehicle state including position, battery, doors, windows, climate control, and tyre information",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Complete Vehicle State", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_state(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -66,11 +64,11 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(vehicle.model_dump() if vehicle else {})
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/doors",
+        uri="data://vehicle/{vehicle_id}/doors",
         name="get_vehicle_doors",
-        title="Get Door Status",
         description="Get door lock status and open/closed state for all doors",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        tags={"physical", "read", "security"},
+        annotations={"title": "Get Door Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_doors(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -83,11 +81,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(physical_status.doors.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/windows",
+        uri="data://vehicle/{vehicle_id}/windows",
         name="get_vehicle_windows",
-        title="Get Window Status",
         description="Get open/closed status for all windows",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Window Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_windows(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -100,11 +97,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(physical_status.windows.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/tyres",
+        uri="data://vehicle/{vehicle_id}/tyres",
         name="get_vehicle_tyres",
-        title="Get Tyre Status",
         description="Get tyre pressure and temperature for all tyres",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Tyre Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_tyres(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -117,11 +113,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(physical_status.tyres.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/type",
+        uri="data://vehicle/{vehicle_id}/type",
         name="get_vehicle_type",
-        title="Get Vehicle Type",
         description="Get vehicle propulsion type: electric (BEV), combustion engine, or plug-in hybrid (PHEV)",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Vehicle Type", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_type(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -134,11 +129,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps({"vehicle_id": vehicle_id, "type": vehicle.type})
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/charging",
+        uri="data://vehicle/{vehicle_id}/charging",
         name="get_charging_state",
-        title="Get Charging State",
         description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, battery level, and charging state (BEV/PHEV only)",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_charging_state(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -151,11 +145,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(energy_status.electric.charging.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/climate",
+        uri="data://vehicle/{vehicle_id}/climate",
         name="get_climatization_state",
-        title="Get Climate Control State",
         description="Get climate control status including state, target temperature, and window/seat heating settings",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Climate Control Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_climatization_state(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -168,11 +161,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(climate_status.climatization.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/maintenance",
+        uri="data://vehicle/{vehicle_id}/maintenance",
         name="get_maintenance_info",
-        title="Get Maintenance Information",
         description="Get service schedules including inspection and oil service due dates and remaining distances",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Maintenance Information", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_maintenance_info(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -185,11 +177,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(maintenance_info.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/range",
+        uri="data://vehicle/{vehicle_id}/range",
         name="get_range_info",
-        title="Get Range Information",
         description="Get range information including total range, electric range (BEV/PHEV), combustion range (PHEV/ICE), and battery/fuel tank levels",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Range Information", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_range_info(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -213,11 +204,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(result)
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/window-heating",
+        uri="data://vehicle/{vehicle_id}/window-heating",
         name="get_window_heating_state",
-        title="Get Window Heating State",
         description="Get window heating/defrosting status for front and rear windows",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Window Heating State", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_window_heating_state(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -230,11 +220,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(climate_status.window_heating.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/lights",
+        uri="data://vehicle/{vehicle_id}/lights",
         name="get_lights_state",
-        title="Get Lights Status",
         description="Get status of vehicle lights (left/right on/off)",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Lights Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_lights_state(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -247,11 +236,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(physical_status.lights.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/position",
+        uri="data://vehicle/{vehicle_id}/position",
         name="get_position",
-        title="Get GPS Position",
         description="Get vehicle GPS position including latitude, longitude, and heading (0=North, 90=East, 180=South, 270=West)",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get GPS Position", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_position(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -264,11 +252,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(position.model_dump())
 
     @mcp.resource(
-        "data://vehicle/{vehicle_id}/battery",
+        uri="data://vehicle/{vehicle_id}/battery",
         name="get_battery_status",
-        title="Get Battery Status",
         description="Quick battery check including level, electric range, and charging status (BEV/PHEV only). Use get_charging_state for detailed charging information",
-        annotations={"readOnlyHint": True, "idempotentHint": True}
+        annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_battery_status(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -297,8 +284,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_vehicles",
-        title="Get All Vehicles",
-        description="List all available vehicles with VIN, name, model, and license plate. Start here to discover which vehicles you can control."
+        description="List all available vehicles with VIN, name, model, and license plate. Start here to discover which vehicles you can control.",
+        tags={"discovery", "read"},
+        annotations={"title": "Get All Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicles() -> str:
         """Return list of all vehicles as JSON string."""
@@ -308,8 +296,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_vehicle_info",
-        title="Get Vehicle Information",
-        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state"
+        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state",
+        tags={"vehicle-info", "read"},
+        annotations={"title": "Get Vehicle Information", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_info_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -324,8 +313,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_vehicle_state",
-        title="Get Complete Vehicle State",
-        description="Get complete vehicle state snapshot including all available data: position, battery, doors, windows, climate, tyres, etc."
+        description="Get complete vehicle state snapshot including all available data: position, battery, doors, windows, climate, tyres, etc.",
+        tags={"vehicle-info", "read", "comprehensive"},
+        annotations={"title": "Get Complete Vehicle State", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_state_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -340,8 +330,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_vehicle_doors",
-        title="Get Door Status",
-        description="Get door lock status and open/closed state for all doors"
+        description="Get door lock status and open/closed state for all doors",
+        tags={"physical", "read", "security"},
+        annotations={"title": "Get Door Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_doors_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -356,8 +347,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_battery_status",
-        title="Get Battery Status",
-        description="Quick battery check for electric/hybrid vehicles including battery level, electric range, and charging status (BEV/PHEV only)"
+        description="Quick battery check for electric/hybrid vehicles including battery level, electric range, and charging status (BEV/PHEV only)",
+        tags={"energy", "read", "battery", "bev-phev"},
+        annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_battery_status_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -382,11 +374,12 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(result)
     
     @mcp.tool(
-        name="get_climate_status",
-        title="Get Climate Control Status",
-        description="Get climate control status including state (off/heating/cooling), target temperature, and estimated time remaining"
+        name="get_climatization_status",
+        description="Get climate control status including state (off/heating/cooling), target temperature, and estimated time remaining",
+        tags={"climate", "read", "comfort"},
+        annotations={"title": "Get Climate Control Status", "readOnlyHint": True, "idempotentHint": True}
     )
-    def get_climate_status_tool(
+    def get_climatization_status_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
     ) -> str:
         """Get climate control status."""
@@ -399,8 +392,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_charging_status",
-        title="Get Charging Status",
-        description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, cable status, and target SOC (BEV/PHEV only)"
+        description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, cable status, and target SOC (BEV/PHEV only)",
+        tags={"energy", "read", "charging", "bev-phev"},
+        annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_charging_status_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -415,8 +409,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     
     @mcp.tool(
         name="get_vehicle_position",
-        title="Get Vehicle Position",
-        description="Get GPS position including latitude, longitude, and heading (0°=North, 90°=East, 180°=South, 270°=West)"
+        description="Get GPS position including latitude, longitude, and heading (0°=North, 90°=East, 180°=South, 270°=West)",
+        tags={"location", "read", "gps"},
+        annotations={"title": "Get Vehicle Position", "readOnlyHint": True, "idempotentHint": True}
     )
     def get_vehicle_position_tool(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -432,115 +427,10 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     # Vehicle Control Tools (state-changing actions)
     
     @mcp.tool(
-        name="list_available_tools",
-        title="List Available Tools",
-        description="Get a list of all available read and control tools with descriptions. Use this to discover what vehicle operations you can perform."
-    )
-    def list_available_tools() -> Dict[str, Any]:
-        """Return a structured list of all available tools."""
-        logger.info("Listing available tools")
-        return {
-            "message": "Use these tools to interact with your vehicles. Start with get_vehicles() to discover available vehicles.",
-            "read_tools": [
-                {
-                    "name": "get_vehicles",
-                    "description": "List all available vehicles",
-                    "example": "get_vehicles()"
-                },
-                {
-                    "name": "get_vehicle_info",
-                    "description": "Get basic vehicle information",
-                    "example": 'get_vehicle_info("Golf")'
-                },
-                {
-                    "name": "get_vehicle_state",
-                    "description": "Get complete vehicle state snapshot",
-                    "example": 'get_vehicle_state("Golf")'
-                },
-                {
-                    "name": "get_vehicle_doors",
-                    "description": "Get door lock and open/closed status",
-                    "example": 'get_vehicle_doors("Golf")'
-                },
-                {
-                    "name": "get_battery_status",
-                    "description": "Get battery status (BEV/PHEV only)",
-                    "example": 'get_battery_status("ID.7")'
-                },
-                {
-                    "name": "get_charging_status",
-                    "description": "Get detailed charging info (BEV/PHEV only)",
-                    "example": 'get_charging_status("ID.7")'
-                },
-                {
-                    "name": "get_climate_status",
-                    "description": "Get climate control status",
-                    "example": 'get_climate_status("Golf")'
-                },
-                {
-                    "name": "get_vehicle_position",
-                    "description": "Get GPS position and heading",
-                    "example": 'get_vehicle_position("Golf")'
-                }
-            ],
-            "control_tools": [
-                {
-                    "name": "lock_vehicle",
-                    "description": "Lock all doors",
-                    "example": 'lock_vehicle("Golf")'
-                },
-                {
-                    "name": "unlock_vehicle",
-                    "description": "Unlock all doors",
-                    "example": 'unlock_vehicle("Golf")'
-                },
-                {
-                    "name": "start_climatization",
-                    "description": "Start climate control (optional: set temperature)",
-                    "example": 'start_climatization("Golf", 22.0)'
-                },
-                {
-                    "name": "stop_climatization",
-                    "description": "Stop climate control",
-                    "example": 'stop_climatization("Golf")'
-                },
-                {
-                    "name": "start_charging",
-                    "description": "Start charging (BEV/PHEV only)",
-                    "example": 'start_charging("ID.7")'
-                },
-                {
-                    "name": "stop_charging",
-                    "description": "Stop charging (BEV/PHEV only)",
-                    "example": 'stop_charging("ID.7")'
-                },
-                {
-                    "name": "flash_lights",
-                    "description": "Flash headlights",
-                    "example": 'flash_lights("Golf", 10)'
-                },
-                {
-                    "name": "honk_and_flash",
-                    "description": "Honk horn and flash lights",
-                    "example": 'honk_and_flash("Golf", 5)'
-                },
-                {
-                    "name": "start_window_heating",
-                    "description": "Start window heating/defrosting",
-                    "example": 'start_window_heating("Golf")'
-                },
-                {
-                    "name": "stop_window_heating",
-                    "description": "Stop window heating",
-                    "example": 'stop_window_heating("Golf")'
-                }
-            ]
-        }
-
-    @mcp.tool(
         name="lock_vehicle",
-        title="Lock Vehicle",
-        description="Lock all vehicle doors remotely"
+        description="Lock all vehicle doors remotely",
+        tags={"command", "security", "write"},
+        annotations={"title": "Lock Vehicle", "readOnlyHint": False}
     )
     def lock_vehicle(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -550,8 +440,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="unlock_vehicle",
-        title="Unlock Vehicle",
-        description="Unlock all vehicle doors remotely"
+        description="Unlock all vehicle doors remotely",
+        tags={"command", "security", "write"},
+        annotations={"title": "Unlock Vehicle", "readOnlyHint": False}
     )
     def unlock_vehicle(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -561,8 +452,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="start_climatization",
-        title="Start Climate Control",
-        description="Start vehicle climate control (heating/cooling). Optional target temperature in Celsius."
+        description="Start vehicle climate control (heating/cooling). Optional target temperature in Celsius.",
+        tags={"command", "climate", "comfort", "write"},
+        annotations={"title": "Start Climate Control", "readOnlyHint": False}
     )
     def start_climatization(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
@@ -573,8 +465,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="stop_climatization",
-        title="Stop Climate Control",
-        description="Stop vehicle climate control (heating/cooling)"
+        description="Stop vehicle climate control (heating/cooling)",
+        tags={"command", "climate", "comfort", "write"},
+        annotations={"title": "Stop Climate Control", "readOnlyHint": False}
     )
     def stop_climatization(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -584,8 +477,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="start_charging",
-        title="Start Charging",
-        description="Start charging the vehicle battery (BEV/PHEV only, vehicle must be plugged in)"
+        description="Start charging the vehicle battery (BEV/PHEV only, vehicle must be plugged in)",
+        tags={"command", "charging", "energy", "bev-phev", "write"},
+        annotations={"title": "Start Charging", "readOnlyHint": False}
     )
     def start_charging(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -595,8 +489,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="stop_charging",
-        title="Stop Charging",
-        description="Stop charging the vehicle battery (BEV/PHEV only)"
+        description="Stop charging the vehicle battery (BEV/PHEV only)",
+        tags={"command", "charging", "energy", "bev-phev", "write"},
+        annotations={"title": "Stop Charging", "readOnlyHint": False}
     )
     def stop_charging(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -606,8 +501,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="flash_lights",
-        title="Flash Lights",
-        description="Flash the vehicle lights to help locate the vehicle in a parking lot. Optional duration in seconds."
+        description="Flash the vehicle lights to help locate the vehicle in a parking lot. Optional duration in seconds.",
+        tags={"command", "locator", "lights", "write"},
+        annotations={"title": "Flash Lights", "readOnlyHint": False}
     )
     def flash_lights(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
@@ -618,8 +514,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="honk_and_flash",
-        title="Honk and Flash",
-        description="Honk the horn and flash the lights to help locate the vehicle. Optional duration in seconds."
+        description="Honk the horn and flash the lights to help locate the vehicle. Optional duration in seconds.",
+        tags={"command", "locator", "lights", "horn", "write"},
+        annotations={"title": "Honk and Flash", "readOnlyHint": False}
     )
     def honk_and_flash(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"],
@@ -630,8 +527,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="start_window_heating",
-        title="Start Window Heating",
-        description="Start window heating/defrosting for front and rear windows"
+        description="Start window heating/defrosting for front and rear windows",
+        tags={"command", "climate", "comfort", "defrost", "write"},
+        annotations={"title": "Start Window Heating", "readOnlyHint": False}
     )
     def start_window_heating(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
@@ -641,8 +539,9 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="stop_window_heating",
-        title="Stop Window Heating",
-        description="Stop window heating/defrosting"
+        description="Stop window heating/defrosting",
+        tags={"command", "climate", "comfort", "defrost", "write"},
+        annotations={"title": "Stop Window Heating", "readOnlyHint": False}
     )
     def stop_window_heating(
         vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
