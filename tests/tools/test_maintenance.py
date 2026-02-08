@@ -89,9 +89,9 @@ def test_maintenance_info_oil_service_only_combustion(adapter):
 
 @pytest.mark.asyncio
 async def test_get_maintenance_info_tool_is_registered(mcp_server):
-    """Test that get_maintenance_info tool is registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that get_maintenance_info is available as a resource in the MCP server"""
+    resource_templates = await mcp_server.get_resource_templates()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
-    assert "get_maintenance_info" in tool_names, "get_maintenance_info tool should be registered in MCP server"
+    assert resource_templates is not None, "Resource templates should not be None"
+    template_uris = list(resource_templates.keys())
+    assert "data://vehicle/{vehicle_id}/maintenance" in template_uris, "data://vehicle/{vehicle_id}/maintenance resource should be registered in MCP server"

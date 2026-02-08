@@ -213,13 +213,13 @@ def test_climate_status_different_between_vehicles(adapter):
 
 @pytest.mark.asyncio
 async def test_get_climate_status_tools_are_registered(mcp_server):
-    """Test that climate status tools are registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that climate status resources are registered in the MCP server"""
+    resource_templates = await mcp_server.get_resource_templates()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
+    assert resource_templates is not None, "Resource templates should not be None"
+    template_uris = list(resource_templates.keys())
     
-    # Check that the climate-related tools are registered
-    # (these are the current MCP tools that provide climate status)
-    assert "get_climatization_state" in tool_names, "get_climatization_state tool should be registered"
-    assert "get_window_heating_state" in tool_names, "get_window_heating_state tool should be registered"
+    # Check that the climate-related resources are registered
+    # (these are the current MCP resources that provide climate status)
+    assert "data://vehicle/{vehicle_id}/climate" in template_uris, "data://vehicle/{vehicle_id}/climate resource should be registered"
+    assert "data://vehicle/{vehicle_id}/window-heating" in template_uris, "data://vehicle/{vehicle_id}/window-heating resource should be registered"

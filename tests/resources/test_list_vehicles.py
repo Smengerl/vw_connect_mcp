@@ -38,21 +38,21 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_is_registered(mcp_server):
-    """Test that data://list_vehicles resource is registered in the MCP server"""
+    """Test that data://vehicles resource is registered in the MCP server"""
     all_resources = await mcp_server.get_resources()
     
     assert all_resources is not None, "Resources should not be None"
     resource_uris = list(all_resources.keys())
     logger.debug(f"Registered resources: {resource_uris}")
-    assert "data://list_vehicles" in resource_uris, "data://list_vehicles resource should be registered"
+    assert "data://vehicles" in resource_uris, "data://vehicles resource should be registered"
 
 
 # ==================== TESTS - RESOURCE DATA RETRIEVAL ====================
 
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_returns_data(mcp_server):
-    """Test that data://list_vehicles resource returns valid data"""
-    vehicles_resource = await mcp_server.get_resource("data://list_vehicles")
+    """Test that data://vehicles resource returns valid data"""
+    vehicles_resource = await mcp_server.get_resource("data://vehicles")
     
     assert vehicles_resource is not None, "Vehicle resource should not be None"
     
@@ -68,8 +68,8 @@ async def test_list_vehicles_resource_returns_data(mcp_server):
 
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_via_client(mcp_client):
-    """Test that MCP client can read data://list_vehicles resource"""
-    result = await mcp_client.read_resource("data://list_vehicles")
+    """Test that MCP client can read data://vehicles resource"""
+    result = await mcp_client.read_resource("data://vehicles")
     logger.debug(f"Client resource read result: {result}")
     
     assert result is not None, "Result should not be None"
@@ -89,7 +89,7 @@ async def test_list_vehicles_resource_via_client(mcp_client):
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_has_required_fields(mcp_client):
     """Test that each vehicle in resource has all required fields"""
-    result = await mcp_client.read_resource("data://list_vehicles")
+    result = await mcp_client.read_resource("data://vehicles")
     vehicles = json.loads(result[0].text)
     
     for vehicle in vehicles:
@@ -103,7 +103,7 @@ async def test_list_vehicles_resource_has_required_fields(mcp_client):
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_electric_vehicle_data(mcp_client):
     """Test that electric vehicle data in resource is correct"""
-    result = await mcp_client.read_resource("data://list_vehicles")
+    result = await mcp_client.read_resource("data://vehicles")
     vehicles = json.loads(result[0].text)
     
     electric = next((v for v in vehicles if v["vin"] == VIN_ELECTRIC), None)
@@ -116,7 +116,7 @@ async def test_list_vehicles_resource_electric_vehicle_data(mcp_client):
 @pytest.mark.asyncio
 async def test_list_vehicles_resource_combustion_vehicle_data(mcp_client):
     """Test that combustion vehicle data in resource is correct"""
-    result = await mcp_client.read_resource("data://list_vehicles")
+    result = await mcp_client.read_resource("data://vehicles")
     vehicles = json.loads(result[0].text)
     
     combustion = next((v for v in vehicles if v["vin"] == VIN_COMBUSTION), None)
@@ -135,7 +135,7 @@ async def test_list_vehicles_resource_matches_adapter(adapter, mcp_client):
     adapter_vehicles = adapter.list_vehicles()
     
     # Get data from resource
-    result = await mcp_client.read_resource("data://list_vehicles")
+    result = await mcp_client.read_resource("data://vehicles")
     resource_vehicles = json.loads(result[0].text)
     
     # Compare counts

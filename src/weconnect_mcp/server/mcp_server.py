@@ -292,6 +292,250 @@ def _register_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         return json.dumps(result)
 
     # Tools (state-changing actions)
+    
+    # Discovery and Read Tools (making resources accessible as tools for better AI integration)
+    
+    @mcp.tool(
+        name="get_vehicles",
+        title="Get All Vehicles",
+        description="List all available vehicles with VIN, name, model, and license plate. Start here to discover which vehicles you can control."
+    )
+    def get_vehicles() -> str:
+        """Return list of all vehicles as JSON string."""
+        vehicles: List[VehicleListItem] = adapter.list_vehicles()
+        logger.info("Listing %d vehicles via tool", len(vehicles))
+        return json.dumps([v.model_dump() for v in vehicles])
+    
+    @mcp.tool(
+        name="get_vehicle_info",
+        title="Get Vehicle Information",
+        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state"
+    )
+    def get_vehicle_info_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get basic vehicle information."""
+        logger.info("get vehicle info (tool) for id=%s", vehicle_id)
+        vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
+        if vehicle is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
+        return json.dumps(vehicle.model_dump() if vehicle else {})
+    
+    @mcp.tool(
+        name="get_vehicle_state",
+        title="Get Complete Vehicle State",
+        description="Get complete vehicle state snapshot including all available data: position, battery, doors, windows, climate, tyres, etc."
+    )
+    def get_vehicle_state_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get complete vehicle state."""
+        logger.info("get vehicle state (tool) for id=%s", vehicle_id)
+        vehicle: Optional[BaseModel] = adapter.get_vehicle(vehicle_id)
+        if vehicle is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
+        return json.dumps(vehicle.model_dump() if vehicle else {})
+    
+    @mcp.tool(
+        name="get_vehicle_doors",
+        title="Get Door Status",
+        description="Get door lock status and open/closed state for all doors"
+    )
+    def get_vehicle_doors_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get door status."""
+        logger.info("get vehicle doors (tool) for id=%s", vehicle_id)
+        physical_status = adapter.get_physical_status(vehicle_id, components=["doors"])
+        if physical_status is None or physical_status.doors is None:
+            logger.warning("Vehicle '%s' not found", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
+        return json.dumps(physical_status.doors.model_dump())
+    
+    @mcp.tool(
+        name="get_battery_status",
+        title="Get Battery Status",
+        description="Quick battery check for electric/hybrid vehicles including battery level, electric range, and charging status (BEV/PHEV only)"
+    )
+    def get_battery_status_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get battery status."""
+        logger.info("get battery status (tool) for id=%s", vehicle_id)
+        energy_status = adapter.get_energy_status(vehicle_id)
+        if energy_status is None or energy_status.electric is None:
+            logger.warning("Vehicle '%s' not found or doesn't have a battery", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
+        
+        result = {
+            "battery_level_percent": energy_status.electric.battery_level_percent,
+            "range_km": energy_status.range.electric_km if energy_status.range else None,
+            "is_charging": energy_status.electric.charging.is_charging if energy_status.electric.charging else False
+        }
+        
+        if energy_status.electric.charging and energy_status.electric.charging.is_charging:
+            result["charging_power_kw"] = energy_status.electric.charging.charging_power_kw
+            result["estimated_charge_time_minutes"] = energy_status.electric.charging.remaining_time_minutes
+        
+        return json.dumps(result)
+    
+    @mcp.tool(
+        name="get_climate_status",
+        title="Get Climate Control Status",
+        description="Get climate control status including state (off/heating/cooling), target temperature, and estimated time remaining"
+    )
+    def get_climate_status_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get climate control status."""
+        logger.info("get climate status (tool) for id=%s", vehicle_id)
+        climate_status = adapter.get_climate_status(vehicle_id)
+        if climate_status is None or climate_status.climatization is None:
+            logger.warning("Vehicle '%s' not found or doesn't support climatization", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support climatization"})
+        return json.dumps(climate_status.climatization.model_dump())
+    
+    @mcp.tool(
+        name="get_charging_status",
+        title="Get Charging Status",
+        description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, cable status, and target SOC (BEV/PHEV only)"
+    )
+    def get_charging_status_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get charging status."""
+        logger.info("get charging status (tool) for id=%s", vehicle_id)
+        energy_status = adapter.get_energy_status(vehicle_id)
+        if energy_status is None or energy_status.electric is None or energy_status.electric.charging is None:
+            logger.warning("Vehicle '%s' not found or doesn't support charging", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
+        return json.dumps(energy_status.electric.charging.model_dump())
+    
+    @mcp.tool(
+        name="get_vehicle_position",
+        title="Get Vehicle Position",
+        description="Get GPS position including latitude, longitude, and heading (0°=North, 90°=East, 180°=South, 270°=West)"
+    )
+    def get_vehicle_position_tool(
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    ) -> str:
+        """Get vehicle GPS position."""
+        logger.info("get position (tool) for id=%s", vehicle_id)
+        position = adapter.get_position(vehicle_id)
+        if position is None:
+            logger.warning("Vehicle '%s' not found or doesn't have position info", vehicle_id)
+            return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have position info"})
+        return json.dumps(position.model_dump())
+    
+    # Vehicle Control Tools (state-changing actions)
+    
+    @mcp.tool(
+        name="list_available_tools",
+        title="List Available Tools",
+        description="Get a list of all available read and control tools with descriptions. Use this to discover what vehicle operations you can perform."
+    )
+    def list_available_tools() -> Dict[str, Any]:
+        """Return a structured list of all available tools."""
+        logger.info("Listing available tools")
+        return {
+            "message": "Use these tools to interact with your vehicles. Start with get_vehicles() to discover available vehicles.",
+            "read_tools": [
+                {
+                    "name": "get_vehicles",
+                    "description": "List all available vehicles",
+                    "example": "get_vehicles()"
+                },
+                {
+                    "name": "get_vehicle_info",
+                    "description": "Get basic vehicle information",
+                    "example": 'get_vehicle_info("Golf")'
+                },
+                {
+                    "name": "get_vehicle_state",
+                    "description": "Get complete vehicle state snapshot",
+                    "example": 'get_vehicle_state("Golf")'
+                },
+                {
+                    "name": "get_vehicle_doors",
+                    "description": "Get door lock and open/closed status",
+                    "example": 'get_vehicle_doors("Golf")'
+                },
+                {
+                    "name": "get_battery_status",
+                    "description": "Get battery status (BEV/PHEV only)",
+                    "example": 'get_battery_status("ID.7")'
+                },
+                {
+                    "name": "get_charging_status",
+                    "description": "Get detailed charging info (BEV/PHEV only)",
+                    "example": 'get_charging_status("ID.7")'
+                },
+                {
+                    "name": "get_climate_status",
+                    "description": "Get climate control status",
+                    "example": 'get_climate_status("Golf")'
+                },
+                {
+                    "name": "get_vehicle_position",
+                    "description": "Get GPS position and heading",
+                    "example": 'get_vehicle_position("Golf")'
+                }
+            ],
+            "control_tools": [
+                {
+                    "name": "lock_vehicle",
+                    "description": "Lock all doors",
+                    "example": 'lock_vehicle("Golf")'
+                },
+                {
+                    "name": "unlock_vehicle",
+                    "description": "Unlock all doors",
+                    "example": 'unlock_vehicle("Golf")'
+                },
+                {
+                    "name": "start_climatization",
+                    "description": "Start climate control (optional: set temperature)",
+                    "example": 'start_climatization("Golf", 22.0)'
+                },
+                {
+                    "name": "stop_climatization",
+                    "description": "Stop climate control",
+                    "example": 'stop_climatization("Golf")'
+                },
+                {
+                    "name": "start_charging",
+                    "description": "Start charging (BEV/PHEV only)",
+                    "example": 'start_charging("ID.7")'
+                },
+                {
+                    "name": "stop_charging",
+                    "description": "Stop charging (BEV/PHEV only)",
+                    "example": 'stop_charging("ID.7")'
+                },
+                {
+                    "name": "flash_lights",
+                    "description": "Flash headlights",
+                    "example": 'flash_lights("Golf", 10)'
+                },
+                {
+                    "name": "honk_and_flash",
+                    "description": "Honk horn and flash lights",
+                    "example": 'honk_and_flash("Golf", 5)'
+                },
+                {
+                    "name": "start_window_heating",
+                    "description": "Start window heating/defrosting",
+                    "example": 'start_window_heating("Golf")'
+                },
+                {
+                    "name": "stop_window_heating",
+                    "description": "Stop window heating",
+                    "example": 'stop_window_heating("Golf")'
+                }
+            ]
+        }
 
     @mcp.tool(
         name="lock_vehicle",

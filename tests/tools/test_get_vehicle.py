@@ -140,9 +140,9 @@ def test_get_vehicle_vin_matches_request(adapter):
 
 @pytest.mark.asyncio
 async def test_get_vehicle_info_tool_is_registered(mcp_server):
-    """Test that get_vehicle_info tool is registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that get_vehicle_info is available as a resource in the MCP server"""
+    resource_templates = await mcp_server.get_resource_templates()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
-    assert "get_vehicle_info" in tool_names, "get_vehicle_info tool should be registered in MCP server"
+    assert resource_templates is not None, "Resource templates should not be None"
+    template_uris = list(resource_templates.keys())
+    assert "data://vehicle/{vehicle_id}/info" in template_uris, "data://vehicle/{vehicle_id}/info resource should be registered in MCP server"

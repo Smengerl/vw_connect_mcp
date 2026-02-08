@@ -72,9 +72,9 @@ def test_list_vehicles_combustion_vehicle_data(adapter):
 
 @pytest.mark.asyncio
 async def test_list_vehicles_tool_is_registered(mcp_server):
-    """Test that list_vehicles tool is registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that list_vehicles is available as a resource in the MCP server"""
+    resources = await mcp_server.get_resources()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
-    assert "list_vehicles" in tool_names, "list_vehicles tool should be registered in MCP server"
+    assert resources is not None, "Resources should not be None"
+    resource_uris = list(resources.keys())
+    assert "data://vehicles" in resource_uris, "data://vehicles resource should be registered in MCP server"

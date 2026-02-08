@@ -196,15 +196,15 @@ def test_get_physical_status_empty_components_list(adapter):
 
 @pytest.mark.asyncio
 async def test_get_physical_status_tools_are_registered(mcp_server):
-    """Test that physical status tools are registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that physical status resources are registered in the MCP server"""
+    resource_templates = await mcp_server.get_resource_templates()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
+    assert resource_templates is not None, "Resource templates should not be None"
+    template_uris = list(resource_templates.keys())
     
-    # Check that the individual component tools are registered
-    # (these are the current MCP tools that provide physical status)
-    assert "get_vehicle_doors" in tool_names, "get_vehicle_doors tool should be registered"
-    assert "get_vehicle_windows" in tool_names, "get_vehicle_windows tool should be registered"
-    assert "get_vehicle_tyres" in tool_names, "get_vehicle_tyres tool should be registered"
-    assert "get_lights_state" in tool_names, "get_lights_state tool should be registered"
+    # Check that the individual component resources are registered
+    # (these are the current MCP resources that provide physical status)
+    assert "data://vehicle/{vehicle_id}/doors" in template_uris, "data://vehicle/{vehicle_id}/doors resource should be registered"
+    assert "data://vehicle/{vehicle_id}/windows" in template_uris, "data://vehicle/{vehicle_id}/windows resource should be registered"
+    assert "data://vehicle/{vehicle_id}/tyres" in template_uris, "data://vehicle/{vehicle_id}/tyres resource should be registered"
+    assert "data://vehicle/{vehicle_id}/lights" in template_uris, "data://vehicle/{vehicle_id}/lights resource should be registered"

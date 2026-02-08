@@ -250,10 +250,11 @@ Copy the configuration output from the script to your Claude Desktop config file
 
 #### Known Limitations
 
-1. **First start takes time:** VW API login can take 10-30 seconds
-2. **VW API rate limiting:** Too many requests may be blocked
-3. **Token expiration:** After a few hours, re-authentication is required
-4. **Read-only access:** Currently only data retrieval is possible, no control (opening doors, starting climate control, etc.)
+1. **No license plate data (VW API limitation):** As of February 2026, the VW WeConnect API does not provide license plate information. All vehicles will show `license_plate: null`. This is a limitation of Volkswagen's official API, not this server.
+2. **First start takes time:** VW API login can take 10-30 seconds
+3. **VW API rate limiting:** Too many requests may be blocked
+4. **Token expiration:** After a few hours, re-authentication is required
+5. **Read-only access:** Currently only data retrieval is possible, no control (opening doors, starting climate control, etc.)
 
 ---
 

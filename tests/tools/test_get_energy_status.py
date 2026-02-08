@@ -210,14 +210,14 @@ def test_energy_status_has_complete_combustion_data(adapter):
 
 @pytest.mark.asyncio
 async def test_get_energy_status_tools_are_registered(mcp_server):
-    """Test that energy status tools are registered in the MCP server"""
-    tools = await mcp_server.get_tools()
+    """Test that energy status resources are registered in the MCP server"""
+    resource_templates = await mcp_server.get_resource_templates()
     
-    assert tools is not None, "Tools should not be None"
-    tool_names = list(tools.keys())
+    assert resource_templates is not None, "Resource templates should not be None"
+    template_uris = list(resource_templates.keys())
     
-    # Check that the energy-related tools are registered
-    # (these are the current MCP tools that provide energy status)
-    assert "get_charging_state" in tool_names, "get_charging_state tool should be registered"
-    assert "get_range_info" in tool_names, "get_range_info tool should be registered"
-    assert "get_battery_status" in tool_names, "get_battery_status tool should be registered"
+    # Check that the energy-related resources are registered
+    # (these are the current MCP resources that provide energy status)
+    assert "data://vehicle/{vehicle_id}/charging" in template_uris, "data://vehicle/{vehicle_id}/charging resource should be registered"
+    assert "data://vehicle/{vehicle_id}/range" in template_uris, "data://vehicle/{vehicle_id}/range resource should be registered"
+    assert "data://vehicle/{vehicle_id}/battery" in template_uris, "data://vehicle/{vehicle_id}/battery resource should be registered"

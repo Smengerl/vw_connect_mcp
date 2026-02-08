@@ -2,7 +2,7 @@
 Tests for vehicle_state Resource
 =================================
 
-This test suite validates the data://state/{vehicle_id} MCP resource template implementation.
+This test suite validates the data://vehicle/{vehicle_id}/state MCP resource template implementation.
 
 What is tested:
 - Resource template registration in MCP server
@@ -13,7 +13,7 @@ What is tested:
 - Invalid vehicle handling
 
 Resource tested:
-- data://state/{vehicle_id}: Returns complete vehicle state for given identifier
+- data://vehicle/{vehicle_id}/state: Returns complete vehicle state for given identifier
 
 Test data:
 - Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
@@ -41,13 +41,13 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_template_is_registered(mcp_server):
-    """Test that data://state/{vehicle_id} resource template is registered"""
+    """Test that data://vehicle/{vehicle_id}/state resource template is registered"""
     all_resource_templates = await mcp_server.get_resource_templates()
     
     assert all_resource_templates is not None, "Resource templates should not be None"
     template_uris = list(all_resource_templates.keys())
     logger.debug(f"Registered resource templates: {template_uris}")
-    assert "data://state/{vehicle_id}" in template_uris, "data://state/{vehicle_id} template should be registered"
+    assert "data://vehicle/{vehicle_id}/state" in template_uris, "data://vehicle/{vehicle_id}/state template should be registered"
 
 
 # ==================== TESTS - RESOURCE DATA RETRIEVAL ====================
@@ -55,22 +55,25 @@ async def test_vehicle_state_resource_template_is_registered(mcp_server):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_by_vin(mcp_server):
     """Test that resource template returns data for valid VIN"""
-    state_resource_template = await mcp_server.get_resource_template("data://state/{vehicle_id}")
+    state_resource_template = await mcp_server.get_resource_template("data://vehicle/{vehicle_id}/state")
     
     assert state_resource_template is not None, "Resource template should not be None"
     
     # Read state for electric vehicle by VIN
-    vehicle_state = await state_resource_template.read({"vehicle_id": VIN_ELECTRIC})
+    vehicle_state_json = await state_resource_template.read({"vehicle_id": VIN_ELECTRIC})
     
-    assert vehicle_state is not None, "Vehicle state should not be None"
-    assert isinstance(vehicle_state, VehicleModel), "State should be VehicleModel instance"
+    assert vehicle_state_json is not None, "Vehicle state should not be None"
+    assert isinstance(vehicle_state_json, str), "State should be JSON string"
+    
+    # Parse JSON to VehicleModel
+    vehicle_state = VehicleModel.model_validate_json(vehicle_state_json)
     assert vehicle_state.vin == VIN_ELECTRIC
 
 
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_via_client_by_vin(mcp_client):
     """Test that MCP client can read vehicle state by VIN"""
-    result = await mcp_client.read_resource(f"data://state/{VIN_ELECTRIC}")
+    result = await mcp_client.read_resource(f"data://vehicle/{VIN_ELECTRIC}/state")
     logger.debug(f"Client resource read result: {result}")
     
     assert result is not None, "Result should not be None"
@@ -88,7 +91,7 @@ async def test_vehicle_state_resource_via_client_by_vin(mcp_client):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_via_client_by_name(mcp_client):
     """Test that MCP client can read vehicle state by name"""
-    result = await mcp_client.read_resource(f"data://state/{NAME_ELECTRIC}")
+    result = await mcp_client.read_resource(f"data://vehicle/{NAME_ELECTRIC}/state")
     
     assert result is not None
     vehicle = VehicleModel.model_validate_json(result[0].text)
@@ -100,7 +103,7 @@ async def test_vehicle_state_resource_via_client_by_name(mcp_client):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_via_client_by_license_plate(mcp_client):
     """Test that MCP client can read vehicle state by license plate"""
-    result = await mcp_client.read_resource(f"data://state/{LICENSE_PLATE_ELECTRIC}")
+    result = await mcp_client.read_resource(f"data://vehicle/{LICENSE_PLATE_ELECTRIC}/state")
     
     assert result is not None
     vehicle = VehicleModel.model_validate_json(result[0].text)
@@ -113,7 +116,7 @@ async def test_vehicle_state_resource_via_client_by_license_plate(mcp_client):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_all_identifiers(mcp_client, identifier):
     """Test that resource works with VIN, name, or license plate"""
-    result = await mcp_client.read_resource(f"data://state/{identifier}")
+    result = await mcp_client.read_resource(f"data://vehicle/{identifier}/state")
     
     assert result is not None
     vehicle = VehicleModel.model_validate_json(result[0].text)
@@ -125,7 +128,7 @@ async def test_vehicle_state_resource_all_identifiers(mcp_client, identifier):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_electric_vehicle_fields(mcp_client):
     """Test that electric vehicle state has all expected fields"""
-    result = await mcp_client.read_resource(f"data://state/{VIN_ELECTRIC}")
+    result = await mcp_client.read_resource(f"data://vehicle/{VIN_ELECTRIC}/state")
     vehicle = VehicleModel.model_validate_json(result[0].text)
     
     # Basic fields
@@ -143,7 +146,7 @@ async def test_vehicle_state_resource_electric_vehicle_fields(mcp_client):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_combustion_vehicle_fields(mcp_client):
     """Test that combustion vehicle state has all expected fields"""
-    result = await mcp_client.read_resource(f"data://state/{VIN_COMBUSTION}")
+    result = await mcp_client.read_resource(f"data://vehicle/{VIN_COMBUSTION}/state")
     vehicle = VehicleModel.model_validate_json(result[0].text)
     
     # Basic fields
@@ -162,7 +165,7 @@ async def test_vehicle_state_resource_combustion_vehicle_fields(mcp_client):
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_both_vehicles(mcp_client, vin, expected):
     """Test that resource returns correct data for both vehicle types"""
-    result = await mcp_client.read_resource(f"data://state/{vin}")
+    result = await mcp_client.read_resource(f"data://vehicle/{vin}/state")
     vehicle = VehicleModel.model_validate_json(result[0].text)
     
     assert vehicle.vin == expected["vin"]
@@ -180,7 +183,7 @@ async def test_vehicle_state_resource_matches_adapter(adapter, mcp_client):
     adapter_vehicle = adapter.get_vehicle(VIN_ELECTRIC)
     
     # Get data from resource
-    result = await mcp_client.read_resource(f"data://state/{VIN_ELECTRIC}")
+    result = await mcp_client.read_resource(f"data://vehicle/{VIN_ELECTRIC}/state")
     resource_vehicle = VehicleModel.model_validate_json(result[0].text)
     
     # Compare
@@ -195,7 +198,7 @@ async def test_vehicle_state_resource_matches_adapter_for_both_vehicles(adapter,
         adapter_vehicle = adapter.get_vehicle(vin)
         
         # Get data from resource
-        result = await mcp_client.read_resource(f"data://state/{vin}")
+        result = await mcp_client.read_resource(f"data://vehicle/{vin}/state")
         resource_vehicle = VehicleModel.model_validate_json(result[0].text)
         
         # Compare
@@ -206,10 +209,17 @@ async def test_vehicle_state_resource_matches_adapter_for_both_vehicles(adapter,
 
 @pytest.mark.asyncio
 async def test_vehicle_state_resource_invalid_vehicle_returns_none(mcp_server):
-    """Test that resource returns None for non-existent vehicle"""
-    state_resource_template = await mcp_server.get_resource_template("data://state/{vehicle_id}")
+    """Test that resource returns error JSON for non-existent vehicle"""
+    state_resource_template = await mcp_server.get_resource_template("data://vehicle/{vehicle_id}/state")
     
     vehicle_state = await state_resource_template.read({"vehicle_id": VIN_INVALID})
     
-    # Should return None for non-existent vehicle
-    assert vehicle_state is None, "Should return None for invalid vehicle"
+    # Should return JSON error for non-existent vehicle
+    assert vehicle_state is not None, "Should return error JSON for invalid vehicle"
+    assert isinstance(vehicle_state, str), "Should return JSON string"
+    
+    # Parse JSON and check for error
+    import json
+    result = json.loads(vehicle_state)
+    assert "error" in result, "Should contain error message"
+    assert VIN_INVALID in result["error"], "Error should mention the invalid VIN"
