@@ -3,14 +3,14 @@
 **Type**: MCP Server (Python) for Volkswagen WeConnect vehicle data and control  
 **Architecture**: Modular adapter with mixins (CacheMixin, VehicleResolutionMixin, CommandMixin, StateExtractionMixin)  
 **Key Library**: `carconnectivity` (third-party VW API wrapper)  
-**Test Suite**: 208 tests - **MUST ALWAYS PASS** before committing
+**Test Suite**: 216 tests (198 unit tests + 18 real API tests) - **MUST ALWAYS PASS** before committing
 
 ## Technology Stack
 
 - **Python 3.10+** with modern type hints (`dict[str, Any]`, not `Dict`)
 - **MCP SDK** for protocol implementation
 - **Pydantic** for data models (all fields `Optional` - VW API is unreliable)
-- **pytest** for testing - **ALL 208 TESTS MUST PASS**
+- **pytest** for testing - **ALL 216 TESTS MUST PASS** (198 unit tests + 18 real API tests)
 
 ## Code Style (Non-Negotiable)
 
@@ -79,9 +79,31 @@ class CarConnectivityAdapter(
 - **Lights**: `duration_seconds` (int) - `flash_lights("Golf", 10)`
 - **Honk**: `duration_seconds` (int) - `honk_and_flash("Golf", 5)`
 
+### Battery State of Charge (SOC) - Fallback Mechanism
+
+The battery SOC (State of Charge) is retrieved from **two sources** with automatic fallback:
+
+1. **Primary Source**: `vehicle.drives.drives['electric'].battery.level` (used in `_get_range_info()`)
+2. **Fallback Source**: `vehicle.battery.level` (used in `_get_charging_state()`)
+
+**Why fallback is needed**: VW API is unreliable. Sometimes `drives` data is unavailable (e.g., when vehicle is in low-power mode or hasn't communicated with WeConnect recently), but `battery` data is still present.
+
+**Implementation** (in `get_energy_status()`):
+```python
+# Try primary source (drives)
+if range_info and range_info.electric_drive:
+    battery_level = range_info.electric_drive.battery_level_percent
+
+# Fallback to charging state if drives data unavailable
+if battery_level is None and charging_state and charging_state.current_soc_percent is not None:
+    battery_level = charging_state.current_soc_percent
+```
+
+**Important**: SOC should be available **even when not charging**! The fallback ensures maximum data availability.
+
 ## Testing Guidelines (CRITICAL)
 
-**Golden Rule**: ALL 208 tests MUST pass before committing. No exceptions.
+**Golden Rule**: ALL 216 tests MUST pass before committing. No exceptions.
 
 ### Test Structure
 ```
