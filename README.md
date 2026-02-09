@@ -27,7 +27,7 @@ Get up and running in 3 steps:
 
 3. **Use with Claude Desktop**
    ```bash
-   ./scripts/get_claude_config.sh  # Copy output to Claude config
+   ./scripts/create_claude_config.sh  # Copy output to Claude config
    ```
    Restart Claude Desktop and ask: *"What vehicles are available?"*
 
@@ -220,7 +220,7 @@ Generate your configuration for Claude Desktop with the following script:
 
 ```bash
 cd /path/to/weconnect_mvp
-./scripts/get_claude_config.sh
+./scripts/create_claude_config.sh
 ```
 
 The script will:
@@ -247,6 +247,92 @@ Copy the configuration output from the script to your Claude Desktop config file
    - "Show me my car's status"
    - "Are my doors locked?"
    - "How much battery does my car have?"
+
+---
+
+### GitHub Copilot (VS Code) Integration
+
+**Setup in 3 steps:**
+
+#### Step 1: Generate Configuration
+
+Generate your configuration for GitHub Copilot with the following script:
+
+```bash
+cd /path/to/weconnect_mvp
+./scripts/create_github_copilot_config.sh
+```
+
+The script will:
+- Automatically detect your Python path
+- Generate the complete configuration for VS Code
+- Show you step-by-step instructions
+
+#### Step 2: Add Configuration to VS Code
+
+1. Open VS Code Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
+2. Type `Preferences: Open User Settings (JSON)` and press Enter
+3. Copy the configuration output from the script into your `settings.json`
+
+Alternatively, edit the settings file directly:
+```bash
+code ~/Library/Application\ Support/Code/User/settings.json  # macOS
+```
+
+#### Step 3: Restart and Test
+
+1. **Reload VS Code window**: 
+   - Open Command Palette (`Cmd+Shift+P`)
+   - Type `Developer: Reload Window`
+   - Press Enter
+
+2. **Test it** in GitHub Copilot Chat:
+   - Open Copilot Chat panel
+   - Type `@weconnect` to verify the server is available
+   - Ask questions like:
+     - "What vehicles are available?"
+     - "Show me my car's battery status"
+     - "Are my doors locked?"
+
+---
+
+### Microsoft Copilot Desktop Integration
+
+**Setup in 3 steps:**
+
+#### Step 1: Generate Configuration
+
+Generate your configuration for Microsoft Copilot Desktop with the following script:
+
+```bash
+cd /path/to/weconnect_mvp
+./scripts/create_copilot_desktop_config.sh
+```
+
+The script will:
+- Automatically detect your Python path
+- Generate the complete configuration for Copilot Desktop
+- Save the configuration to `tmp/copilot_desktop_mcp.json`
+
+#### Step 2: Copy Configuration
+
+Copy the configuration file to Microsoft Copilot Desktop's config directory:
+
+```bash
+mkdir -p ~/Library/Application\ Support/Microsoft/Copilot
+cp tmp/copilot_desktop_mcp.json ~/Library/Application\ Support/Microsoft/Copilot/mcp.json
+```
+
+Alternatively, manually copy the JSON output from the script to the location above.
+
+#### Step 3: Restart and Test
+
+1. **Restart Microsoft Copilot Desktop completely**
+
+2. **Test it** by asking Copilot:
+   - "What vehicles are available?"
+   - "Show me my car's status"
+   - "What's my battery level?"
 
 ---
 
@@ -291,7 +377,7 @@ Copy the configuration output from the script to your Claude Desktop config file
 
 - **Cause:** Claude Desktop cannot find the Python command
 - **Solution:** Use full Python path from your venv (the script handles this automatically)
-- **Helper script:** `./scripts/get_claude_config.sh`
+- **Helper script:** `./scripts/create_claude_config.sh`
 
 **"TemporaryAuthenticationError: Token could not be fetched"**
 

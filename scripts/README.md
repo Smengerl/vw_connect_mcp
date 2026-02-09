@@ -106,14 +106,36 @@ source ./scripts/activate_venv.sh
 
 ---
 
-### get_claude_config.sh
+### create_claude_config.sh
 Generate MCP configuration for Claude Desktop.
 
 ```bash
-./scripts/get_claude_config.sh
+./scripts/create_claude_config.sh
 ```
 
-Copy the output to your Claude Desktop configuration file.
+Copy the output to your Claude Desktop configuration file or use the generated file from `tmp/claude_desktop/claude_desktop_config.json`.
+
+---
+
+### create_github_copilot_config.sh
+Generate MCP configuration for GitHub Copilot (VS Code).
+
+```bash
+./scripts/create_github_copilot_config.sh
+```
+
+Copy the output to your VS Code settings.json or use the generated file from `tmp/github_copilot_vscode/settings.json`.
+
+---
+
+### create_copilot_desktop_config.sh
+Generate MCP configuration for Microsoft Copilot Desktop.
+
+```bash
+./scripts/create_copilot_desktop_config.sh
+```
+
+Copy the output or use the generated file from `tmp/copilot_desktop/mcp.json`.
 
 ---
 

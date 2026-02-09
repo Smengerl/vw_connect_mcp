@@ -28,7 +28,7 @@ Test data characteristics:
 """
 from types import SimpleNamespace
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, BatteryStatusModel, 
+    AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, 
     DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel, 
     ChargingModel, ClimatizationModel, MaintenanceModel, RangeModel, DriveModel, 
     WindowHeatingsModel, WindowHeatingModel, LightsModel, LightModel,
