@@ -2,11 +2,22 @@
 
 This directory contains utility scripts for the weconnect_mvp project.
 
+## Platform Support
+
+All scripts are available for both Unix-like systems (Linux/macOS) and Windows:
+- **Unix/Linux/macOS**: Use `.sh` scripts (e.g., `./scripts/setup.sh`)
+- **Windows**: Use `.bat` scripts (e.g., `scripts\setup.bat`)
+
+The functionality is identical across platforms.
+
+---
+
 ## Available Scripts
 
-### test.sh
+### test.sh / test.bat
 Run the test suite with optional filtering.
 
+**Linux/macOS:**
 ```bash
 # Run all tests (including slow real API tests)
 ./scripts/test.sh
@@ -21,6 +32,21 @@ Run the test suite with optional filtering.
 ./scripts/test.sh --help
 ```
 
+**Windows:**
+```cmd
+REM Run all tests (including slow real API tests)
+scripts\test.bat
+
+REM Run only fast mock tests (recommended for CI/CD)
+scripts\test.bat --skip-slow
+
+REM Run with verbose output
+scripts\test.bat --skip-slow -v
+
+REM Show help
+scripts\test.bat --help
+```
+
 **Options:**
 - `--skip-slow` - Skip tests marked as 'slow' or 'real_api'
 - `-v, --verbose` - Run pytest in verbose mode
@@ -32,9 +58,10 @@ Run the test suite with optional filtering.
 
 ---
 
-### vehicle_command.sh
+### vehicle_command.sh / vehicle_command.bat
 Send commands to VW vehicles using CarConnectivityAdapter.
 
+**Linux/macOS:**
 ```bash
 # Show help
 ./scripts/vehicle_command.sh --help
@@ -50,6 +77,24 @@ Send commands to VW vehicles using CarConnectivityAdapter.
 
 # Start climate control
 ./scripts/vehicle_command.sh ID7 start_climatization
+```
+
+**Windows:**
+```cmd
+REM Show help
+scripts\vehicle_command.bat --help
+
+REM Lock vehicle
+scripts\vehicle_command.bat ID7 lock
+
+REM Unlock vehicle
+scripts\vehicle_command.bat Golf unlock
+
+REM Start charging
+scripts\vehicle_command.bat ID7 start_charging
+
+REM Start climate control
+scripts\vehicle_command.bat ID7 start_climatization
 ```
 
 **⚠️ WARNING:** This will ACTUALLY execute commands on your vehicle! Only use for testing in safe conditions.
@@ -88,51 +133,81 @@ Send commands to VW vehicles using CarConnectivityAdapter.
 
 ---
 
-### setup.sh
+### setup.sh / setup.bat
 Initialize the project (install dependencies, create virtualenv).
 
+**Linux/macOS:**
 ```bash
 ./scripts/setup.sh
 ```
 
----
-
-### activate_venv.sh
-Activate the Python virtual environment.
-
-```bash
-source ./scripts/activate_venv.sh
+**Windows:**
+```cmd
+scripts\setup.bat
 ```
 
 ---
 
-### create_claude_config.sh
+### activate_venv.sh / activate_venv.bat
+Activate the Python virtual environment.
+
+**Linux/macOS:**
+```bash
+source ./scripts/activate_venv.sh
+```
+
+**Windows:**
+```cmd
+call scripts\activate_venv.bat
+```
+
+---
+
+### create_claude_config.sh / create_claude_config.bat
 Generate MCP configuration for Claude Desktop.
 
+**Linux/macOS:**
 ```bash
 ./scripts/create_claude_config.sh
+```
+
+**Windows:**
+```cmd
+scripts\create_claude_config.bat
 ```
 
 Copy the output to your Claude Desktop configuration file or use the generated file from `tmp/claude_desktop/claude_desktop_config.json`.
 
 ---
 
-### create_github_copilot_config.sh
+### create_github_copilot_config.sh / create_github_copilot_config.bat
 Generate MCP configuration for GitHub Copilot (VS Code).
 
+**Linux/macOS:**
 ```bash
 ./scripts/create_github_copilot_config.sh
+```
+
+**Windows:**
+```cmd
+scripts\create_github_copilot_config.bat
 ```
 
 Copy the output to your VS Code settings.json or use the generated file from `tmp/github_copilot_vscode/settings.json`.
 
 ---
 
-### create_copilot_desktop_config.sh
+### create_copilot_desktop_config.sh / create_copilot_desktop_config.bat
 Generate MCP configuration for Microsoft Copilot Desktop.
 
+**Linux/macOS:**
 ```bash
 ./scripts/create_copilot_desktop_config.sh
+```
+
+**Windows:**
+```cmd
+scripts\create_copilot_desktop_config.bat
 ```
 
 Copy the output or use the generated file from `tmp/copilot_desktop/mcp.json`.
@@ -151,6 +226,8 @@ Contains legacy scripts that directly use the carconnectivity library (without a
 ## Usage Patterns
 
 ### Running Tests Before Commit
+
+**Linux/macOS:**
 ```bash
 # Fast - only mock tests
 ./scripts/test.sh --skip-slow
@@ -159,7 +236,18 @@ Contains legacy scripts that directly use the carconnectivity library (without a
 ./scripts/test.sh
 ```
 
+**Windows:**
+```cmd
+REM Fast - only mock tests
+scripts\test.bat --skip-slow
+
+REM Complete - all tests including real API
+scripts\test.bat
+```
+
 ### Testing Vehicle Commands
+
+**Linux/macOS:**
 ```bash
 # Check if vehicle is accessible
 ./scripts/vehicle_command.sh ID7 lock
@@ -171,7 +259,21 @@ Contains legacy scripts that directly use the carconnectivity library (without a
 ./scripts/vehicle_command.sh ID7 start_charging
 ```
 
+**Windows:**
+```cmd
+REM Check if vehicle is accessible
+scripts\vehicle_command.bat ID7 lock
+
+REM Test climate control
+scripts\vehicle_command.bat Golf start_climatization
+
+REM Test charging (BEV/PHEV only)
+scripts\vehicle_command.bat ID7 start_charging
+```
+
 ### Development Workflow
+
+**Linux/macOS:**
 ```bash
 # 1. Activate venv
 source ./scripts/activate_venv.sh
@@ -187,11 +289,27 @@ source ./scripts/activate_venv.sh
 # 5. Commit if all tests pass
 ```
 
+**Windows:**
+```cmd
+REM 1. Activate venv
+call scripts\activate_venv.bat
+
+REM 2. Make changes to code
+
+REM 3. Run tests
+scripts\test.bat --skip-slow
+
+REM 4. Test with real vehicle (optional)
+scripts\vehicle_command.bat ID7 lock
+
+REM 5. Commit if all tests pass
+```
+
 ---
 
 ## Exit Codes
 
-All scripts follow standard Unix exit codes:
+All scripts follow standard exit codes:
 - `0` - Success
 - `1` - Error/Failure
 
@@ -199,4 +317,11 @@ This allows for easy integration in CI/CD pipelines and shell scripts.
 
 ## Virtual Environment
 
-All scripts automatically activate the virtual environment using `activate_venv.sh`. You don't need to manually activate it before running scripts.
+All scripts automatically activate the virtual environment (using `activate_venv.sh` or `activate_venv.bat`). You don't need to manually activate it before running scripts.
+
+## Windows Notes
+
+- The Windows `.bat` scripts provide the same functionality as their Unix `.sh` equivalents
+- Some features like background process management differ slightly due to Windows limitations (documented in the scripts)
+- All scripts use `%TEMP%` for temporary files on Windows (equivalent to `/tmp` on Unix)
+- Path separators are automatically handled (`\` on Windows, `/` on Unix)
