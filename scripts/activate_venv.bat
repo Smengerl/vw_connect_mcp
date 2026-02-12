@@ -2,8 +2,6 @@
 REM Activate repository's virtualenv Python
 REM This script checks if the venv exists and can be called from other scripts.
 
-setlocal enabledelayedexpansion
-
 REM Get the script directory and set ROOT_DIR (one level up)
 set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%.."

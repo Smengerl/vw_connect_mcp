@@ -58,7 +58,7 @@ echo Starting server (background, http mode) with config=%CONFIG%
 
 REM Start the server in background using start command
 REM /B = start without new window, redirecting output to log file
-start "WeConnect MCP Server" /B python "%ROOT_DIR%\src\weconnect_mcp\cli\mcp_server_cli.py" "%CONFIG%" --tokenstorefile %TEMP%\tokenstore --transport=http %EXTRA_ARGS% > "%LOG_FILE%" 2>&1
+start "WeConnect MCP Server" /B python "%ROOT_DIR%\src\weconnect_mcp\cli\mcp_server_cli.py" "%CONFIG%" --tokenstorefile "%TEMP%\tokenstore" --transport=http %EXTRA_ARGS% > "%LOG_FILE%" 2>&1
 
 REM Note: Windows doesn't provide an easy way to get the PID from start command
 REM Users can use Task Manager to find the python.exe process if needed

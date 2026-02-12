@@ -53,6 +53,6 @@ if not exist "%CONFIG%" (
 )
 
 echo Starting server (foreground) with config=%CONFIG%
-python "%ROOT_DIR%\src\weconnect_mcp\cli\mcp_server_cli.py" "%CONFIG%" --tokenstorefile %TEMP%\tokenstore --log-level DEBUG %EXTRA_ARGS%
+python "%ROOT_DIR%\src\weconnect_mcp\cli\mcp_server_cli.py" "%CONFIG%" --tokenstorefile "%TEMP%\tokenstore" --log-level DEBUG %EXTRA_ARGS%
 
 exit /b %ERRORLEVEL%
