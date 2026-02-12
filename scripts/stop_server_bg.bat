@@ -3,8 +3,6 @@ REM Stop background server started with start_server_bg.bat
 REM Note: Windows batch scripts have limited process management capabilities
 REM Usage: scripts\stop_server_bg.bat
 
-setlocal enabledelayedexpansion
-
 set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%.."
 

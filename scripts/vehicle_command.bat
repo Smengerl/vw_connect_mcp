@@ -1,6 +1,5 @@
 @echo off
 REM Send commands to VW vehicles using CarConnectivityAdapter
-setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%.."
