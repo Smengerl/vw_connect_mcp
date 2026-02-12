@@ -133,6 +133,63 @@ scripts\vehicle_command.bat ID7 start_climatization
 
 ---
 
+### start_server_fg.sh / start_server_fg.bat
+Start the MCP server in foreground mode (with console output).
+
+**Linux/macOS:**
+```bash
+./scripts/start_server_fg.sh
+# or with custom config
+./scripts/start_server_fg.sh path/to/config.json
+```
+
+**Windows:**
+```cmd
+scripts\start_server_fg.bat
+REM or with custom config
+scripts\start_server_fg.bat path\to\config.json
+```
+
+---
+
+### start_server_bg.sh / start_server_bg.bat
+Start the MCP server in background mode (logs to file).
+
+**Linux/macOS:**
+```bash
+./scripts/start_server_bg.sh
+# or with custom config
+./scripts/start_server_bg.sh path/to/config.json
+```
+
+**Windows:**
+```cmd
+scripts\start_server_bg.bat
+REM or with custom config
+scripts\start_server_bg.bat path\to\config.json
+```
+
+Logs are written to `logs/server.log`.
+
+---
+
+### stop_server_bg.sh / stop_server_bg.bat
+Stop the background server.
+
+**Linux/macOS:**
+```bash
+./scripts/stop_server_bg.sh
+```
+
+**Windows:**
+```cmd
+scripts\stop_server_bg.bat
+```
+
+**Note:** Windows version provides instructions for manual process termination due to platform limitations.
+
+---
+
 ### setup.sh / setup.bat
 Initialize the project (install dependencies, create virtualenv).
 
