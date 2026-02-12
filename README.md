@@ -16,19 +16,36 @@ A developer-focused server that exposes information from VW vehicles via a Model
 Get up and running in 3 steps:
 
 1. **Install**
+   
+   **Linux/macOS:**
    ```bash
    git clone https://github.com/Smengerl/weconnect_mvp.git
    cd weconnect_mvp
    ./scripts/setup.sh
+   ```
+   
+   **Windows:**
+   ```cmd
+   git clone https://github.com/Smengerl/weconnect_mvp.git
+   cd weconnect_mvp
+   scripts\setup.bat
    ```
 
 2. **Configure**  
    Edit `src/config.json` with your VW credentials (username, password, spin)
 
 3. **Use with Claude Desktop**
+   
+   **Linux/macOS:**
    ```bash
    ./scripts/create_claude_config.sh  # Copy output to Claude config
    ```
+   
+   **Windows:**
+   ```cmd
+   scripts\create_claude_config.bat
+   ```
+   
    Restart Claude Desktop and ask: *"What vehicles are available?"*
 
 For detailed instructions, see sections below.
@@ -61,15 +78,31 @@ For detailed instructions, see sections below.
    ```
 
 2. **Create and activate a virtual environment and install dependencies**  
+   
+   **Linux/macOS:**
    ```bash
    python -m venv .venv
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
+   
+   **Windows:**
+   ```cmd
+   python -m venv .venv
+   .venv\Scripts\activate.bat
+   pip install -r requirements.txt
+   ```
 
 	You can use the convenience scripts to automatically set up everything:
+	
+	**Linux/macOS:**
 	```bash
 	./scripts/setup.sh
+	```
+	
+	**Windows:**
+	```cmd
+	scripts\setup.bat
 	```
 
 
@@ -79,8 +112,15 @@ The server requires a configuration file (default: `src/config.json`).
 **You must create this file based on the provided example and add your VW credentials.**
 
 **Step 1: Copy the example configuration**
+
+**Linux/macOS:**
 ```bash
 cp src/config.example.json src/config.json
+```
+
+**Windows:**
+```cmd
+copy src\config.example.json src\config.json
 ```
 
 **Step 2: Edit the configuration with your VW credentials**
@@ -141,18 +181,39 @@ The server supports two transport modes:
 You can start the MCP server using the provided CLI scripts or directly via Python:
 
 #### 1. Starting the server in foreground (with logs to console)
+
+**Linux/macOS:**
 ```bash
 ./scripts/start_server_fg.sh
 ```
 
+**Windows:**
+```cmd
+scripts\start_server_fg.bat
+```
+
 #### 2. Starting the server in background (with logs to file)
+
+**Linux/macOS:**
 ```bash
 ./scripts/start_server_bg.sh
 ```
 
+**Windows:**
+```cmd
+scripts\start_server_bg.bat
+```
+
 #### 3. Starting the server directly via Python
+
+**Linux/macOS:**
 ```bash
 python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8765
+```
+
+**Windows:**
+```cmd
+python -m weconnect_mcp.cli.mcp_server_cli path\to\config.json --port 8765
 ```
 
 #### 4. Stopping the Server
@@ -218,9 +279,16 @@ Interact with your VW car in Claude Desktop - here's how to set it up:
 
 Generate your configuration for Claude Desktop with the following script:
 
+**Linux/macOS:**
 ```bash
 cd /path/to/weconnect_mvp
 ./scripts/create_claude_config.sh
+```
+
+**Windows:**
+```cmd
+cd C:\path\to\weconnect_mvp
+scripts\create_claude_config.bat
 ```
 
 The script will:
@@ -258,9 +326,16 @@ Copy the configuration output from the script to your Claude Desktop config file
 
 Generate your configuration for GitHub Copilot with the following script:
 
+**Linux/macOS:**
 ```bash
 cd /path/to/weconnect_mvp
 ./scripts/create_github_copilot_config.sh
+```
+
+**Windows:**
+```cmd
+cd C:\path\to\weconnect_mvp
+scripts\create_github_copilot_config.bat
 ```
 
 The script will:
@@ -275,8 +350,15 @@ The script will:
 3. Copy the configuration output from the script into your `settings.json`
 
 Alternatively, edit the settings file directly:
+
+**Linux/macOS:**
 ```bash
-code ~/Library/Application\ Support/Code/User/settings.json  # macOS
+code ~/Library/Application\ Support/Code/User/settings.json
+```
+
+**Windows:**
+```cmd
+code %APPDATA%\Code\User\settings.json
 ```
 
 #### Step 3: Restart and Test
@@ -304,23 +386,37 @@ code ~/Library/Application\ Support/Code/User/settings.json  # macOS
 
 Generate your configuration for Microsoft Copilot Desktop with the following script:
 
+**Linux/macOS:**
 ```bash
 cd /path/to/weconnect_mvp
 ./scripts/create_copilot_desktop_config.sh
 ```
 
+**Windows:**
+```cmd
+cd C:\path\to\weconnect_mvp
+scripts\create_copilot_desktop_config.bat
+```
+
 The script will:
 - Automatically detect your Python path
 - Generate the complete configuration for Copilot Desktop
-- Save the configuration to `tmp/copilot_desktop_mcp.json`
+- Save the configuration to `tmp/copilot_desktop/mcp.json`
 
 #### Step 2: Copy Configuration
 
 Copy the configuration file to Microsoft Copilot Desktop's config directory:
 
+**Linux/macOS:**
 ```bash
 mkdir -p ~/Library/Application\ Support/Microsoft/Copilot
-cp tmp/copilot_desktop_mcp.json ~/Library/Application\ Support/Microsoft/Copilot/mcp.json
+cp tmp/copilot_desktop/mcp.json ~/Library/Application\ Support/Microsoft/Copilot/mcp.json
+```
+
+**Windows:**
+```cmd
+if not exist "%APPDATA%\Microsoft\Copilot" mkdir "%APPDATA%\Microsoft\Copilot"
+copy tmp\copilot_desktop\mcp.json "%APPDATA%\Microsoft\Copilot\mcp.json"
 ```
 
 Alternatively, manually copy the JSON output from the script to the location above.
@@ -489,6 +585,7 @@ The server will then be available at `http://localhost:8765`.
 
 Run the test suite with:
 
+**Linux/macOS:**
 ```bash
 # Run all tests (including slow real API tests)
 ./scripts/test.sh
@@ -501,6 +598,21 @@ Run the test suite with:
 
 # Show help
 ./scripts/test.sh --help
+```
+
+**Windows:**
+```cmd
+REM Run all tests (including slow real API tests)
+scripts\test.bat
+
+REM Run only fast mock tests (skip real API tests - recommended for CI/CD)
+scripts\test.bat --skip-slow
+
+REM Run with verbose output
+scripts\test.bat --skip-slow -v
+
+REM Show help
+scripts\test.bat --help
 ```
 
 **Test Structure:**
