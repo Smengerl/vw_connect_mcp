@@ -2,7 +2,7 @@
 # weconnect_mvp
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Beer-ware](https://img.shields.io/badge/License-Beer--ware-yellow.svg)](LICENSE.txt)
 [![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -517,6 +517,27 @@ For detailed test documentation, see [tests/README.md](tests/README.md)
 - The CLI scripts activate the virtual environment automatically
 - Main package source is under `src/`
 
+### Publication Readiness Agent
+
+The project includes a custom GitHub Copilot agent to ensure publication readiness. This agent verifies:
+
+- ✅ Code documentation quality (docstrings, type hints)
+- ✅ README.md completeness
+- ✅ License file presence
+- ✅ Unit test coverage
+- ✅ CLI scripts documentation
+
+**Usage:**
+```bash
+# Via GitHub Copilot
+@workspace /agent publication-readiness Run publication check
+
+# Or follow the manual checklist
+cat .github/agents/publication-readiness.md
+```
+
+For more information, see [.github/agents/README.md](.github/agents/README.md).
+
 ### Security Best Practices
 
 ⚠️ **Never** commit `config.json` with your VW credentials!  
@@ -536,7 +557,9 @@ Contributions are welcome! Please see `CONTRIBUTING.md` and follow the code of c
 
 ## License
 
-This project is licensed under the terms of the MIT License. See `LICENSE.txt` for details.
+This project is licensed under the **Beer-ware License** (Revision 42). See `LICENSE.txt` for details.
+
+In short: Do whatever you want with this code. If we meet someday and you think this stuff is worth it, you can buy me a beer in return.
 
 ---
 
