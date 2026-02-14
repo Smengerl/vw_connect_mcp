@@ -517,6 +517,27 @@ For detailed test documentation, see [tests/README.md](tests/README.md)
 - The CLI scripts activate the virtual environment automatically
 - Main package source is under `src/`
 
+### Publication Readiness Agent
+
+The project includes a custom GitHub Copilot agent to ensure publication readiness. This agent verifies:
+
+- ✅ Code documentation quality (docstrings, type hints)
+- ✅ README.md completeness
+- ✅ License file presence
+- ✅ Unit test coverage
+- ✅ CLI scripts documentation
+
+**Usage:**
+```bash
+# Via GitHub Copilot
+@workspace /agent publication-readiness Run publication check
+
+# Or follow the manual checklist
+cat .github/agents/publication-readiness.md
+```
+
+For more information, see [.github/agents/README.md](.github/agents/README.md).
+
 ### Security Best Practices
 
 ⚠️ **Never** commit `config.json` with your VW credentials!  
