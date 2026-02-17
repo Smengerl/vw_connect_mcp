@@ -265,19 +265,21 @@ cd /path/to/weconnect_mvp
 
 The script will:
 - Automatically detect your Python path
-- Generate the complete configuration for VS Code
+- Generate the complete MCP configuration for VS Code
 - Show you step-by-step instructions
 
 #### Step 2: Add Configuration to VS Code
 
 1. Open VS Code Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
-2. Type `Preferences: Open User Settings (JSON)` and press Enter
-3. Copy the configuration output from the script into your `settings.json`
+2. Type `Preferences: Open User MCP Settings (JSON)` and press Enter
+3. Copy the configuration output from the script into your `mcp.json`
 
-Alternatively, edit the settings file directly:
+Alternatively, edit the MCP settings file directly:
 ```bash
-code ~/Library/Application\ Support/Code/User/settings.json  # macOS
+code ~/Library/Application\ Support/Code/User/mcp.json  # macOS
 ```
+
+**Note:** Use the standard `mcp.json` configuration, not the deprecated `github.copilot.chat.mcpServers` setting in `settings.json`.
 
 #### Step 3: Restart and Test
 
@@ -286,13 +288,31 @@ code ~/Library/Application\ Support/Code/User/settings.json  # macOS
    - Type `Developer: Reload Window`
    - Press Enter
 
-2. **Test it** in GitHub Copilot Chat:
+2. **Verify installation**:
    - Open Copilot Chat panel
-   - Type `@weconnect` to verify the server is available
-   - Ask questions like:
+   - Type `/list` to see all available tools
+   - Look for tools starting with `mcp_weconnect_` (e.g., `mcp_weconnect_get_vehicles`)
+   
+   **Note:** VS Code automatically prefixes tool names with `mcp_{servername}_`. 
+   Since your server is named `weconnect`, all tools appear as `mcp_weconnect_*`.
+
+3. **Test the server**:
+   - Try `@mcp_weconnect_get_vehicles` in Copilot Chat
+   - Ask natural language questions:
      - "What vehicles are available?"
      - "Show me my car's battery status"
      - "Are my doors locked?"
+
+**Available Tools:**
+- `mcp_weconnect_get_vehicles` - List all vehicles
+- `mcp_weconnect_get_vehicle_info` - Get vehicle information
+- `mcp_weconnect_get_vehicle_state` - Get complete state
+- `mcp_weconnect_get_vehicle_doors` - Check door status
+- `mcp_weconnect_get_battery_status` - Battery info (BEV/PHEV)
+- `mcp_weconnect_get_climatization_status` - Climate status
+- `mcp_weconnect_get_charging_status` - Charging details (BEV/PHEV)
+- `mcp_weconnect_get_vehicle_position` - GPS location
+- Plus 10 command tools (`lock_vehicle`, `start_charging`, etc.)
 
 ---
 
@@ -546,6 +566,33 @@ For more information, see [.github/agents/README.md](.github/agents/README.md).
 ⚠️ Use environment variables for sensitive data in production  
 ⚠️ HTTP mode should only be used in trusted networks  
 ⚠️ Consider additional authentication for production deployments
+
+---
+
+## Frequently Asked Questions (FAQ)
+
+### VS Code / GitHub Copilot
+
+**Q: Why are my tools named `mcp_weconnect_*` instead of just `get_vehicles`?**
+
+A: VS Code automatically prefixes MCP tools with `mcp_{servername}_`. Since your server is named `weconnect` in `mcp.json`, all tools become `mcp_weconnect_*`. This is standard behavior and prevents naming conflicts between different MCP servers.
+
+**Q: How do I see which tools are available?**
+
+A: In Copilot Chat, type `/list` to see all available tools. Look for tools starting with `mcp_weconnect_`.
+
+**Q: The MCP server isn't working after installation. What should I check?**
+
+A: Follow these steps:
+1. Restart VS Code (`Cmd+Shift+P` → `Developer: Reload Window`)
+2. Check if the server is running: `Cmd+Shift+P` → `MCP: List Servers`
+3. Check logs: `$PROJECT_DIR/logs/mcp_server.log`
+4. Verify trust: You must trust the MCP server when prompted
+5. Check VS Code Developer Console: `Help` → `Toggle Developer Tools` → `Console` tab
+
+**Q: Can I rename the server to avoid the `mcp_weconnect_` prefix?**
+
+A: Yes, change the server name in `mcp.json` from `"weconnect"` to something shorter like `"wc"`. However, we recommend keeping it as `weconnect` for clarity.
 
 ---
 

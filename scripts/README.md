@@ -124,7 +124,15 @@ Generate MCP configuration for GitHub Copilot (VS Code).
 ./scripts/create_github_copilot_config.sh
 ```
 
-Copy the output to your VS Code settings.json or use the generated file from `tmp/github_copilot_vscode/settings.json`.
+Copy the output to your VS Code `mcp.json` file or use the generated file from `tmp/github_copilot_vscode/mcp.json`.
+
+**Note:** This uses the standard MCP configuration format (`mcp.json`), not the deprecated `github.copilot.chat.mcpServers` setting in `settings.json`.
+
+**After Installation:**
+- Restart VS Code (`Cmd+Shift+P` → `Developer: Reload Window`)
+- Type `/list` in Copilot Chat to verify installation
+- Look for tools starting with `mcp_weconnect_` (e.g., `mcp_weconnect_get_vehicles`)
+- VS Code automatically prefixes tools with `mcp_{servername}_` to avoid naming conflicts
 
 ---
 
