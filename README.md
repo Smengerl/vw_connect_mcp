@@ -2,9 +2,9 @@
 # weconnect_mvp
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: Beer-ware](https://img.shields.io/badge/License-Beer--ware-yellow.svg)](LICENSE.txt)
 [![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
 **MCP Server for Volkswagen Vehicles**  
 A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
@@ -557,9 +557,7 @@ Contributions are welcome! Please see `CONTRIBUTING.md` and follow the code of c
 
 ## License
 
-This project is licensed under the **Beer-ware License** (Revision 42). See `LICENSE.txt` for details.
-
-In short: Do whatever you want with this code. If we meet someday and you think this stuff is worth it, you can buy me a beer in return.
+This project is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0) — see `LICENSE.txt` for details or visit http://creativecommons.org/licenses/by-sa/4.0/
 
 ---
 
