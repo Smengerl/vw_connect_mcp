@@ -11,6 +11,17 @@ A developer-focused server that exposes information from VW vehicles via a Model
 
 ---
 
+## See It In Action
+
+<p align="center">
+  <img src="examples/claude_status.png" alt="Claude showing vehicle status" width="45%">
+  <img src="examples/github_copilot_prepare_trip.png" alt="GitHub Copilot preparing for trip" width="45%">
+</p>
+
+*Control your VW vehicle through AI assistants like Claude Desktop and GitHub Copilot*
+
+---
+
 ## Quick Start
 
 Get up and running in 3 steps:
@@ -205,6 +216,28 @@ Reload Claude Desktop and ask questions like:
 - "Show me my car's battery status"
 - "Are my doors locked?"
 
+#### Example Usage
+
+**Check battery status and state of charge:**
+
+![Claude checking battery SOC](examples/claude_check_soc.png)
+
+**Get complete vehicle status:**
+
+![Claude showing vehicle status](examples/claude_status.png)
+
+**Check vehicle position:**
+
+![Claude showing vehicle position](examples/claude_vehicle_pos.png)
+
+**Start charging session:**
+
+![Claude starting charging](examples/claude_charging.png)
+
+**Interactive demo video:**
+
+![Claude interaction demo](examples/claude_example_interaction.mov)
+
 ---
 
 ### GitHub Copilot (VS Code) Integration
@@ -218,6 +251,15 @@ cd /path/to/weconnect_mvp
 
 Restart VS Code and verify installation by typing `/list` in Copilot Chat. Look for tools starting with `mcp_weconnect_`
 
+#### Example Usage
+
+**Prepare for a trip - check battery, charging status, doors, and location:**
+
+![GitHub Copilot preparing for trip](examples/github_copilot_prepare_trip.png)
+
+**Interactive demo video:**
+
+![GitHub Copilot interaction demo](examples/github_copilot_example_interaction.mov)
 
 ---
 
