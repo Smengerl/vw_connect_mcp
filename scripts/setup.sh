@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
 # Create or recreate the .venv virtual environment and install from requirements.txt
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
-PYTHON_BIN="$(command -v python3 || command -v python)"
 REQ_FILE="$ROOT_DIR/requirements.txt"
 
-echo "Repository root: $ROOT_DIR"
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
 
-if [ ! -x "$PYTHON_BIN" ]; then
-  echo "Python not found on PATH. Please install Python 3.8+ and retry." >&2
-  exit 1
+# Detect Python and OS
+detect_python || exit 1
+
+# Set venv paths (do this regardless of whether venv exists)
+# We define them manually here because get_venv_paths checks if venv exists
+if [ "$IS_WINDOWS" = true ]; then
+    VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
+    VENV_PIP="$VENV_DIR/Scripts/pip.exe"
+    VENV_ACTIVATE="$VENV_DIR/Scripts/activate"
+else
+    VENV_PYTHON="$VENV_DIR/bin/python"
+    VENV_PIP="$VENV_DIR/bin/pip"
+    VENV_ACTIVATE="$VENV_DIR/bin/activate"
 fi
+
+echo "Repository root: $ROOT_DIR"
+echo "OS: $OS_TYPE"
+echo "System Python: $PYTHON_BIN"
 
 if [ ! -f "$REQ_FILE" ]; then
   echo "requirements.txt not found at $REQ_FILE" >&2
@@ -34,9 +50,6 @@ fi
 
 echo "Creating virtualenv at $VENV_DIR"
 "$PYTHON_BIN" -m venv "$VENV_DIR"
-
-VENV_PYTHON="$VENV_DIR/bin/python"
-VENV_PIP="$VENV_DIR/bin/pip"
 
 echo "Upgrading pip inside venv..."
 "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
@@ -66,7 +79,13 @@ fi
 
 echo ""
 echo "Done. To activate the venv, run:"
-echo "  source $VENV_DIR/bin/activate"
+if [ "$IS_WINDOWS" = true ]; then
+  echo "  $VENV_DIR\\Scripts\\activate  (CMD)"
+  echo "  . $VENV_DIR/Scripts/activate  (Bash)"
+else
+  echo "  source $VENV_DIR/bin/activate"
+fi
+echo ""
 echo "Or run scripts via the venv python directly, e.g.:"
 echo "  $VENV_PYTHON -m pytest"
 echo "  $VENV_PYTHON -m weconnect_mcp.cli.mcp_server_cli src/config.json"

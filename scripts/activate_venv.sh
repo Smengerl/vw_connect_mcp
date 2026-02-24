@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
 # Activate repository's virtualenv Python
 # This script can be sourced to activate the venv in the current shell.
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
+VENV_DIR="$ROOT_DIR/.venv"
 
-if [ ! -x "$VENV_PYTHON" ]; then
-  echo "Virtualenv python not found at $VENV_PYTHON"
-  echo "Activate your venv or adjust the path in this script."
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
+
+# Detect OS and get venv paths
+detect_python || exit 1
+get_venv_activate_script "$VENV_DIR"
+
+if [ ! -f "$VENV_ACTIVATE" ]; then
+  echo "Virtualenv not found at $VENV_DIR"
+  echo "Run ./scripts/setup.sh to create it first."
+  exit 1
+fi
+
+# Source the activation script
+if [ -f "$VENV_ACTIVATE" ]; then
+  # shellcheck disable=SC1090
+  source "$VENV_ACTIVATE"
+else
+  echo "Could not find activation script at $VENV_ACTIVATE"
   exit 1
 fi

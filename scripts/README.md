@@ -2,6 +2,67 @@
 
 This directory contains utility scripts for the weconnect_mvp project.
 
+## 🖥️ Platform Support
+
+All scripts now work on:
+- **macOS** (Bash / Zsh)
+- **Linux** (Bash)
+- **Windows** (Git Bash, WSL, MinGW, or PowerShell with Git Bash installed)
+
+Python detection is automatic:
+- Uses `python3` on macOS/Linux
+- Uses `python` on Windows (falls back to `python3` if available)
+- Uses virtualenv paths appropriate for each OS
+
+## 🧰 Shared Library
+
+All scripts now use a centralized Python detection library to eliminate code duplication.
+
+### `lib/detect_python.sh`
+
+Provides platform-aware utilities for:
+- Detecting OS type (Windows, macOS, Linux)
+- Finding Python executables
+- Resolving virtualenv paths (platform-specific)
+- Getting configuration file paths for VS Code, Claude Desktop, and Copilot Desktop
+
+**Benefits**:
+- ✅ Single source of truth for platform detection
+- ✅ Consistent behavior across all scripts
+- ✅ Easy to extend for new configuration paths
+- ✅ No code duplication
+
+See [lib/README.md](lib/README.md) for detailed documentation and usage examples.
+
+### Running Scripts on Windows
+
+#### Option 1: Git Bash (Recommended)
+```bash
+# Git Bash handles all scripts transparently
+./scripts/setup.sh
+./scripts/test.sh --skip-slow
+./scripts/create_github_copilot_config.sh
+```
+
+#### Option 2: WSL (Windows Subsystem for Linux)
+```bash
+# Works exactly like Linux
+bash scripts/setup.sh
+bash scripts/test.sh
+```
+
+#### Option 3: MinGW / MSYS2
+```bash
+# Same as Git Bash
+./scripts/setup.sh
+```
+
+#### Option 4: PowerShell with WSL
+```powershell
+wsl ./scripts/setup.sh
+wsl ./scripts/test.sh --skip-slow
+```
+
 ## Available Scripts
 
 ### test.sh
@@ -32,59 +93,30 @@ Run the test suite with optional filtering.
 
 ---
 
-### vehicle_command.sh
-Send commands to VW vehicles using CarConnectivityAdapter.
+### start_server_fg.sh
+Start the MCP server in foreground (with console output).
 
 ```bash
-# Show help
-./scripts/vehicle_command.sh --help
-
-# Lock vehicle
-./scripts/vehicle_command.sh ID7 lock
-
-# Unlock vehicle
-./scripts/vehicle_command.sh Golf unlock
-
-# Start charging
-./scripts/vehicle_command.sh ID7 start_charging
-
-# Start climate control
-./scripts/vehicle_command.sh ID7 start_climatization
+./scripts/start_server_fg.sh
 ```
 
-**⚠️ WARNING:** This will ACTUALLY execute commands on your vehicle! Only use for testing in safe conditions.
+---
 
-**Available Commands:**
+### start_server_bg.sh
+Start the MCP server in background (with log file output).
 
-**Lock/Unlock:**
-- `lock` - Lock the vehicle
-- `unlock` - Unlock the vehicle
+```bash
+./scripts/start_server_bg.sh
+```
 
-**Climatization:**
-- `start_climatization` - Start climate control
-- `stop_climatization` - Stop climate control
+---
 
-**Charging (BEV/PHEV only):**
-- `start_charging` - Start charging
-- `stop_charging` - Stop charging
+### stop_server_bg.sh
+Stop the MCP server running in background.
 
-**Lights/Horn:**
-- `flash_lights` - Flash lights only
-- `honk_and_flash` - Honk and flash lights
-
-**Window Heating:**
-- `start_window_heating` - Start window heating
-- `stop_window_heating` - Stop window heating
-
-**Requirements:**
-- Valid VW credentials in `src/config.json`
-- Vehicle must be connected and online
-
-**Technical Details:**
-- Uses `CarConnectivityAdapter` (not direct carconnectivity library)
-- Automatically activates virtualenv
-- Validates vehicle existence before execution
-- Returns proper exit codes (0 = success, 1 = failure)
+```bash
+./scripts/stop_server_bg.sh
+```
 
 ---
 
@@ -113,7 +145,11 @@ Generate MCP configuration for Claude Desktop.
 ./scripts/create_claude_config.sh
 ```
 
-Copy the output to your Claude Desktop configuration file or use the generated file from `tmp/claude_desktop/claude_desktop_config.json`.
+**Output locations:**
+- Configuration saved to `tmp/claude_desktop/claude_desktop_config.json`
+- On **macOS**: Copy to `~/Library/Application Support/Claude/claude_desktop_config.json`
+- On **Windows**: Copy to `%APPDATA%\Claude\claude_desktop_config.json`
+- On **Linux**: Varies by distribution
 
 ---
 
@@ -124,9 +160,18 @@ Generate MCP configuration for GitHub Copilot (VS Code).
 ./scripts/create_github_copilot_config.sh
 ```
 
-Copy the output to your VS Code `mcp.json` file or use the generated file from `tmp/github_copilot_vscode/mcp.json`.
+**Output locations:**
+- Configuration saved to `tmp/github_copilot_vscode/mcp.json`
+- On **macOS**: `~/Library/Application Support/Code/User/mcp.json`
+- On **Windows**: `%APPDATA%\Microsoft\VSCode\mcp.json`
+- On **Linux**: `~/.config/Code/User/mcp.json`
 
-**Note:** This uses the standard MCP configuration format (`mcp.json`), not the deprecated `github.copilot.chat.mcpServers` setting in `settings.json`.
+**Interactive installation:**
+The script offers 4 options:
+1. **🎯 Automatic** - Auto-merges into existing `mcp.json` (requires `jq`)
+2. **🖱️ GUI** - Instructions for VS Code Command Palette
+3. **✏️ Manual** - Instructions for manual file editing
+4. **ℹ️ Info** - Show all methods
 
 **After Installation:**
 - Restart VS Code (`Cmd+Shift+P` → `Developer: Reload Window`)
@@ -143,20 +188,14 @@ Generate MCP configuration for Microsoft Copilot Desktop.
 ./scripts/create_copilot_desktop_config.sh
 ```
 
-Copy the output or use the generated file from `tmp/copilot_desktop/mcp.json`.
+**Output locations:**
+- Configuration saved to `tmp/copilot_desktop/mcp.json`
+- On **macOS**: `~/Library/Application Support/Microsoft/Copilot/mcp.json`
+- On **Windows**: `%APPDATA%\Microsoft\Copilot\mcp.json`
 
 ---
 
-## Development Scripts
-
-### carconnectivity/
-Contains legacy scripts that directly use the carconnectivity library (without adapter layer).
-
-**⚠️ Deprecated:** Use `vehicle_command.sh` instead for new development.
-
----
-
-## Usage Patterns
+## Development Notes
 
 ### Running Tests Before Commit
 ```bash
@@ -167,30 +206,18 @@ Contains legacy scripts that directly use the carconnectivity library (without a
 ./scripts/test.sh
 ```
 
-### Testing Vehicle Commands
-```bash
-# Check if vehicle is accessible
-./scripts/vehicle_command.sh ID7 lock
-
-# Test climate control
-./scripts/vehicle_command.sh Golf start_climatization
-
-# Test charging (BEV/PHEV only)
-./scripts/vehicle_command.sh ID7 start_charging
-```
-
 ### Development Workflow
 ```bash
-# 1. Activate venv
+# 1. Setup project
+./scripts/setup.sh
+
+# 2. Activate venv
 source ./scripts/activate_venv.sh
 
-# 2. Make changes to code
+# 3. Make changes to code
 
-# 3. Run tests
+# 4. Run tests
 ./scripts/test.sh --skip-slow
-
-# 4. Test with real vehicle (optional)
-./scripts/vehicle_command.sh ID7 lock
 
 # 5. Commit if all tests pass
 ```

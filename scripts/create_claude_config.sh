@@ -1,5 +1,6 @@
 #!/bin/bash
 # Script to help find the correct Python path for Claude Desktop config
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 
 echo "🔍 Finding Python paths for Claude Desktop configuration..."
 echo ""
@@ -8,33 +9,35 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
+
+# Detect Python and OS
+detect_python || exit 1
+get_claude_config_path
+
 echo "Project directory: $PROJECT_DIR"
+echo "OS: $OS_TYPE"
 echo ""
 
 if [ -d "$PROJECT_DIR/.venv" ]; then
+    get_venv_paths "$PROJECT_DIR/.venv"
     echo "Virtual environment found!"
     echo ""
-    echo "Python executables in venv:"
-    ls -l "$PROJECT_DIR/.venv/bin/python"* 2>/dev/null || echo "No python found in venv"
+    
+    echo "Python executable in venv:"
+    echo "   $VENV_PYTHON"
     echo ""
     echo "Use this path in your Claude Desktop config:"
-    echo "   \"command\": \"$PROJECT_DIR/.venv/bin/python\""
+    echo "   \"command\": \"$VENV_PYTHON\""
+    PYTHON_PATH="$VENV_PYTHON"
     echo ""
-    PYTHON_PATH="$PROJECT_DIR/.venv/bin/python"
 else
     echo "No virtual environment found at $PROJECT_DIR/.venv"
     echo ""
-    echo "Looking for system Python..."
-    PYTHON_PATH=$(which python3)
-    if [ -n "$PYTHON_PATH" ]; then
-        echo "Found Python 3 at: $PYTHON_PATH"
-        echo ""
-        echo "Use this path in your Claude Desktop config:"
-        echo "   \"command\": \"$PYTHON_PATH\""
-    else
-        echo "No Python found!"
-        exit 1
-    fi
+    echo "Using system Python: $PYTHON_BIN"
+    PYTHON_PATH="$PYTHON_BIN"
 fi
 
 # Create tmp directory if it doesn't exist
@@ -61,21 +64,18 @@ cat << EOF > "$CONFIG_FILE"
 }
 EOF
 
-
 echo ""
 echo "✅ Configuration saved to:"
 echo "   $CONFIG_FILE"
 echo ""
 echo "📋 Copy the configuration to Claude Desktop:"
-echo "   ~/Library/Application Support/Claude/claude_desktop_config.json"
+echo "   $CLAUDE_CONFIG"
 echo ""
 echo "You can either:"
-echo "1. Copy from the file above:"
-echo "   cp $CONFIG_FILE ~/Library/Application\\ Support/Claude/claude_desktop_config.json"
+echo "1. Copy from the file above (using File Explorer)"
+echo "   Source: $CONFIG_FILE"
+echo "   Destination: $CLAUDE_CONFIG"
 echo ""
-echo "2. Or manually copy the JSON output above"
-echo ""
-echo "To edit the Claude config file directly:"
-echo "   open ~/Library/Application\\ Support/Claude/claude_desktop_config.json"
+echo "2. Or manually copy the JSON output from $CONFIG_FILE"
 echo ""
 echo "After editing, restart Claude Desktop completely!"

@@ -1,4 +1,3 @@
-
 # weconnect_mvp
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -54,23 +53,56 @@ For detailed instructions, see sections below.
 
 ### Installation
 
-1. **Clone the repository**  
+**Quick Start (Recommended):**
+
+Simply run the setup script which handles everything automatically:
+
+```bash
+git clone https://github.com/Smengerl/weconnect_mvp.git
+cd weconnect_mvp
+./scripts/setup.sh
+```
+
+The script will:
+- ✅ Detect your Python installation
+- ✅ Create a virtual environment at `.venv/`
+- ✅ Install all dependencies
+- ✅ Create configuration template
+
+**Manual Installation (Alternative):**
+
+```bash
+git clone https://github.com/Smengerl/weconnect_mvp.git
+cd weconnect_mvp
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+#### Windows-Specific Notes
+
+⚠️ **Important for Windows Users:**
+
+The setup script automatically detects and avoids Microsoft Store Python (which doesn't work). If you see errors about Python not found:
+
+1. **Install Python from python.org** (not Microsoft Store)
+   - Download from [python.org](https://www.python.org)
+   - ✅ Check "Add Python to PATH" during installation
+
+2. **Disable Microsoft Store Python alias** (if you have it):
+   - Settings → Apps → Advanced app settings → App execution aliases
+   - Turn OFF: `python.exe`, `python3.exe`, `python3.x.exe`
+
+3. **Verify your Python installation:**
    ```bash
-   git clone https://github.com/Smengerl/weconnect_mvp.git
-   cd weconnect_mvp
+   # Should return a path like: C:\Program Files\PythonXXX\python.exe
+   where python
    ```
 
-2. **Create and activate a virtual environment and install dependencies**  
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
+4. **Run diagnostic tool:**
+   ```powershell
+   & .\scripts\diagnose_python.ps1
    ```
-
-	You can use the convenience scripts to automatically set up everything:
-	```bash
-	./scripts/setup.sh
-	```
 
 
 ### Configuration
@@ -454,54 +486,14 @@ You can also check Claude Desktop logs via: **Help → View Logs** (search for "
 
 ---
 
-### VS Code Copilot Integration
+## 📚 Documentation
 
-For VS Code with GitHub Copilot:
+For detailed setup and configuration guidance:
 
-1. Install the MCP extension for VS Code (if available)
-2. Configure the server in VS Code settings under `mcp.servers`
-
----
-
-### Other AI Tools (Cline)
-
-The server uses the standard MCP protocol and works with all MCP-compatible tools.
-
-**Cline (VS Code Extension)** - Configuration in `.vscode/cline_mcp_settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "weconnect": {
-      "command": "python",
-      "args": [
-        "-m",
-        "weconnect_mcp.cli.mcp_server_cli",
-        "/path/to/your/config.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/weconnect_mvp/src"
-      }
-    }
-  }
-}
-```
-
----
-
-### HTTP Mode for API Access
-
-You can also start the server in HTTP mode for programmatic access:
-
-```bash
-python -m weconnect_mcp.cli.mcp_server_cli \
-    /path/to/config.json \
-    --transport http \
-    --port 8765
-```
-
-The server will then be available at `http://localhost:8765`.
-
+- **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
+- **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
+- **[tests/README.md](tests/README.md)** - Test suite overview
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 
 ---
 

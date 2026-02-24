@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
-# Run unit tests for weconnect_mvp
+# Run unit tests for weconnect
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
+
+# Detect Python and get venv paths
+detect_python || exit 1
+get_venv_paths "$ROOT_DIR/.venv"
+get_venv_activate_script "$ROOT_DIR/.venv"
 
 # Print usage information
 usage() {
@@ -46,7 +56,26 @@ for arg in "$@"; do
 done
 
 echo "Activating virtualenv"
-${ROOT_DIR}/scripts/activate_venv.sh
+# Source activation script
+if [ -f "$VENV_ACTIVATE" ]; then
+  # shellcheck disable=SC1090
+  source "$VENV_ACTIVATE"
+fi
+
+# Set marker expression to skip slow tests if requested
+if [ "$SKIP_SLOW" = true ]; then
+    PYTEST_MARKERS="-m \"not real_api and not slow\""
+    echo "Running fast tests only (skipping slow/real_api tests)"
+else
+    echo "Running ALL tests (including slow real API tests)"
+fi
+
+echo "Running tests from: ${ROOT_DIR}/tests/"
+
+# Run pytest on entire tests directory
+eval "$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" $PYTEST_VERBOSE $PYTEST_LOG $PYTEST_MARKERS "$@"
+
+echo "Tests completed successfully"
 
 # Set marker expression to skip slow tests if requested
 if [ "$SKIP_SLOW" = true ]; then

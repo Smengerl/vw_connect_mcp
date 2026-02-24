@@ -1,5 +1,6 @@
 #!/bin/bash
 # Script to configure GitHub Copilot MCP Server for WeConnect
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 
 set -e  # Exit on error
 
@@ -7,18 +8,28 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
+
+# Detect Python and OS
+detect_python || exit 1
+get_mcp_file_path
+
 echo "🚀 WeConnect MCP Server Setup for VS Code"
 echo "=========================================="
 echo ""
 echo "Project directory: $PROJECT_DIR"
+echo "OS: $OS_TYPE"
 echo ""
 
 # Find Python executable
 if [ -d "$PROJECT_DIR/.venv" ]; then
-    PYTHON_PATH="$PROJECT_DIR/.venv/bin/python"
+    get_venv_paths "$PROJECT_DIR/.venv"
+    PYTHON_PATH="$VENV_PYTHON"
     echo "✅ Virtual environment found: $PYTHON_PATH"
 else
-    PYTHON_PATH=$(which python3)
+    PYTHON_PATH="$PYTHON_BIN"
     if [ -z "$PYTHON_PATH" ]; then
         echo "❌ Error: No Python found!"
         exit 1
@@ -31,15 +42,6 @@ echo ""
 # Create tmp directory for backup config
 mkdir -p "$PROJECT_DIR/tmp/github_copilot_vscode"
 CONFIG_FILE="$PROJECT_DIR/tmp/github_copilot_vscode/mcp.json"
-
-# Determine MCP file location based on OS
-if [ "$(uname)" = "Darwin" ]; then
-    MCP_FILE="$HOME/Library/Application Support/Code/User/mcp.json"
-elif [ "$(uname)" = "Linux" ]; then
-    MCP_FILE="$HOME/.config/Code/User/mcp.json"
-else
-    MCP_FILE="$APPDATA\\Code\\User\\mcp.json"
-fi
 
 # Generate MCP configuration
 cat << EOF > "$CONFIG_FILE"
@@ -68,7 +70,6 @@ cat << EOF > "$CONFIG_FILE"
 EOF
 
 echo "📝 Configuration saved to: $CONFIG_FILE"
-echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Choose your installation method:"
@@ -127,8 +128,12 @@ case $choice in
                     echo "  → $CONFIG_FILE"
                     echo ""
                     echo "To install jq:"
-                    echo "  macOS: brew install jq"
-                    echo "  Linux: sudo apt install jq / sudo yum install jq"
+                    if [ "$IS_WINDOWS" = true ]; then
+                        echo "  Windows: choco install jq"
+                    else
+                        echo "  macOS: brew install jq"
+                        echo "  Linux: sudo apt install jq / sudo yum install jq"
+                    fi
                 fi
             else
                 echo "Merge cancelled."
@@ -203,9 +208,13 @@ case $choice in
         echo ""
         echo "Steps:"
         echo "  1. Open the file in your editor:"
-        echo "     $ open -a 'Visual Studio Code' \"$MCP_FILE\""
-        echo "     or"
-        echo "     $ code \"$MCP_FILE\""
+        if [ "$IS_WINDOWS" = true ]; then
+            echo "     code \"$MCP_FILE\""
+        else
+            echo "     $ open -a 'Visual Studio Code' \"$MCP_FILE\""
+            echo "     or"
+            echo "     $ code \"$MCP_FILE\""
+        fi
         echo ""
         echo "  2. Add the 'weconnect' server configuration shown above"
         echo "     (Merge it into the 'servers' object)"

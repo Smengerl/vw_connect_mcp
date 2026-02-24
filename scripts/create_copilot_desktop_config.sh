@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script to generate a valid mcp.json for Microsoft Copilot Desktop (macOS)
-# for the WeConnect MCP Server
+# Script to generate a valid mcp.json for Microsoft Copilot Desktop
+# Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 
 echo "🔧 Generating Copilot Desktop MCP configuration..."
 echo ""
@@ -9,15 +9,25 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Source the shared detection library
+# shellcheck source=./lib/detect_python.sh
+source "$(dirname "$0")/lib/detect_python.sh"
+
+# Detect Python and OS
+detect_python || exit 1
+get_copilot_config_path
+
 echo "Project directory: $PROJECT_DIR"
+echo "OS: $OS_TYPE"
 echo ""
 
-# Detect Python
+# Detect Python path
 if [ -d "$PROJECT_DIR/.venv" ]; then
-    PYTHON_PATH="$PROJECT_DIR/.venv/bin/python"
+    get_venv_paths "$PROJECT_DIR/.venv"
+    PYTHON_PATH="$VENV_PYTHON"
     echo "Using virtualenv Python: $PYTHON_PATH"
 else
-    PYTHON_PATH=$(which python3)
+    PYTHON_PATH="$PYTHON_BIN"
     echo "Using system Python: $PYTHON_PATH"
 fi
 
@@ -47,23 +57,19 @@ cat << EOF > "$CONFIG_FILE"
 }
 EOF
 
-
 echo ""
 echo "✅ Configuration saved to:"
 echo "   $CONFIG_FILE"
 echo ""
 echo "📋 Copy the configuration to Microsoft Copilot Desktop:"
-echo "   ~/Library/Application Support/Microsoft/Copilot/mcp.json"
+echo "   $COPILOT_CONFIG"
 echo ""
 echo "You can either:"
-echo "1. Copy from the file above:"
-echo "   mkdir -p ~/Library/Application\\ Support/Microsoft/Copilot"
-echo "   cp $CONFIG_FILE ~/Library/Application\\ Support/Microsoft/Copilot/mcp.json"
+echo "1. Copy from the file above (using File Explorer)"
+echo "   Source: $CONFIG_FILE"
+echo "   Destination: $COPILOT_CONFIG"
 echo ""
-echo "2. Or manually copy the JSON output above"
-echo ""
-echo "To edit the Copilot Desktop config file directly:"
-echo "   open ~/Library/Application\\ Support/Microsoft/Copilot/mcp.json"
+echo "2. Or manually copy the JSON output from $CONFIG_FILE"
 echo ""
 echo "After editing, restart Microsoft Copilot Desktop completely!"
 echo ""
