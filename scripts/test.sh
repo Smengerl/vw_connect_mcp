@@ -73,21 +73,6 @@ fi
 echo "Running tests from: ${ROOT_DIR}/tests/"
 
 # Run pytest on entire tests directory
-eval "$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" $PYTEST_VERBOSE $PYTEST_LOG $PYTEST_MARKERS "$@"
-
-echo "Tests completed successfully"
-
-# Set marker expression to skip slow tests if requested
-if [ "$SKIP_SLOW" = true ]; then
-    PYTEST_MARKERS="-m \"not real_api and not slow\""
-    echo "Running fast tests only (skipping slow/real_api tests)"
-else
-    echo "Running ALL tests (including slow real API tests)"
-fi
-
-echo "Running tests from: ${ROOT_DIR}/tests/"
-
-# Run pytest on entire tests directory
-eval pytest "${ROOT_DIR}/tests/" $PYTEST_VERBOSE $PYTEST_LOG $PYTEST_MARKERS "$@"
+"$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" $PYTEST_VERBOSE $PYTEST_LOG $PYTEST_MARKERS "$@"
 
 echo "Tests completed successfully"
