@@ -20,6 +20,18 @@ logger = logging_config.get_logger(__name__)
 def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.resource(
+        uri="data://vehicles",
+        name="res_list_vehicles",
+        description="Get list of all available vehicles with basic information (VIN, name, model, license plate)",
+        tags={"vehicle-list", "read"},
+        annotations={"title": "List All Vehicles", "readOnlyHint": True, "idempotentHint": True}
+    )
+    def res_list_vehicles() -> str:
+        logger.info("list all vehicles")
+        vehicles: List[VehicleListItem] = adapter.list_vehicles()
+        return json.dumps([v.model_dump() for v in vehicles])
+
+    @mcp.resource(
         uri="data://vehicle/{vehicle_id}/info",
         name="res_get_vehicle_info",
         description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state",

@@ -35,8 +35,8 @@ usage() {
 # Parse arguments
 PYTEST_VERBOSE=""
 PYTEST_LOG=""
-PYTEST_MARKERS=""
 SKIP_SLOW=false
+PYTEST_ARGS=()
 
 for arg in "$@"; do
     case $arg in
@@ -52,6 +52,9 @@ for arg in "$@"; do
             PYTEST_LOG="-o log_cli_level=INFO --log-cli-level=INFO"
             shift
             ;;
+        *)
+            PYTEST_ARGS+=("$arg")
+            ;;
     esac
 done
 
@@ -62,17 +65,31 @@ if [ -f "$VENV_ACTIVATE" ]; then
   source "$VENV_ACTIVATE"
 fi
 
-# Set marker expression to skip slow tests if requested
+# Build pytest command
+PYTEST_CMD=("$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" --capture=no)
+
+# Add markers if skipping slow tests
 if [ "$SKIP_SLOW" = true ]; then
-    PYTEST_MARKERS="-m \"not real_api and not slow\""
+    PYTEST_CMD+=(-m "not real_api and not slow")
     echo "Running fast tests only (skipping slow/real_api tests)"
 else
     echo "Running ALL tests (including slow real API tests)"
 fi
 
+# Add verbose and logging flags
+if [ -n "$PYTEST_VERBOSE" ]; then
+    PYTEST_CMD+=($PYTEST_VERBOSE)
+fi
+if [ -n "$PYTEST_LOG" ]; then
+    PYTEST_CMD+=($PYTEST_LOG)
+fi
+
+# Add any remaining arguments
+PYTEST_CMD+=("${PYTEST_ARGS[@]}")
+
 echo "Running tests from: ${ROOT_DIR}/tests/"
 
 # Run pytest on entire tests directory
-"$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" $PYTEST_VERBOSE $PYTEST_LOG $PYTEST_MARKERS "$@"
+"${PYTEST_CMD[@]}"
 
 echo "Tests completed successfully"
