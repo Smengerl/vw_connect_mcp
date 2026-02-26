@@ -510,5 +510,682 @@ Provide structured readiness report:
 
 Ultimate comprehensive check combining all vehicle and external data sources."""
 
-    logger.info("Registered 13 workflow prompts (7 basic + 6 advanced with external data)")
+    # ─────────────────────────────────────────────────────────────────────────
+    # INTELLIGENT PROACTIVE PROMPTS  (new)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @mcp.prompt(
+        name="service_planning_advisor",
+        title="Service & Maintenance Planning Advisor",
+        description=(
+            "Evaluate upcoming service needs based on odometer, maintenance data, "
+            "and manufacturer intervals. Optionally find nearby workshops and book appointments."
+        ),
+        tags={"maintenance", "service", "planning", "external-data", "proactive"}
+    )
+    def service_planning_advisor(vehicle_id: str) -> str:
+        """Proactive service planning combining vehicle maintenance data with workshop search.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+
+        Returns:
+            Prompt template for intelligent service planning workflow
+        """
+        return f"""Perform intelligent service and maintenance planning for {vehicle_id}:
+
+**NOTE**: All vehicle tools only work reliably when the vehicle is parked and not in active use.
+
+**STEP 1 – VEHICLE DATA**
+1. Get vehicle info using get_vehicle_info
+   - Manufacturer, model, year, current odometer (km)
+2. Get maintenance info using get_maintenance_info
+   - Next inspection due date and distance
+   - Oil-service due date and distance (if combustion/hybrid)
+3. Get energy status using get_energy_status
+   - For electric vehicles: note battery health indicators
+4. Get current position using get_vehicle_position (needed for workshop search later)
+
+**STEP 2 – URGENCY ASSESSMENT**
+5. Calculate urgency for each maintenance item:
+   - Distance remaining to next service (from odometer vs. due distance)
+   - Days remaining to next service date (from today vs. due date)
+   - Classify urgency:
+     - 🔴 URGENT: ≤ 500 km or ≤ 14 days remaining
+     - 🟡 DUE SOON: ≤ 2 000 km or ≤ 30 days remaining
+     - 🟢 OK: > 2 000 km and > 30 days remaining
+6. Check for any active warnings reported by the vehicle (from vehicle state or maintenance data)
+7. For electric vehicles additionally assess:
+   - Battery degradation hints (if available)
+   - Tyre pressure status (from get_physical_status)
+
+**STEP 3 – MANUFACTURER INTERVAL LOOKUP**
+8. Look up the manufacturer-recommended service intervals for this vehicle:
+   - Search web for "{{manufacturer}} {{model}} {{year}} Inspektionsintervall" or service schedule
+   - Standard VW/Audi/Skoda/Seat intervals: 30 000 km or 12 months (Longlife: up to 30 000 km / 2 years)
+   - If found, compare with current maintenance data and flag any discrepancy
+
+**STEP 4 – WORKSHOP SEARCH (if urgency is URGENT or DUE SOON)**
+9. Use vehicle position for a nearby workshop search:
+   - Search for authorised {{manufacturer}} dealers within 20 km
+   - Also consider independent workshops with good ratings
+   - Collect: name, address, phone number, opening hours, rating, distance
+   - Prioritise authorised dealers for warranty-relevant work
+10. Check online booking availability for top 3 workshops
+
+**STEP 5 – REPORT & RECOMMENDATIONS**
+Provide a structured report:
+
+```
+🔧 SERVICE STATUS FOR {{vehicle_name}} ({{odometer}} km)
+────────────────────────────────────────────────
+{{urgency_icon}} Next Inspection: {{due_date}} (in {{days_left}} days / {{km_left}} km)
+{{urgency_icon}} Oil Service: {{due_date}} (in {{days_left}} days / {{km_left}} km) [if applicable]
+
+📋 RECOMMENDED ACTIONS:
+  1. [Action] – Reason
+  2. ...
+
+🏭 NEARBY WORKSHOPS:
+  1. {{name}} ({{distance}} km) – {{rating}}⭐ – Tel: {{phone}}
+     Available slots: [date/time if found]
+  2. ...
+
+💡 TIPS:
+  - [Manufacturer-specific advice, e.g. Longlife oil, tyre rotation]
+  - [Cost estimate if available]
+```
+
+If no action is needed, confirm: "Vehicle {{vehicle_id}} is up to date – next service in {{km}} km / {{days}} days." """
+
+    @mcp.prompt(
+        name="intelligent_charging_plan",
+        title="Intelligent Cost-Optimised Charging Plan",
+        description=(
+            "Create a cost-optimised charging schedule considering electricity spot prices, "
+            "weather (cold reduces range), vehicle state, and user calendar."
+        ),
+        tags={"charging", "cost", "optimization", "weather", "calendar", "external-data", "proactive"}
+    )
+    def intelligent_charging_plan(vehicle_id: str, target_departure_time: str = "tomorrow 07:00") -> str:
+        """Intelligent charging plan combining prices, weather, and vehicle state.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+            target_departure_time: When the vehicle is needed next (e.g. "tomorrow 07:00")
+
+        Returns:
+            Prompt template for cost-optimised charging planning
+        """
+        return f"""Create an intelligent, cost-optimised charging plan for {vehicle_id} with departure at {target_departure_time}:
+
+**NOTE**: Vehicle commands (start_charging, stop_charging) only work when the vehicle is parked and plugged in.
+
+**STEP 1 – CURRENT VEHICLE STATE**
+1. Get charging status using get_charging_status
+   - Is the vehicle currently plugged in? (is_plugged_in)
+   - Current SOC and target SOC
+   - Current charging power (kW)
+2. Get battery status using get_battery_status
+   - Current range estimate
+3. Get vehicle position using get_vehicle_position
+   - Needed for weather and electricity price lookup
+
+**STEP 2 – WEATHER FORECAST**
+4. Get weather forecast for the vehicle location:
+   - Overnight low temperature (between now and {target_departure_time})
+   - Temperature at {target_departure_time}
+   - Precipitation (rain, snow, frost)
+5. Estimate weather impact on battery range:
+   - Below 0°C: range reduced by ~25–35 %, battery needs preconditioning
+   - 0–10°C: range reduced by ~10–20 %
+   - Above 20°C (with AC): range reduced by ~5–10 %
+6. Determine if windows are closed and vehicle secured (get_physical_status)
+   - Open windows in cold/wet weather = additional climate load
+
+**STEP 3 – ELECTRICITY PRICE FORECAST**
+7. Fetch electricity spot prices or time-of-use tariffs for the overnight period:
+   - Use location (country/region) from vehicle position
+   - Search for ENTSO-E day-ahead prices, Tibber, aWATTar, or similar for the region
+   - Identify cheapest 4-hour window between now and {target_departure_time}
+   - Identify most expensive periods to avoid
+8. Calculate cost comparison:
+   - Cheapest window price per kWh
+   - Average/peak price per kWh
+   - Potential savings by shifting charging
+
+**STEP 4 – REQUIRED ENERGY CALCULATION**
+9. Calculate energy needed:
+   - Target SOC for departure (80 % default, 100 % if long trip)
+   - Weather-adjusted range target (add buffer for cold weather)
+   - Energy gap = (target_soc - current_soc) × battery_capacity_kWh
+   - Charging time at current power = energy_gap / charging_power_kW
+10. Include preconditioning energy if temperature < 5°C (approx. 3–5 kWh extra)
+
+**STEP 5 – OPTIMAL SCHEDULE**
+11. Calculate optimal charging schedule:
+    - Fit charging window into cheapest electricity period
+    - Ensure charging completes at least 30 min before {target_departure_time} (for preconditioning)
+    - If vehicle is already charging: assess whether to pause and restart at cheaper time
+    - If not plugged in: remind user to connect cable
+
+**STEP 6 – ACTIONS & REPORT**
+12. If vehicle is plugged in and charging should start/stop now:
+    - Use start_charging or stop_charging as appropriate
+    - Verify with get_charging_status
+13. Provide the plan:
+
+```
+⚡ CHARGING PLAN FOR {{vehicle_name}}
+────────────────────────────────────────────────
+🔋 Current SOC: {{soc}}% → Target: {{target_soc}}% ({{energy_needed}} kWh)
+🌡️  Overnight low: {{temp}}°C → Range impact: {{impact}}%
+💶 Cheapest window: {{start_time}}–{{end_time}} @ {{price}} ct/kWh
+💰 Estimated cost: €{{cost}} (saving €{{saving}} vs. charging now)
+
+📅 RECOMMENDED SCHEDULE:
+  {{start_time}}: Start charging ({{charging_power}} kW)
+  {{end_time}}: Charging complete at {{target_soc}}%
+  {{precondition_time}}: Begin cabin preconditioning ({{target_temp}}°C)
+
+⚠️  ALERTS:
+  [Weather: Frost expected – preconditioning recommended]
+  [Windows: Check if closed before overnight parking]
+
+✅ ACTION TAKEN: [charging started / scheduled / no action needed]
+```"""
+
+    @mcp.prompt(
+        name="proactive_preconditioning_suggestion",
+        title="Proactive Preconditioning Suggestion",
+        description=(
+            "Suggest and optionally start cabin preconditioning based on weather forecast, "
+            "user calendar events, and current vehicle state."
+        ),
+        tags={"climate", "preconditioning", "weather", "calendar", "comfort", "proactive", "external-data"}
+    )
+    def proactive_preconditioning_suggestion(vehicle_id: str) -> str:
+        """Suggest proactive preconditioning based on weather and calendar.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+
+        Returns:
+            Prompt template for proactive preconditioning workflow
+        """
+        return f"""Proactively suggest and manage cabin preconditioning for {vehicle_id}:
+
+**NOTE**: Climatization commands only work when the vehicle is parked (not in use).
+
+**STEP 1 – USER CALENDAR CHECK**
+1. Check the user's calendar for upcoming appointments or events in the next 4 hours:
+   - Departure times, meeting locations, travel events
+   - Look for keywords: "car", "drive", "pick up", address fields
+   - Identify the most imminent planned departure
+2. Ask the user if no calendar is available: "When do you next plan to use the vehicle?"
+
+**STEP 2 – VEHICLE STATE**
+3. Get vehicle position using get_vehicle_position
+4. Get climate status using get_climate_status
+   - Is climatization already running?
+   - Current settings
+5. Get charging status using get_charging_status (BEV/PHEV)
+   - Using external power for preconditioning saves battery range
+
+**STEP 3 – WEATHER AT DEPARTURE TIME**
+6. Get weather forecast for vehicle location at planned departure time:
+   - Current outside temperature
+   - Temperature at planned departure
+   - Precipitation: rain, snow, frost, fog, hail
+   - Wind chill factor
+7. Determine preconditioning need:
+   - ❄️  Below 0°C: STRONGLY recommended (cabin comfort + battery warmup for BEV)
+   - 🌧️  Rain/snow: Recommended (defogging, defrost)
+   - ☀️  Above 28°C: Recommended (cabin cooling before entry)
+   - 🟢 Mild conditions: Optional comfort improvement
+8. For BEV/PHEV: preconditioning while plugged in saves significant range (up to 15%)
+
+**STEP 4 – OPTIMAL START TIME**
+9. Calculate when to start preconditioning:
+   - Cold weather (<0°C): 20–30 min before departure
+   - Moderate cold (0–10°C): 10–15 min before departure
+   - Rain/fog: 5–10 min before departure (defogging)
+   - Hot weather (>28°C): 10–15 min before departure
+   - Heating speed: cabin reaches target in ~10–15 min under normal conditions
+
+**STEP 5 – TARGET TEMPERATURE**
+10. Determine optimal target temperature:
+    - Standard comfort: 21°C
+    - Cold weather: 22–23°C (slightly warmer for comfort)
+    - Hot weather: 19–20°C (cooler for relief from heat)
+    - User preference: check previous settings in climate status if available
+
+**STEP 6 – SUGGESTION & ACTION**
+11. Present suggestion to user:
+    "Based on {{weather_conditions}} at {{departure_time}}, I recommend starting preconditioning at {{start_time}} to reach {{target_temp}}°C.
+     {{vehicle_is_plugged_in ? 'Vehicle is plugged in – preconditioning will use grid power (no range loss).' : 'Note: Vehicle is not plugged in – preconditioning uses ~3–5 kWh of battery.'}}
+    Shall I start it automatically?"
+
+12. If user confirms (or if this is automated):
+    - Use start_climatization with target temperature
+    - For frost/fog: also start_window_heating
+    - Verify with get_climate_status
+
+**STEP 7 – REPORT**
+```
+🌡️  PRECONDITIONING PLAN FOR {{vehicle_name}}
+────────────────────────────────────────────────
+📅 Next departure: {{departure_time}} (from calendar: "{{event_title}}")
+🌤️  Weather: {{temp}}°C, {{conditions}}
+🔌 Power source: {{grid_or_battery}}
+
+▶️  Start preconditioning: {{start_time}}
+🎯 Target temperature: {{target_temp}}°C
+🪟 Window heating: {{yes_no}}
+
+✅ Status: {{action_taken}}
+``` """
+
+    @mcp.prompt(
+        name="trip_optimizer",
+        title="Trip Departure & Charging Stop Optimizer",
+        description=(
+            "Optimise departure timing, en-route charging stops, or fuel stops "
+            "based on user calendar, vehicle range, and live traffic."
+        ),
+        tags={"trip", "planning", "charging", "navigation", "calendar", "range", "external-data", "proactive"}
+    )
+    def trip_optimizer(vehicle_id: str, destination: str) -> str:
+        """Optimise departure time and charging/fuel stops for a trip.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+            destination: Trip destination (address or place name)
+
+        Returns:
+            Prompt template for intelligent trip optimisation
+        """
+        return f"""Optimise the trip from current location to {destination} for {vehicle_id}:
+
+**STEP 1 – VEHICLE ENERGY STATE**
+1. Get energy status using get_energy_status
+   - Current SOC / fuel level and estimated range
+   - Vehicle type (electric / hybrid / combustion)
+2. Get vehicle position using get_vehicle_position (starting point)
+
+**STEP 2 – CALENDAR & TIME CONSTRAINTS**
+3. Check user's calendar for constraints related to this trip:
+   - Does the destination match a calendar event? → hard arrival deadline
+   - Return trip? → note any scheduled return time
+   - Meeting duration at destination?
+4. If no calendar event matches, ask: "Is there a specific arrival time you need to meet?"
+
+**STEP 3 – ROUTE & TRAFFIC ANALYSIS**
+5. Calculate primary route to {destination}:
+   - Total distance
+   - Current estimated driving time (live traffic)
+   - Toll roads, motorway vs. country road mix
+6. Get traffic forecast for the next 1–4 hours:
+   - Rush hour patterns for departure area
+   - Any reported incidents or roadworks
+   - Optimal departure window to minimise travel time
+7. Calculate 2–3 alternative routes with time and distance comparison
+
+**STEP 4 – ENERGY FEASIBILITY**
+8. Determine if current range is sufficient for the trip:
+   - For BEV/PHEV: estimate consumption (motorway ~20% more than city)
+   - Apply weather correction (cold/heat, wind)
+   - Safety buffer: always target ≥ 15–20% SOC / ≥ 50 km range on arrival
+9. If range is insufficient:
+   - For electric: find fast charging stations (CCS/CHAdeMO) along route
+     → Search PlugShare, ABRP, or similar for stations within 5 km of route
+     → Select optimal stop (minimise detour + charging time)
+     → Calculate required charging time for enough range to reach destination
+   - For combustion/hybrid: find petrol stations along route
+
+**STEP 5 – PRE-DEPARTURE CHARGING (if needed)**
+10. If vehicle is plugged in and more charge is needed:
+    - Calculate how much additional SOC is required
+    - Estimate charging time at current power
+    - If plugged in, check whether to charge more before departure
+    - Use start_charging if needed, with verification via get_charging_status
+
+**STEP 6 – OPTIMAL DEPARTURE TIME**
+11. Calculate the optimal departure window:
+    - Earliest: when sufficient charge reached (if charging) + 5 min preconditioning buffer
+    - Latest: arrival deadline − driving time − weather buffer − charging stop time (if needed)
+    - Best: balances traffic avoidance, charge level, and time constraints
+12. If cold (<5°C): add preconditioning start 15–20 min before optimal departure
+
+**STEP 7 – REPORT**
+```
+🗺️  TRIP PLAN: {{start}} → {destination}
+────────────────────────────────────────────────
+🚗 Vehicle: {{vehicle_name}} | 🔋 {{soc}}% / {{range}} km
+📅 Calendar constraint: {{event_or_none}}
+
+⏱️  DEPARTURE OPTIONS:
+  🟢 Optimal: {{optimal_time}} → Arrive {{arrival_time}} ({{drive_time}} drive)
+  🟡 Latest:  {{latest_departure}} → Arrive {{latest_arrival}} (on time: {{yes_no}})
+
+⚡ CHARGING NEEDED: {{yes_no}}
+  {{if yes: "Charge to {{target_soc}}% by {{ready_time}} (+{{charge_minutes}} min)"}}
+  {{if charging_stop: "Stop at {{station_name}} ({{km_from_start}} km) – {{charge_minutes}} min break"}}
+
+🛣️  BEST ROUTE: {{route_name}} ({{distance}} km, {{time}} min)
+   Alternative: {{alt_route}} saves/costs {{diff}} min
+
+⚠️  ALERTS: {{traffic_warnings, weather_warnings}}
+
+✅ NEXT ACTION: {{start charging / start preconditioning / depart now / wait until HH:MM}}
+``` """
+
+    @mcp.prompt(
+        name="parking_time_monitor",
+        title="Parking Time & Cost Monitor",
+        description=(
+            "Monitor parking duration and costs based on vehicle position, "
+            "local parking regulations, and remind the user before time expires."
+        ),
+        tags={"parking", "location", "cost", "reminder", "external-data", "proactive"}
+    )
+    def parking_time_monitor(vehicle_id: str, max_parking_minutes: int = 120) -> str:
+        """Monitor parking time and costs with reminders.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+            max_parking_minutes: Maximum allowed or desired parking time in minutes (default: 120)
+
+        Returns:
+            Prompt template for parking time monitoring workflow
+        """
+        return f"""Monitor parking time and costs for {vehicle_id} (limit: {max_parking_minutes} min):
+
+**STEP 1 – VEHICLE POSITION**
+1. Get current vehicle position using get_vehicle_position
+   - Latitude, longitude, heading
+   - Derive street address from coordinates (reverse geocoding)
+2. Verify vehicle is parked (heading/speed context if available, or assume parked)
+
+**STEP 2 – PARKING REGULATIONS LOOKUP**
+3. Look up parking regulations for the current location:
+   - Search for local parking rules: maximum stay, time restrictions, permit zones
+   - Check for blue zones, resident-only zones, loading zones
+   - Check operating hours of paid parking in this area
+   - Sources: city council websites, ParkingEye, OpenStreetMap parking data, Google Maps
+4. Determine parking type:
+   - Free unlimited parking
+   - Time-limited free parking (e.g. max 2h)
+   - Paid parking (hourly rate)
+   - Permit/resident zone (check if user has permit)
+   - No-parking or restricted zone (ALERT immediately if so!)
+
+**STEP 3 – COST ESTIMATION**
+5. Calculate parking costs:
+   - Find current hourly/daily rate for this location (search parking operators)
+   - Calculate cost for {max_parking_minutes} minutes
+   - Calculate cost for full day if relevant
+   - Check if cheaper alternatives exist within 200 m (search nearby parking)
+6. For electric vehicles: Check if charging is available at this parking spot
+   - Parking with free/paid charging
+   - Compare charging cost vs. energy needed
+
+**STEP 4 – ZONE RESTRICTIONS & ENTRY RESTRICTIONS**
+7. Check for any area-specific entry or parking restrictions:
+   - Environmental zones (Umweltzone, LEZ) – does the vehicle meet the requirements?
+   - EV-only or zero-emission zones
+   - Time-based restrictions (e.g. market day, snow clearing)
+   - Get vehicle type from get_vehicle_info to verify zone eligibility
+
+**STEP 5 – REMINDER CALCULATION**
+8. Calculate reminder times based on parking limit of {max_parking_minutes} minutes:
+   - First reminder: at 75% of allowed time (or 15 min before limit)
+   - Final reminder: 10 minutes before limit
+   - Urgent alert: at limit / when payment runs out
+9. Note parking start time (current time) and calculate expiry
+
+**STEP 6 – REPORT & MONITORING**
+Provide initial parking status report:
+
+```
+🅿️  PARKING STATUS FOR {{vehicle_name}}
+────────────────────────────────────────────────
+📍 Location: {{address}}
+🕐 Parked at: {{park_time}} | Limit: {max_parking_minutes} min → Expires: {{expiry_time}}
+💶 Estimated cost: €{{cost}} ({{rate}}/h) [or: FREE]
+
+📋 REGULATIONS:
+  {{parking_type}} – {{restrictions_summary}}
+  {{zone_restrictions_if_any}}
+
+⏰ REMINDERS SET:
+  🟡 First warning: {{warning_time}} (15 min before expiry)
+  🔴 Final alert:   {{alert_time}} (10 min before expiry)
+
+⚡ NEARBY CHARGING: {{yes_no_with_details}}
+
+⚠️  ALERTS: {{any_immediate_issues}}
+
+💡 TIP: {{cheaper_alternative_if_found}}
+```
+
+10. When reminder times are reached (if this is an automated monitoring loop):
+    - Send reminder: "⏰ Parking for {{vehicle_name}} expires in {{minutes}} min at {{location}}!"
+    - At expiry: "🔴 Parking time expired for {{vehicle_name}} at {{location}}. Please return or pay."
+    - Suggest: move vehicle, extend ticket, or nearby alternative parking"""
+
+    @mcp.prompt(
+        name="zone_entry_restriction_check",
+        title="Zone Entry Restriction Check",
+        description=(
+            "Check whether the vehicle is allowed to enter a destination area "
+            "considering environmental zones, EV-only zones, and congestion zones."
+        ),
+        tags={"zones", "restrictions", "ev", "compliance", "external-data", "navigation"}
+    )
+    def zone_entry_restriction_check(vehicle_id: str, destination: str) -> str:
+        """Check zone entry restrictions for a destination.
+
+        Args:
+            vehicle_id: Vehicle name or VIN
+            destination: Destination city, area, or address to check
+
+        Returns:
+            Prompt template for zone restriction check
+        """
+        return f"""Check if {vehicle_id} is allowed to enter {destination} and identify any zone restrictions:
+
+**STEP 1 – VEHICLE DETAILS**
+1. Get vehicle info using get_vehicle_info
+   - Manufacturer, model, year
+   - Vehicle type (electric, hybrid, combustion) via get_energy_status
+   - Euro emission standard (derive from year + manufacturer if not directly available)
+2. For electric/hybrid: Get current SOC via get_battery_status (relevant for PHEV electric range)
+
+**STEP 2 – ZONE RESTRICTION RESEARCH**
+3. Research entry restrictions for {destination}:
+
+   a) **Environmental/Low Emission Zones (LEZ/Umweltzone)**:
+      - Search for "{destination} Umweltzone" or "{destination} low emission zone"
+      - Determine required Euro standard (Euro 4, 5, 6)
+      - Check dates/times when restrictions apply
+      - Check if exemptions apply (electric, hybrid, new vehicles)
+
+   b) **Zero Emission Zones (ZEZ / EV-only zones)**:
+      - Search for "{destination} zero emission zone" or "{destination} EV only zone"
+      - Check if purely electric vehicles have advantages
+      - Check if PHEVs qualify (depends on electric range requirements)
+      - Increasingly common in city centres: check Oslo, Amsterdam, London, etc.
+
+   c) **Congestion Charge / City Toll**:
+      - Search for "{destination} congestion charge" or "{destination} Citymaut"
+      - Check charge amount, operating hours
+      - EV exemptions (London, Stockholm, Milan, etc.)
+      - Daily, weekly caps
+
+   d) **Diesel Driving Bans (Dieselfahrverbote)**:
+      - Relevant for German cities (Stuttgart, Hamburg, Berlin, Frankfurt, Munich, etc.)
+      - Check affected streets or entire zones
+      - Euro 5 diesel bans in some cities
+
+   e) **Temporary Restrictions**:
+      - Event-based restrictions (large events, races, markets)
+      - Construction-related road closures
+      - Weather-related emergency restrictions
+
+**STEP 3 – VEHICLE COMPLIANCE CHECK**
+4. Cross-reference vehicle details with zone requirements:
+   - Does the vehicle meet the emission standard?
+   - Is an EV exemption applicable?
+   - Does PHEV qualify (check electric range requirement, typically ≥ 50 km)
+   - Are there sticker/vignette requirements (German Umweltplakette: green = Euro 4+)
+
+**STEP 4 – COST IMPACT**
+5. Calculate cost impact:
+   - Congestion/city toll: €{{amount}} per entry or per day
+   - Parking surcharges for non-compliant vehicles (where applicable)
+   - Fine risk if restrictions violated (mention as risk, not to encourage violation)
+   - EV benefits: free/reduced city tolls, free parking in some zones
+
+**STEP 5 – ROUTE ALTERNATIVES**
+6. If restrictions apply:
+   - Identify alternative routes that avoid restricted zones
+   - Suggest park-and-ride options on the zone boundary
+   - For PHEV: confirm sufficient electric range to drive in ZEZ in EV mode
+
+**STEP 6 – REPORT**
+```
+🚦 ZONE CHECK: {{vehicle_name}} → {destination}
+────────────────────────────────────────────────
+🚗 Vehicle: {{manufacturer}} {{model}} {{year}} | {{vehicle_type}}
+   Emission standard: Euro {{standard}} | {{compliance_badge}}
+
+📋 RESTRICTIONS FOR {destination}:
+  {{zone_type}}: {{allowed_or_restricted}} {{details}}
+  {{congestion_charge}}: {{amount_or_free}} {{hours}}
+  {{diesel_ban}}: {{applies_or_not}}
+
+✅ VERDICT: {{vehicle_name}} is {{ALLOWED / RESTRICTED / ALLOWED WITH CONDITIONS}} in {destination}
+
+💶 COSTS: {{toll_costs_summary}}
+
+💡 RECOMMENDATIONS:
+  {{exemptions_available}}
+  {{ev_benefits}}
+  {{alternative_routes_or_park_and_ride}}
+
+⚠️  ACTION NEEDED: {{register_zone / buy_vignette / use_alt_route / no_action}}
+``` """
+
+    @mcp.prompt(
+        name="battery_health_optimizer",
+        title="Battery Health & Charging Optimiser",
+        description=(
+            "Analyse current and ongoing charging behaviour and suggest optimisations "
+            "to maximise battery longevity: target SOC, charge rate, and schedule."
+        ),
+        tags={"battery", "charging", "health", "optimization", "bev-phev", "proactive", "external-data"}
+    )
+    def battery_health_optimizer(vehicle_id: str) -> str:
+        """Optimise battery charging strategy for long-term health.
+
+        Args:
+            vehicle_id: Vehicle name or VIN (BEV/PHEV)
+
+        Returns:
+            Prompt template for battery health optimisation workflow
+        """
+        return f"""Analyse and optimise the charging strategy for {vehicle_id} to maximise battery longevity:
+
+**NOTE**: This prompt is for BEV/PHEV vehicles only. Commands only execute when vehicle is parked.
+
+**STEP 1 – CURRENT STATE**
+1. Get charging status using get_charging_status
+   - Current SOC, target SOC, charging state
+   - Charging power (kW), charge mode
+   - Is vehicle currently charging?
+2. Get battery status using get_battery_status
+   - SOC percentage, estimated range
+3. Get vehicle info using get_vehicle_info
+   - Model, year → used to look up battery specs
+4. Get vehicle position using get_vehicle_position
+   - Needed for weather (temperature affects battery chemistry)
+
+**STEP 2 – WEATHER & TEMPERATURE**
+5. Get current temperature at vehicle location:
+   - Below 10°C: lithium-ion batteries charge less efficiently, higher internal resistance
+   - Below 0°C: charging at high rates can cause lithium plating (permanent damage)
+   - Above 35°C: accelerated degradation during charging
+6. Assess if temperature-related charging caution is needed
+
+**STEP 3 – BATTERY HEALTH RESEARCH**
+7. Look up battery health guidelines for this specific vehicle:
+   - Search for "{{manufacturer}} {{model}} battery longevity tips" or "{{model}} charging recommendations"
+   - Standard best practices for lithium-ion:
+     * Daily charge target: 80% (not 100%) for regular use
+     * 100% only for long trips (and drive soon after reaching 100%)
+     * Avoid staying at 100% for extended periods (>2 h)
+     * Avoid deep discharge below 10–15%
+     * Preferred daily operating range: 20–80%
+   - Vehicle-specific: some models have built-in buffer (e.g. Tesla reports 100% but actual is ~95%)
+8. Check manufacturer-specific recommendations (e.g. VW ID series: "home charging" mode targets 80%)
+
+**STEP 4 – CURRENT BEHAVIOUR ASSESSMENT**
+9. Assess current charging settings vs. best practice:
+   - Current target SOC vs. recommended daily target (80%)
+   - Is vehicle often charged to 100%? (infer from current settings)
+   - Charging speed: AC (gentle, preferred for daily) vs. DC fast charging (limit when possible)
+   - Is vehicle left plugged in at 100% for long periods?
+10. Note any active charging if running (and current power level)
+
+**STEP 5 – USAGE CONTEXT**
+11. Ask or infer from calendar/context:
+    - Is the user taking a long trip soon? → 100% charge may be justified
+    - Normal daily commute (<100 km)? → 80% is optimal
+    - Vehicle parked for >24 h? → avoid high SOC
+12. If charging is currently active and target SOC > 80% with no long trip planned:
+    - Suggest reducing target SOC (user action in vehicle app, as direct SOC target setting
+      may not be available via this API)
+
+**STEP 6 – CHARGING RATE OPTIMISATION**
+13. Assess current charging power:
+    - For overnight charging: slower AC charging (7–11 kW) preferred over fast DC
+    - DC fast charging generates more heat → use sparingly
+    - If available: check if vehicle supports reduced charging current setting
+14. Temperature-based rate advice:
+    - Below 0°C: recommend preconditioning battery before charging (start_climatization)
+    - Above 35°C: consider charging at cooler time of day
+
+**STEP 7 – REPORT & RECOMMENDATIONS**
+```
+🔋 BATTERY HEALTH REPORT: {{vehicle_name}}
+────────────────────────────────────────────────
+📊 Current SOC: {{soc}}% | Target: {{target_soc}}% | Range: {{range}} km
+⚡ Charging: {{state}} @ {{power}} kW | Mode: {{charge_mode}}
+🌡️  Temperature: {{temp}}°C → {{temp_risk_level}}
+
+🏥 HEALTH ASSESSMENT:
+  Target SOC:   {{target_soc}}% → {{good_warning_critical}} (recommended: 80% daily)
+  Charge speed: {{ac_dc}} → {{good_warning}}
+  Temperature:  {{temp_assessment}}
+  Current SOC habits: {{assessment_based_on_data}}
+
+💡 OPTIMISATION RECOMMENDATIONS:
+  1. {{most_important_action}} – Reason: {{why}}
+  2. {{second_action}}
+  3. {{third_action}}
+
+📈 ESTIMATED IMPACT:
+  Following these recommendations can extend battery life by {{X}}% over {{Y}} years.
+  (Based on manufacturer data and EV battery longevity research)
+
+🔧 SETTINGS TO CHANGE:
+  → In VW ID / MyVW app: Set charge limit to 80% for daily use
+  → Enable "Reduced AC charging" if available for overnight charging
+  → {{other_vehicle_specific_settings}}
+
+✅ IMMEDIATE ACTION: {{any_action_taken_via_api}}
+``` """
+
+    logger.info("Registered 20 workflow prompts (7 basic + 6 advanced + 7 intelligent proactive)")
 
