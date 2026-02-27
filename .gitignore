@@ -2,6 +2,11 @@
 src/config.json
 claude_desktop_config.json
 
+# Environment files with credentials
+.env
+*.env
+!.env.example
+
 # Python cache
 __pycache__/
 src/__pycache__/

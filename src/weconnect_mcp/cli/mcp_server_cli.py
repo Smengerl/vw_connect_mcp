@@ -1,7 +1,16 @@
-"""CLI shim to start MCP server with carconnectivity adapter."""
+"""CLI shim to start MCP server with carconnectivity adapter.
+
+Environment variables (override config.json for cloud/container deployments):
+  VW_USERNAME     VW account e-mail
+  VW_PASSWORD     VW account password
+  VW_SPIN         4-digit S-PIN
+  MCP_API_KEY     Bearer token clients must send (HTTP mode only).
+                  If unset, the server runs WITHOUT authentication.
+"""
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -19,12 +28,61 @@ DEFAULT_TRANSPORT = "stdio"
 DEFAULT_PORT = 8765
 
 
+def _maybe_patch_config_from_env(config_path: str) -> str:
+    """Overlay VW credentials from environment variables onto config.json.
+
+    If any of VW_USERNAME, VW_PASSWORD, or VW_SPIN are set, the config is
+    written to a temporary file with those values replaced so that the
+    carconnectivity adapter picks them up without touching the source file.
+
+    This enables cloud/container deployments where credentials are injected
+    as environment variables (Docker secrets, Railway env, Fly.io secrets, …)
+    instead of being baked into a config file.
+
+    Args:
+        config_path: Path to the original config.json.
+
+    Returns:
+        Path to use – either the original path (nothing changed) or a temp
+        file path (env overrides applied).
+    """
+    username = os.environ.get("VW_USERNAME")
+    password = os.environ.get("VW_PASSWORD")
+    spin = os.environ.get("VW_SPIN")
+
+    if not any([username, password, spin]):
+        return config_path  # Nothing to override
+
+    with open(config_path, encoding="utf-8") as f:
+        config = json.load(f)
+
+    connectors = (
+        config.get("carConnectivity", {}).get("connectors", [])
+    )
+    for connector in connectors:
+        cfg = connector.get("config", {})
+        if username:
+            cfg["username"] = username
+        if password:
+            cfg["password"] = password
+        if spin:
+            cfg["spin"] = spin
+
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    )
+    json.dump(config, tmp, indent=2)
+    tmp.close()
+    return tmp.name
 
 
-def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None):
+def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None):
     import logging
     from weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
     from weconnect_mcp.server.mcp_server import get_server
+
+    # Resolve API key: CLI argument > env variable > None (no auth)
+    resolved_api_key = api_key or os.environ.get("MCP_API_KEY")
 
     # CRITICAL: If log_file is specified AND we're in stdio mode, redirect stderr to /dev/null
     # This is the ONLY way to keep stderr clean for MCP stdio protocol
@@ -72,13 +130,32 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
     
     logger = logging_config.get_logger(__name__)
 
-    logger.debug("Starting adapter with config: %s", config_path)
-    with CarConnectivityAdapter(config_path=config_path, tokenstore_file=tokenstore_file) as adapter:
+    # Apply env-variable credential overrides (for cloud/container deployments)
+    effective_config_path = _maybe_patch_config_from_env(config_path)
+    if effective_config_path != config_path:
+        logger.info("VW credentials overridden from environment variables")
+
+    logger.debug("Starting adapter with config: %s", effective_config_path)
+    with CarConnectivityAdapter(config_path=effective_config_path, tokenstore_file=tokenstore_file) as adapter:
         logger.debug("Starting MCP server")
-        server = get_server(adapter)
+        server = get_server(adapter, api_key=resolved_api_key)
         try:
             if transport == "http":
-                server.run(show_banner=False, transport="http", host="0.0.0.0", port=port)
+                from starlette.middleware import Middleware as ASGIMiddleware
+                from starlette.middleware.cors import CORSMiddleware
+
+                cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+                cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
+
+                cors_middleware = [
+                    ASGIMiddleware(
+                        CORSMiddleware,
+                        allow_origins=cors_origins,
+                        allow_methods=["GET", "POST", "OPTIONS"],
+                        allow_headers=["Authorization", "Content-Type"],
+                    )
+                ]
+                server.run(show_banner=False, transport="http", host="0.0.0.0", port=port, middleware=cors_middleware)
             elif transport == "stdio":
                 server.run(show_banner=False, transport="stdio")
             else:
@@ -97,6 +174,16 @@ def build_parser():
     parser.add_argument('--log-file', help='Log file path (default: stderr only)')
     parser.add_argument('--transport', default=DEFAULT_TRANSPORT, choices=['http', 'stdio'], help=f'Transport mode (default: {DEFAULT_TRANSPORT})')
     parser.add_argument('--port', type=int, default=DEFAULT_PORT, help=f'HTTP port (default: {DEFAULT_PORT})')
+    parser.add_argument(
+        '--api-key',
+        default=None,
+        help=(
+            'Bearer token for HTTP authentication. '
+            'Can also be set via MCP_API_KEY env variable. '
+            'If neither is set, the server runs without authentication '
+            '(suitable for local use only).'
+        ),
+    )
     return parser
 
 def main(argv=None):
@@ -116,7 +203,8 @@ def main(argv=None):
         transport=args.transport,
         port=args.port,
         log_level=log_level,
-        log_file=args.log_file
+        log_file=args.log_file,
+        api_key=args.api_key,
     )
 
 if __name__ == '__main__':
