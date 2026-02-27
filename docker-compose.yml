@@ -1,0 +1,33 @@
+# docker-compose.yml – local testing of the containerised MCP server
+#
+# Usage:
+#   cp .env.example .env        # fill in your real credentials
+#   docker compose up --build
+#
+# The server will be available at http://localhost:8080
+# Test: curl http://localhost:8080/health
+
+services:
+  weconnect-mcp:
+    build: .
+    image: weconnect-mcp:local
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env          # create from .env.example – never commit this file!
+    environment:
+      PORT: "8080"
+    volumes:
+      # Persist the OAuth token store between restarts to avoid repeated logins
+      - tokenstore:/tmp/tokenstore
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  tokenstore:

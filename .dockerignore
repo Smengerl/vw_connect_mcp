@@ -1,0 +1,34 @@
+# Version control
+.git/
+.github/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# Credentials – NEVER copy into image
+src/config.json
+src/tokenstore.json
+/tmp/tokenstore*
+logs/
+
+# Development / editor
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Tests (not needed in production image)
+tests/
+
+# Docs / examples
+examples/
+tmp/
