@@ -12,7 +12,6 @@ Uses mixin pattern to compose functionality:
 """
 
 import json
-import sys
 import logging
 from typing import List, Any, Optional
 from datetime import datetime, timedelta
@@ -30,13 +29,6 @@ from carconnectivity.vehicle import GenericVehicle, ElectricVehicle, CombustionV
 # Cache duration to avoid VW API rate limits
 CACHE_DURATION_SECONDS = 300  # in seconds
 
-# Configure logging to stderr for MCP stdio compatibility
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr,
-    force=True
-)
 logger = logging.getLogger(__name__)
 
 

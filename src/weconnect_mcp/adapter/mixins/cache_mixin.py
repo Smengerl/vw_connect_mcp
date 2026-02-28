@@ -4,7 +4,6 @@ Provides data caching functionality to avoid VW API rate limits.
 Tracks last fetch time and ensures data freshness.
 """
 
-import sys
 import logging
 from typing import Optional
 from datetime import datetime, timedelta
@@ -12,13 +11,6 @@ from datetime import datetime, timedelta
 # Cache duration to avoid VW API rate limits
 CACHE_DURATION_SECONDS = 300  # 5 minutes
 
-# Configure logging
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr,
-    force=True
-)
 logger = logging.getLogger(__name__)
 
 

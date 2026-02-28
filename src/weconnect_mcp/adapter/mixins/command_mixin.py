@@ -4,7 +4,6 @@ Provides vehicle control commands: lock, unlock, climatization, charging,
 lights/horn, and window heating.
 """
 
-import sys
 import logging
 from typing import Any, Optional
 
@@ -17,13 +16,6 @@ from carconnectivity.command_impl import (
     WindowHeatingStartStopCommand,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr,
-    force=True
-)
 logger = logging.getLogger(__name__)
 
 

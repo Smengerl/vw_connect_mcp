@@ -77,57 +77,19 @@ def _maybe_patch_config_from_env(config_path: str) -> str:
 
 
 def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None):
-    import logging
     from weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
     from weconnect_mcp.server.mcp_server import get_server
 
     # Resolve API key: CLI argument > env variable > None (no auth)
     resolved_api_key = api_key or os.environ.get("MCP_API_KEY")
 
-    # CRITICAL: If log_file is specified AND we're in stdio mode, redirect stderr to /dev/null
-    # This is the ONLY way to keep stderr clean for MCP stdio protocol
-    if log_file and transport == "stdio":
-        sys.stderr = open(os.devnull, 'w')
-    
-    # Configure logging based on log_file and transport mode
-    if log_file:
-        # Create log directory if needed
-        log_dir = os.path.dirname(log_file)
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-        
-        # Configure root logger to write to file
-        logging.basicConfig(
-            level=log_level,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            filename=log_file,
-            filemode='a',
-            force=True
-        )
-        
-        # Remove stderr handlers to keep stderr clean for MCP stdio protocol
-        root_logger = logging.getLogger()
-        for handler in root_logger.handlers[:]:
-            if isinstance(handler, logging.StreamHandler) and handler.stream in (sys.stderr, sys.__stderr__):
-                root_logger.removeHandler(handler)
-    else:
-        # No log file - use stderr (only when transport is not stdio, or for debugging)
-        logging.basicConfig(
-            level=log_level,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            stream=sys.stderr,
-            force=True
-        )
-    
-    # Apply the same log level to third-party loggers (respect user's choice)
-    # Only increase level (make less verbose) if user chose ERROR or higher
-    third_party_level = max(log_level, logging.ERROR) if log_level < logging.ERROR else log_level
-    
-    logging.getLogger('carconnectivity').setLevel(third_party_level)
-    logging.getLogger('carconnectivity.connectors.volkswagen-api-debug').setLevel(third_party_level)
-    logging.getLogger('urllib3').setLevel(third_party_level)
-    logging.getLogger('httpx').setLevel(third_party_level)
-    
+    # ── Logging setup ─────────────────────────────────────────────────────────
+    # One call does everything: chooses the right stream (stdout for http,
+    # stderr for stdio), optionally writes to a file, clamps third-party
+    # library levels, and clears any handlers that third-party imports may
+    # have already installed.  See logging_config for full documentation.
+    logging_config.configure_logging(transport, level=log_level, log_file=log_file)
+
     logger = logging_config.get_logger(__name__)
 
     # Apply env-variable credential overrides (for cloud/container deployments)
@@ -188,6 +150,9 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
                 adapter.__enter__()
                 real_adapter.append(adapter)
                 proxy._swap(adapter)
+                # Re-apply after CarConnectivity.__init__() may have reset levels
+                # by reading log_level from its own config file.
+                logging_config.apply_third_party_levels(log_level)
                 logger.info("VW adapter connected – server fully ready")
             except Exception as exc:
                 logger.error("VW adapter failed to connect: %s", exc)
@@ -200,8 +165,10 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
 
             cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
             cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
+
             server.run(
                 show_banner=False, transport="http", host="0.0.0.0", port=port,
+                uvicorn_config={"log_config": logging_config.get_uvicorn_log_config()},
                 middleware=[ASGIMiddleware(CORSMiddleware,
                     allow_origins=cors_origins,
                     allow_methods=["GET", "POST", "OPTIONS"],
