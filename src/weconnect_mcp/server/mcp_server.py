@@ -123,11 +123,24 @@ def get_server(adapter: AbstractAdapter, api_key: Optional[str] = None) -> FastM
     # ── Health check endpoint (HTTP transport only) ───────────────────────────
     # Exposed at GET /health (unauthenticated) so that cloud platforms and load
     # balancers can verify the server is up without an API key.
+    # Returns "starting" while the VW adapter is still logging in (can take 30s).
     @mcp.custom_route("/health", methods=["GET", "OPTIONS"])
     async def health(_request):  # type: ignore[no-untyped-def]
-        """Lightweight liveness probe – returns 200 OK when server is ready."""
+        """Liveness + readiness probe.
+
+        Returns HTTP 200 immediately (even during VW login) so Railway's
+        health-check window is not exhausted.  The ``ready`` field tells
+        clients whether the VW adapter has finished connecting.
+        """
         from starlette.responses import JSONResponse
-        return JSONResponse({"status": "ok", "service": "weconnect-mcp"})
+        is_ready = getattr(adapter, "_ready", True)  # TestAdapter has no _ready
+        return JSONResponse(
+            {
+                "status": "ok" if is_ready else "starting",
+                "service": "weconnect-mcp",
+                "ready": is_ready,
+            }
+        )
 
     return mcp
 

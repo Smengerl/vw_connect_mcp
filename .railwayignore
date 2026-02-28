@@ -1,0 +1,34 @@
+# Files excluded from Railway uploads (analogous to .gitignore for railway up).
+# Railway builds the Docker image server-side, so we only need to upload source.
+
+# Python virtual environment (HUGE – pip runs inside Docker instead)
+.venv/
+venv/
+env/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# Local credentials – Railway uses env variables instead
+src/config.json
+src/tokenstore.json
+.env
+
+# Logs and temporary files
+logs/
+tmp/
+*.log
+tokenstore*
+
+# IDE and OS
+.vscode/
+.DS_Store
+*.swp
+
+# Git metadata
+.git/

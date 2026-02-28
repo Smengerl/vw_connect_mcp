@@ -136,32 +136,95 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
         logger.info("VW credentials overridden from environment variables")
 
     logger.debug("Starting adapter with config: %s", effective_config_path)
-    with CarConnectivityAdapter(config_path=effective_config_path, tokenstore_file=tokenstore_file) as adapter:
-        logger.debug("Starting MCP server")
-        server = get_server(adapter, api_key=resolved_api_key)
+
+    if transport == "http":
+        # ── HTTP / cloud mode ─────────────────────────────────────────────────
+        # Start the HTTP server FIRST so cloud health-checks pass immediately,
+        # then connect the VW adapter in the background thread.
+        # The server is built around a mutable proxy so all tool closures
+        # transparently use the real adapter once VW login completes.
+        import threading
+        from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
+        from weconnect_mcp.adapter.starting_adapter import StartingAdapter
+
+        class _AdapterProxy(AbstractAdapter):
+            """Thin proxy that delegates to whichever adapter is current."""
+            _ready = False
+            def __init__(self, initial: AbstractAdapter) -> None:
+                self._delegate = initial
+            def _swap(self, real: AbstractAdapter) -> None:
+                self._delegate = real
+                self._ready = True
+            def list_vehicles(self): return self._delegate.list_vehicles()  # type: ignore[override]
+            def get_vehicle(self, v): return self._delegate.get_vehicle(v)  # type: ignore[override]
+            def get_physical_status(self, v): return self._delegate.get_physical_status(v)  # type: ignore[override]
+            def get_climate_status(self, v): return self._delegate.get_climate_status(v)  # type: ignore[override]
+            def get_energy_status(self, v): return self._delegate.get_energy_status(v)  # type: ignore[override]
+            def get_position(self, v): return self._delegate.get_position(v)  # type: ignore[override]
+            def get_maintenance_info(self, v): return self._delegate.get_maintenance_info(v)  # type: ignore[override]
+            def shutdown(self): return self._delegate.shutdown()  # type: ignore[override]
+            def lock_vehicle(self, v): return self._delegate.lock_vehicle(v)  # type: ignore[override]
+            def unlock_vehicle(self, v): return self._delegate.unlock_vehicle(v)  # type: ignore[override]
+            def start_climatization(self, v, t=None): return self._delegate.start_climatization(v, t)  # type: ignore[override]
+            def stop_climatization(self, v): return self._delegate.stop_climatization(v)  # type: ignore[override]
+            def start_charging(self, v): return self._delegate.start_charging(v)  # type: ignore[override]
+            def stop_charging(self, v): return self._delegate.stop_charging(v)  # type: ignore[override]
+            def start_window_heating(self, v): return self._delegate.start_window_heating(v)  # type: ignore[override]
+            def stop_window_heating(self, v): return self._delegate.stop_window_heating(v)  # type: ignore[override]
+            def flash_lights(self, v, d=None): return self._delegate.flash_lights(v, d)  # type: ignore[override]
+            def honk_and_flash(self, v, d=None): return self._delegate.honk_and_flash(v, d)  # type: ignore[override]
+
+        proxy = _AdapterProxy(StartingAdapter())
+        real_adapter: list[CarConnectivityAdapter] = []
+
+        server = get_server(proxy, api_key=resolved_api_key)
+
+        def _connect_vw() -> None:
+            try:
+                adapter = CarConnectivityAdapter(
+                    config_path=effective_config_path,
+                    tokenstore_file=tokenstore_file,
+                )
+                adapter.__enter__()
+                real_adapter.append(adapter)
+                proxy._swap(adapter)
+                logger.info("VW adapter connected – server fully ready")
+            except Exception as exc:
+                logger.error("VW adapter failed to connect: %s", exc)
+
+        threading.Thread(target=_connect_vw, daemon=True, name="vw-connect").start()
+
         try:
-            if transport == "http":
-                from starlette.middleware import Middleware as ASGIMiddleware
-                from starlette.middleware.cors import CORSMiddleware
+            from starlette.middleware import Middleware as ASGIMiddleware
+            from starlette.middleware.cors import CORSMiddleware
 
-                cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
-                cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
-
-                cors_middleware = [
-                    ASGIMiddleware(
-                        CORSMiddleware,
-                        allow_origins=cors_origins,
-                        allow_methods=["GET", "POST", "OPTIONS"],
-                        allow_headers=["Authorization", "Content-Type"],
-                    )
-                ]
-                server.run(show_banner=False, transport="http", host="0.0.0.0", port=port, middleware=cors_middleware)
-            elif transport == "stdio":
-                server.run(show_banner=False, transport="stdio")
-            else:
-                raise ValueError(f"Unsupported transport: {transport}")
+            cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+            cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
+            server.run(
+                show_banner=False, transport="http", host="0.0.0.0", port=port,
+                middleware=[ASGIMiddleware(CORSMiddleware,
+                    allow_origins=cors_origins,
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=["Authorization", "Content-Type"],
+                )],
+            )
         finally:
             logger.debug("Shutdown server")
+            for a in real_adapter:
+                try:
+                    a.__exit__(None, None, None)
+                except Exception:
+                    pass
+
+    else:
+        # ── stdio mode (local) ────────────────────────────────────────────────
+        with CarConnectivityAdapter(config_path=effective_config_path, tokenstore_file=tokenstore_file) as adapter:
+            logger.debug("Starting MCP server")
+            server = get_server(adapter, api_key=resolved_api_key)
+            try:
+                server.run(show_banner=False, transport="stdio")
+            finally:
+                logger.debug("Shutdown server")
 
 
 def build_parser():

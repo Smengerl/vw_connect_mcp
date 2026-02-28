@@ -1,0 +1,15 @@
+# Railway deployment configuration
+# Docs: https://docs.railway.com/reference/config-as-code
+
+[build]
+# Railway detects the Dockerfile automatically.
+# builder = "DOCKERFILE" is the default when a Dockerfile is present.
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway injects $PORT at runtime; our CMD uses ${PORT:-8080}.
+# healthcheckPath must respond 200 without authentication.
+healthcheckPath = "/health"
+healthcheckTimeout = 300     # seconds – VW API login takes up to 30s + build overhead
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

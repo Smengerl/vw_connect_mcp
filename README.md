@@ -50,6 +50,9 @@ Get up and running in 3 steps:
    ```   
    Restart VS Code and ask in Copilot Chat: *"What vehicles are available?"*
 
+   **Option C: Cloud deployment (ChatGPT, Claude.ai, …)**  
+   Deploy to Railway (or any Docker host) – see [Cloud Deployment](#cloud-deployment) below.
+
 For detailed instructions, see sections below.
 
 ---
@@ -58,9 +61,11 @@ For detailed instructions, see sections below.
 
 - **MCP Server**: Provides a standard MCP interface for accessing vehicle data
 - **Volkswagen Integration**: Connects to VW vehicles using the `carconnectivity` library
-- **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, and other MCP-compatible tools
-- **Flexible CLI**: Multiple transport modes (stdio and HTTP)
-- **Configurable**: Easily adapt connection and authentication settings via config file
+- **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, ChatGPT, Claude.ai and other MCP-compatible tools
+- **Cloud Deployable**: Ships with `Dockerfile`, `docker-compose.yml` and Railway config for one-command cloud deployment
+- **API-Key Authentication**: Bearer token auth for secure public HTTP endpoints
+- **Flexible CLI**: Multiple transport modes (stdio for local, HTTP for cloud)
+- **Configurable**: Credentials via config file or environment variables (for Docker / Railway)
 
 
 ## Getting Started
@@ -343,23 +348,160 @@ The server uses the standard MCP protocol and works with all MCP-compatible tool
 
 ### HTTP Mode for API Access
 
-You can also start the server in HTTP mode for programmatic access:
+You can also start the server in HTTP mode for programmatic access or local testing of the cloud setup:
 
 ```bash
-python -m weconnect_mcp.cli.mcp_server_cli \
-    /path/to/config.json \
-    --transport http \
-    --port 8765
+MCP_API_KEY=your-secret-key \
+VW_USERNAME=your@email.com \
+VW_PASSWORD=yourpassword \
+VW_SPIN=1234 \
+./scripts/start_server_http.sh 8080
 ```
 
-The server will then be available at `http://localhost:8765`.
+The server will then be available at `http://localhost:8080`.
 
-- **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
-- **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
-- **[tests/README.md](tests/README.md)** - Test suite overview
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+- MCP endpoint: `http://localhost:8080/mcp`
+- Health check: `http://localhost:8080/health`
 
 ---
+
+## Cloud Deployment
+
+The server ships with a `Dockerfile` and supports full cloud deployment, enabling connections from web-based AI services such as **ChatGPT**, **Claude.ai**, or any other MCP-compatible client.
+
+### Architecture
+
+In HTTP/cloud mode the server starts two things independently:
+
+1. **HTTP server** starts immediately → cloud health checks pass right away
+2. **VW OAuth login** runs in the background (takes up to 30 s) → `/health` reports `"ready": false` until complete, then `"ready": true`
+
+Tools called before the VW adapter is ready return a friendly `"Server is still starting"` error instead of crashing.
+
+### Option A: Railway (recommended)
+
+[Railway](https://railway.com) is a platform-as-a-service that builds and runs your Docker container automatically. It detects the `Dockerfile` and `railway.toml` in this repo with zero configuration.
+
+**Step 1 – Install Railway CLI and log in**
+```bash
+brew install railway     # macOS; see https://docs.railway.com/guides/cli for other OSes
+railway login
+```
+
+**Step 2 – Create project and deploy**
+```bash
+cd /path/to/weconnect_mvp
+railway init             # creates a new Railway project linked to this directory
+railway up --detach      # builds the Docker image and deploys it
+```
+
+**Step 3 – Set secret environment variables**  
+Never put credentials in the repository. Set them in the Railway dashboard instead:
+
+```bash
+railway variables set VW_USERNAME="your@email.com"
+railway variables set VW_PASSWORD="yourpassword"
+railway variables set VW_SPIN="1234"
+railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+Or go to: **railway.com → your project → service → Variables**
+
+**Step 4 – Get the public URL**
+```bash
+railway domain           # e.g. https://weconnectmcp-production.up.railway.app
+```
+
+**Step 5 – Verify**
+```bash
+curl https://<your-subdomain>.up.railway.app/health
+# → {"status": "ok", "ready": true, "service": "weconnect-mcp"}
+```
+
+Every `git push` followed by `railway up` redeploys the service.
+
+---
+
+### Option B: Docker (local or any host)
+
+**Local test with Docker Compose:**
+```bash
+cp .env.example .env   # fill in your real credentials
+docker compose up --build
+```
+
+The server is then available at `http://localhost:8080`.
+
+**Manual Docker run:**
+```bash
+docker build -t weconnect-mcp .
+docker run -p 8080:8080 \
+  -e VW_USERNAME="your@email.com" \
+  -e VW_PASSWORD="yourpassword" \
+  -e VW_SPIN="1234" \
+  -e MCP_API_KEY="your-secret-key" \
+  weconnect-mcp
+```
+
+---
+
+### Environment Variables (Cloud / Docker)
+
+Credentials and the API key are passed via environment variables — **never put them in the repository**:
+
+| Variable | Required | Description |
+|---|---|---|
+| `VW_USERNAME` | ✅ | VW WeConnect account e-mail |
+| `VW_PASSWORD` | ✅ | VW WeConnect account password |
+| `VW_SPIN` | ✅ | 4-digit S-PIN |
+| `MCP_API_KEY` | ✅ | Bearer token clients must send for authentication |
+| `PORT` | auto | HTTP port (Railway injects this automatically; default: `8080`) |
+| `CORS_ORIGINS` | optional | Comma-separated allowed origins (default: `*`) |
+
+Generate a strong API key:
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+---
+
+### Connecting AI Clients to the Cloud Server
+
+Once deployed, point any MCP-compatible client at your public URL:
+
+- **MCP endpoint:** `https://<your-host>/mcp`
+- **Authentication:** HTTP header `Authorization: Bearer <MCP_API_KEY>`
+
+**Claude.ai:**  
+Settings → Integrations → Add MCP Server → enter URL and header
+
+**ChatGPT Custom GPT:**  
+Configure → Actions → select MCP → enter URL and `Authorization: Bearer <key>`
+
+**GitHub Copilot (VS Code) via remote server:**  
+Add to `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "weconnect-cloud": {
+      "type": "http",
+      "url": "https://<your-host>/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Security Notes for Cloud Deployment
+
+⚠️ **Always set `MCP_API_KEY`** – without it the server runs unauthenticated  
+⚠️ **Never commit `.env` or `src/config.json`** – both are gitignored  
+⚠️ **Rotate the key** if it is ever exposed (e.g. accidentally pasted into a chat)  
+⚠️ The `/health` endpoint is intentionally unauthenticated (required for health checks)  
 
 ## Testing
 
@@ -384,6 +526,15 @@ Run the test suite with:
 - **18 slow real API tests** - Require valid VW account in `src/config.json`
 
 For detailed test documentation, see [tests/README.md](tests/README.md)
+
+---
+
+## Additional Documentation
+
+- **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
+- **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
+- **[tests/README.md](tests/README.md)** - Test suite overview
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 
 ---
 
@@ -416,12 +567,13 @@ For more information, see [.github/agents/README.md](.github/agents/README.md).
 
 ### Security Best Practices
 
-⚠️ **Never** commit `config.json` with your VW credentials!  
+⚠️ **Never** commit `config.json` or `.env` with your VW credentials!  
 ⚠️ Add `src/config.json` to `.gitignore` if not already done  
 ⚠️ The token store (default: `/tmp/tokenstore`) contains session tokens - keep it secure  
 ⚠️ Use environment variables for sensitive data in production  
-⚠️ HTTP mode should only be used in trusted networks  
-⚠️ Consider additional authentication for production deployments
+⚠️ **Always set `MCP_API_KEY`** when running in HTTP mode on a public network  
+⚠️ Rotate `MCP_API_KEY` immediately if it was ever accidentally exposed  
+⚠️ The `/health` endpoint is intentionally unauthenticated (required for Railway / Docker health checks)
 
 ---
 
