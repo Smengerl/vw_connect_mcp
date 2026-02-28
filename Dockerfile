@@ -30,8 +30,12 @@ COPY --from=builder /install /usr/local
 # Copy application source
 COPY src/ ./src/
 
-# Writable directory for token store (carconnectivity caches OAuth tokens here)
-RUN mkdir -p /tmp/tokenstore && chown mcpuser /tmp/tokenstore
+# Make the src/ directory importable as a Python package root
+ENV PYTHONPATH=/app/src
+
+# Writable directory for token store (carconnectivity caches OAuth tokens here).
+# The CLI passes /tmp/tokenstore as a FILE PREFIX, not a directory.
+RUN mkdir -p /tmp && chown mcpuser /tmp
 
 USER mcpuser
 
@@ -53,8 +57,10 @@ EXPOSE $PORT
 # _maybe_patch_config_from_env() in mcp_server_cli.py
 COPY src/config.example.json /app/config.json
 
-CMD ["python", "-m", "weconnect_mcp.cli.mcp_server_cli", \
-    "/app/config.json", \
-    "--transport", "http", \
-    "--port", "8080", \
-    "--log-level", "INFO"]
+# Shell form so that $PORT is expanded at runtime.
+# Railway injects PORT automatically; locally it defaults to 8080.
+CMD python -m weconnect_mcp.cli.mcp_server_cli \
+    /app/config.json \
+    --transport http \
+    --port "${PORT:-8080}" \
+    --log-level INFO
