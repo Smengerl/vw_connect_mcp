@@ -70,8 +70,9 @@ def test_list_vehicles_combustion_vehicle_data(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_list_vehicles_tool_is_registered(mcp_server):
+async def test_list_vehicles_resource_is_registered(mcp_server):
     """Test that list_vehicles is available as a resource in the MCP server"""
     resources = await mcp_server.get_resources()
     

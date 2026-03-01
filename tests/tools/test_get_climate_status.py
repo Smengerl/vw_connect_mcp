@@ -211,8 +211,9 @@ def test_climate_status_different_between_vehicles(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_get_climate_status_tools_are_registered(mcp_server):
+async def test_get_climate_status_resource_are_registered(mcp_server):
     """Test that climate status resources are registered in the MCP server"""
     resource_templates = await mcp_server.get_resource_templates()
     

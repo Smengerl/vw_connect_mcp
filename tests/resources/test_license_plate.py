@@ -1,9 +1,16 @@
 """Tests for license_plate field in VehicleModel.
 
 Verifies that license_plate is correctly returned in get_vehicle() calls.
+
+Note:
+    These tests require register_resources() to be active in mcp_server.py.
+    They are marked with @pytest.mark.mcp_resources and skipped by default
+    (see test.sh --skip-slow and pytest.ini).
 """
 import pytest
 from src.weconnect_mcp.adapter.abstract_adapter import VehicleDetailLevel
+
+pytestmark = pytest.mark.mcp_resources
 
 
 def test_get_vehicle_returns_license_plate_basic(adapter):

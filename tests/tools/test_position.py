@@ -73,8 +73,9 @@ def test_position_coordinates_valid_ranges(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_get_position_tool_is_registered(mcp_server):
+async def test_get_position_resource_is_registered(mcp_server):
     """Test that get_position is available as a resource in the MCP server"""
     resource_templates = await mcp_server.get_resource_templates()
     

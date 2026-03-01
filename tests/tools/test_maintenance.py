@@ -87,8 +87,9 @@ def test_maintenance_info_oil_service_only_combustion(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_get_maintenance_info_tool_is_registered(mcp_server):
+async def test_get_maintenance_info_resource_is_registered(mcp_server):
     """Test that get_maintenance_info is available as a resource in the MCP server"""
     resource_templates = await mcp_server.get_resource_templates()
     

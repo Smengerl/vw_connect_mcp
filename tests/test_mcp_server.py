@@ -46,6 +46,7 @@ async def test_mcp_client_connects(mcp_client):
 
 # ==================== MCP TOOL INVOCATION TESTS ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_climatization_state(mcp_client):
@@ -66,6 +67,7 @@ async def test_mcp_get_climatization_state(mcp_client):
     assert climatization_dict["target_temperature_celsius"] == 22.0
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_maintenance_info(mcp_client):
@@ -87,6 +89,7 @@ async def test_mcp_get_maintenance_info(mcp_client):
     assert maintenance_dict["oil_service_due_distance_km"] == 8000
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_range_info(mcp_client):
@@ -110,6 +113,7 @@ async def test_mcp_get_range_info(mcp_client):
     assert "tank_level_percent" not in range_dict
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_window_heating_state(mcp_client):
@@ -129,6 +133,7 @@ async def test_mcp_get_window_heating_state(mcp_client):
     assert window_heating_dict["rear"]["state"] == "on"
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_lights_state(mcp_client):
@@ -148,6 +153,7 @@ async def test_mcp_get_lights_state(mcp_client):
     assert lights_dict["right"]["state"] == "ok"
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_position(mcp_client):
@@ -170,6 +176,7 @@ async def test_mcp_get_position(mcp_client):
 
 
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
 async def test_mcp_get_battery_status(mcp_client):

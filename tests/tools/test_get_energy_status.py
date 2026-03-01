@@ -227,8 +227,9 @@ def test_energy_status_battery_fallback_from_charging_state(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_get_energy_status_tools_are_registered(mcp_server):
+async def test_get_energy_status_resource_are_registered(mcp_server):
     """Test that energy status resources are registered in the MCP server"""
     resource_templates = await mcp_server.get_resource_templates()
     

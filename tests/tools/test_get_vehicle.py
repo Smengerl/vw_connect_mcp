@@ -138,8 +138,9 @@ def test_get_vehicle_vin_matches_request(adapter):
 
 # ==================== MCP SERVER REGISTRATION ====================
 
+@pytest.mark.mcp_resources
 @pytest.mark.asyncio
-async def test_get_vehicle_info_tool_is_registered(mcp_server):
+async def test_get_vehicle_info_resouce_is_registered(mcp_server):
     """Test that get_vehicle_info is available as a resource in the MCP server"""
     resource_templates = await mcp_server.get_resource_templates()
     

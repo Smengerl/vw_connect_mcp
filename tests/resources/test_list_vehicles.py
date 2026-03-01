@@ -18,6 +18,11 @@ Resource tested:
 Test data:
 - Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
 - Expected values from tests.test_data module
+
+Note:
+    These tests require register_resources() to be active in mcp_server.py.
+    They are marked with @pytest.mark.mcp_resources and skipped by default
+    (see test.sh --skip-slow and pytest.ini).
 """
 import pytest
 import json
@@ -32,6 +37,8 @@ from test_data import (
 
 import logging
 logger = logging.getLogger(__name__)
+
+pytestmark = pytest.mark.mcp_resources
 
 
 # ==================== TESTS - RESOURCE REGISTRATION ====================

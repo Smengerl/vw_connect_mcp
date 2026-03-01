@@ -21,7 +21,7 @@ usage() {
     echo "Run pytest on all tests in tests/ directory and subdirectories."
     echo ""
     echo "Options:"
-    echo "  --skip-slow       Skip tests marked as 'slow' or 'real_api'"
+    echo "  --skip-slow       Skip tests marked as 'slow', 'real_api', or 'mcp_resources'"
     echo "  -v, --verbose     Run pytest in verbose mode"
     echo "  -h, --help        Show this help message"
     echo ""
@@ -70,8 +70,8 @@ PYTEST_CMD=("$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" --capture=no)
 
 # Add markers if skipping slow tests
 if [ "$SKIP_SLOW" = true ]; then
-    PYTEST_CMD+=(-m "not real_api and not slow")
-    echo "Running fast tests only (skipping slow/real_api tests)"
+    PYTEST_CMD+=(-m "not real_api and not slow and not mcp_resources")
+    echo "Running fast tests only (skipping slow/real_api/mcp_resources tests)"
 else
     echo "Running ALL tests (including slow real API tests)"
 fi
@@ -85,7 +85,7 @@ if [ -n "$PYTEST_LOG" ]; then
 fi
 
 # Add any remaining arguments
-PYTEST_CMD+=("${PYTEST_ARGS[@]}")
+PYTEST_CMD+=("${PYTEST_ARGS[@]+"${PYTEST_ARGS[@]}"}")
 
 echo "Running tests from: ${ROOT_DIR}/tests/"
 
