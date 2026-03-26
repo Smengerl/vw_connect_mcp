@@ -877,3 +877,17 @@ All tools and resources include **hierarchical tags** for MCP client filtering a
 
 **Usage**: MCP clients can filter tools by tags to show only relevant operations (e.g., show only `bev-phev` tools when working with electric vehicles, or only `read` tools when browsing data).
 
+---
+
+## Maintainer note: keep docs in sync
+
+**Whenever you add, remove, or rename MCP tools or resources, you MUST update `README.md` accordingly** to avoid documentation drift.
+
+The source of truth for the exposed interface is:
+- **Read tools**: `src/weconnect_mcp/server/mixins/read_tools.py`
+- **Command tools**: `src/weconnect_mcp/server/mixins/command_tools.py`
+- **Resources**: `src/weconnect_mcp/server/mixins/resources.py`
+- **Agent instructions**: this file (`AI_INSTRUCTIONS.md`)
+
+All four locations (README, AI_INSTRUCTIONS.md, read_tools.py, command_tools.py, resources.py) must stay consistent at all times.
+
