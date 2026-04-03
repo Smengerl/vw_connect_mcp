@@ -219,23 +219,72 @@ python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --l
 
 ## AI Integration
 
-This MCP server provides **5 tools** that AI assistants can use to interact with your VW vehicle:
+This MCP server provides **18 tools** (8 read + 10 command) that AI assistants can use to interact with your VW vehicle, plus 15 URI-based **MCP Resources** for declarative data access.
+
+> **Source of truth:** The canonical, up-to-date tool reference lives in  
+> [`src/weconnect_mcp/server/AI_INSTRUCTIONS.md`](src/weconnect_mcp/server/AI_INSTRUCTIONS.md)  
+> and in the tool registration files  
+> `src/weconnect_mcp/server/mixins/read_tools.py` / `command_tools.py`.
+
+### MCP Tools (Preferred for AI Assistants)
+
+**Read tools (8) — query vehicle data:**
 
 | Tool | Description |
 |------|-------------|
-| `list_vehicles` | Get all available vehicle IDs |
-| `get_vehicle_state` | Get complete vehicle state (battery, position, doors, windows, climate, tyres) |
-| `get_vehicle_doors` | Get door lock and open/closed status |
-| `get_vehicle_windows` | Get window open/closed status |
-| `get_vehicle_tyres` | Get tyre pressure and temperature |
+| `get_vehicles` | List all available vehicles (name, VIN, model) |
+| `get_vehicle_info` | Basic vehicle info (model, year, type) |
+| `get_vehicle_state` | Complete state snapshot (battery, doors, climate, position, …) |
+| `get_vehicle_doors` | Door lock and open/closed status |
+| `get_battery_status` | Quick battery level check (BEV/PHEV) |
+| `get_climatization_status` | Climate control status and target temperature |
+| `get_charging_status` | Charging details and remaining time (BEV/PHEV) |
+| `get_vehicle_position` | GPS location (latitude, longitude, heading) |
+
+**Command tools (10) — control vehicle remotely:**
+
+| Tool | Description |
+|------|-------------|
+| `lock_vehicle` | Lock all doors |
+| `unlock_vehicle` | Unlock all doors |
+| `start_climatization` | Start climate control (optional target temperature in °C) |
+| `stop_climatization` | Stop climate control |
+| `start_charging` | Start charging session (BEV/PHEV) |
+| `stop_charging` | Stop charging session (BEV/PHEV) |
+| `flash_lights` | Flash lights for vehicle location (optional duration in seconds) |
+| `honk_and_flash` | Honk and flash lights (optional duration in seconds) |
+| `start_window_heating` | Start window/rear-window defrost |
+| `stop_window_heating` | Stop window/rear-window defrost |
+
+### MCP Resources (URI-Based Read Access)
+
+Resources provide the same data as read tools via stable URIs and are suited for declarative access patterns. **AI assistants should prefer Tools** for interactive conversations.
+
+| Resource URI | Description |
+|---|---|
+| `data://vehicles` | List all vehicles |
+| `data://vehicle/{id}/info` | Basic vehicle information |
+| `data://vehicle/{id}/state` | Complete vehicle state snapshot |
+| `data://vehicle/{id}/doors` | Door lock/open status |
+| `data://vehicle/{id}/windows` | Window open/closed status |
+| `data://vehicle/{id}/tyres` | Tyre pressure and temperature |
+| `data://vehicle/{id}/type` | Propulsion type (BEV / PHEV / ICE) |
+| `data://vehicle/{id}/charging` | Detailed charging status (BEV/PHEV) |
+| `data://vehicle/{id}/climate` | Climate control status |
+| `data://vehicle/{id}/maintenance` | Service schedule information |
+| `data://vehicle/{id}/range` | Range and fuel/battery levels |
+| `data://vehicle/{id}/window-heating` | Window heating/defrost status |
+| `data://vehicle/{id}/lights` | Lights status |
+| `data://vehicle/{id}/position` | GPS location |
+| `data://vehicle/{id}/battery` | Quick battery check (BEV/PHEV) |
 
 ### What AI Assistants Can Do
 
-✅ List vehicles and recognize their IDs  
-✅ Intelligently interpret vehicle status  
-✅ Retrieve specific information (doors, windows, tyres)  
-✅ Answer natural questions like "Where is my car?"  
-✅ Combine multiple queries for complex answers  
+✅ List vehicles and identify them by name or VIN  
+✅ Read full or targeted vehicle status (battery, doors, climate, position, …)  
+✅ Execute remote commands (lock, charge, climatize, flash lights, …)  
+✅ Answer natural questions like "Where is my car?" or "Is it locked?"  
+✅ Combine multiple queries and commands for complex tasks  
 
 ---
 
