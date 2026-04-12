@@ -3,27 +3,10 @@
 **Type**: MCP Server (Python) for Volkswagen WeConnect vehicle data and control  
 **Architecture**: Modular adapter with mixins (CacheMixin, VehicleResolutionMixin, CommandMixin, StateExtractionMixin)  
 **Key Library**: `carconnectivity` (third-party VW API wrapper)  
-**Languages**: Python 3.10+ (tested with Python 3.14)
-**Project Size**: ~50 files, ~5000 lines of code
+**Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)  
 **Test Suite**: 215 tests (197 mock + 18 real API) - **197 MOCK TESTS MUST PASS** before committing
 
-## Repository Overview
-
-**Purpose**: MCP (Model Context Protocol) server that exposes Volkswagen WeConnect vehicle data and control commands to AI assistants (Claude, Copilot, etc.)
-
-**Key Dependencies**:
-- `carconnectivity` (0.9.2) - Third-party VW API wrapper
-- `mcp` (1.25.0) - Model Context Protocol SDK
-- `pydantic` (2.12.5) - Data validation
-- `pytest` (9.0.2) - Testing framework
-- `fastmcp` (2.14.1) - Fast MCP server implementation
-
-## Technology Stack
-
-- **Python 3.10+** with modern type hints (`dict[str, Any]`, not `Dict`)
-- **MCP SDK** for protocol implementation
-- **Pydantic** for data models (all fields `Optional` - VW API is unreliable)
-- **pytest** for testing - **197 MOCK TESTS MUST PASS** (18 real API tests will fail without VW credentials)
+> For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**.
 
 ## Code Style (Non-Negotiable)
 
@@ -47,144 +30,6 @@ if battery is not None:
 # ❌ Bad - will crash
 level = vehicle.battery.level.value
 ```
-
-## First-Time Setup (For Developers)
-
-⚠️ **IMPORTANT FOR CODING AGENTS**: The developer must have already completed this setup with real VW credentials. **DO NOT modify or create config.json** - it contains the developer's VW credentials and should never be committed to the repository.
-
-**For developers setting up locally (ONE TIME ONLY)**:
-
-```bash
-# 1. Clone and navigate to repository
-git clone https://github.com/Smengerl/weconnect_mvp.git
-cd weconnect_mvp
-
-# 2. Setup virtual environment and install dependencies (~30 seconds)
-./scripts/setup.sh
-# This creates .venv/, installs dependencies, and creates config.json from example
-
-# 3. Edit config.json with YOUR REAL VW WeConnect credentials
-nano src/config.json  # or code src/config.json
-# Required: username (VW email), password, spin (4-digit S-PIN)
-
-# 4. Activate virtual environment
-source .venv/bin/activate
-
-# 5. Verify setup - run mock tests (~7 seconds, expect 197 passed)
-./scripts/test.sh --skip-slow
-```
-
-**Expected output**: `197 passed, 18 deselected` (real API tests are skipped)
-
-## Build & Test Commands (Use These Before Committing)
-
-### Testing (CRITICAL)
-
-**ALWAYS use `./scripts/test.sh` - do NOT run pytest directly**
-
-```bash
-# Fast mock tests only (~7 seconds) - use this during development
-# These tests use TestAdapter (fake data) and DO NOT require VW credentials
-./scripts/test.sh --skip-slow
-# Expected: 197 passed, 18 deselected
-
-# All tests including real API tests (~30 seconds)
-# These WILL FAIL unless config.json has valid VW credentials
-# DO NOT use in automated environments without credentials
-./scripts/test.sh
-# Expected with credentials: 215 passed
-# Expected without credentials: 197 passed, 18 failed
-
-# Verbose output for debugging
-./scripts/test.sh --skip-slow -v
-```
-
-**Test Categories**:
-- **Mock tests (197)**: Use `TestAdapter` with fake data - no VW credentials needed
-  - `tools/` (76 tests) - Adapter method tests
-  - `commands/` (74 tests) - Command execution tests  
-  - `resources/` (27 tests) - MCP resource tests
-  - `test_caching.py` (12 tests) - Cache behavior
-  - `test_mcp_server.py` (8 tests) - MCP protocol
-- **Real API tests (18)**: Marked with `@pytest.mark.real_api` - require valid VW credentials
-  - `real_api/` directory - WILL FAIL without credentials
-
-**Pre-commit requirement**: `./scripts/test.sh --skip-slow` must show **197 passed**
-
-**IMPORTANT**: Real API tests (`./scripts/test.sh` without `--skip-slow`) will fail for agents working remotely or without VW credentials configured. This is expected and normal. Only mock tests need to pass for code contributions.
-
-### Running the Server
-
-```bash
-# Foreground (logs to console) - use for development/debugging
-./scripts/start_server_fg.sh
-
-# Background (logs to logs/server.log) - use for integration testing
-./scripts/start_server_bg.sh
-./scripts/stop_server_bg.sh  # Stop background server
-
-# Direct invocation with custom settings
-python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --transport stdio
-
-# Test with MCP inspector tool
-npx @modelcontextprotocol/inspector python -m weconnect_mcp.server
-```
-
-**Server startup time**: 10-30 seconds on first run (VW API connection requires valid credentials)
-
-### No Build Step Required
-
-This is a pure Python project - **no compilation needed**. Just install dependencies with `./scripts/setup.sh` and run.
-
-## Project Structure & Key Files
-
-```
-weconnect_mvp/
-├── src/weconnect_mcp/              # Main package
-│   ├── adapter/                    # Core adapter implementation
-│   │   ├── abstract_adapter.py     # Base class + Pydantic models (VehicleModel, etc.)
-│   │   ├── carconnectivity_adapter.py  # ⭐ Main adapter (mixin composition)
-│   │   ├── test_adapter.py         # ⭐ Mock adapter for testing (fake data)
-│   │   └── mixins/                 # Mixin pattern components
-│   │       ├── cache_mixin.py      # 5-min caching with auto-invalidation
-│   │       ├── vehicle_resolution_mixin.py  # VIN/name → vehicle lookup
-│   │       ├── command_mixin.py    # ⭐ 10 vehicle commands (lock, climate, charging, etc.)
-│   │       └── state_extraction_mixin.py  # ⭐ Extract state from carconnectivity
-│   ├── server/                     # MCP server implementation
-│   │   ├── mcp_server.py           # FastMCP server setup
-│   │   ├── tools.py                # ⭐ MCP tool definitions (18 tools)
-│   │   └── resources.py            # ⭐ MCP resource definitions (14 resources)
-│   └── cli/                        # CLI entry points
-│       └── mcp_server_cli.py       # Main server CLI with argparse
-├── tests/                          # 215 tests (197 mock + 18 real API)
-│   ├── conftest.py                 # ⭐ Central fixtures (mock_adapter, real_adapter)
-│   ├── tools/                      # 76 tests for adapter methods
-│   ├── commands/                   # 74 tests for vehicle commands
-│   ├── resources/                  # 27 tests for MCP resources
-│   ├── real_api/                   # 18 real VW API tests (require credentials)
-│   ├── test_caching.py             # 12 cache invalidation tests
-│   ├── test_mcp_server.py          # 8 MCP protocol tests
-│   └── README.md                   # Detailed test documentation
-├── scripts/                        # Development scripts
-│   ├── setup.sh                    # ⭐ ONE-TIME: Setup venv + dependencies
-│   ├── test.sh                     # ⭐ Run pytest with proper markers
-│   ├── start_server_fg.sh          # Start server (foreground, logs to console)
-│   ├── start_server_bg.sh          # Start server (background, logs to file)
-│   ├── stop_server_bg.sh           # Stop background server
-│   └── create_*_config.sh          # Generate AI assistant configs
-├── src/config.json                 # ⚠️ VW credentials (gitignored, NEVER commit!)
-├── src/config.example.json         # Template for config.json
-├── requirements.txt                # Python dependencies (pip install -r)
-├── pytest.ini                      # Pytest configuration (markers, async mode)
-├── README.md                       # User-facing documentation
-├── CONTRIBUTING.md                 # Contribution guidelines
-└── .github/copilot-instructions.md # This file
-```
-
-**Configuration Files**:
-- `pytest.ini` - Defines test markers (`real_api`, `slow`), async mode
-- `src/config.json` - **NEVER EDIT OR COMMIT** - contains VW credentials
-- `requirements.txt` - All Python dependencies
 
 ## Architecture (Mixin Pattern)
 
@@ -254,46 +99,8 @@ if battery_level is None and charging_state and charging_state.current_soc_perce
 
 ## Testing Guidelines (CRITICAL)
 
-**Golden Rule**: All 197 mock tests MUST pass before committing. No exceptions.
-
-### Test Structure
-```
-tests/
-├── commands/          # Test all 10 command methods (74 tests)
-│   ├── test_charging.py
-│   ├── test_climatization.py
-│   ├── test_lights_horn.py
-│   ├── test_lock_unlock.py
-│   └── test_window_heating.py
-├── tools/            # Test MCP tool layer (76 tests)
-│   ├── test_get_battery_status.py
-│   ├── test_get_climate_status.py
-│   ├── test_get_energy_status.py
-│   └── ...
-├── resources/        # Test MCP resources (27 tests)
-├── real_api/         # Real VW API tests (18 tests, require credentials)
-├── test_caching.py   # Cache behavior (12 tests)
-├── test_adapter.py   # Adapter tests
-└── test_mcp_server.py  # MCP protocol tests (8 tests)
-```
-
-### Running Tests
-```bash
-# Before every commit - ALL mock tests must pass
-./scripts/test.sh --skip-slow
-# Expected: 197 passed, 18 deselected in ~7 seconds
-
-# Specific test file
-pytest tests/commands/test_climatization.py -v
-
-# With coverage
-pytest tests/ --cov=src/weconnect_mcp -m "not real_api"
-
-# Real API tests (will fail without VW credentials)
-./scripts/test.sh
-# Expected with credentials: 215 passed
-# Expected without credentials: 197 passed, 18 failed (real_api tests)
-```
+**Golden Rule**: All 197 mock tests MUST pass before committing. No exceptions.  
+**Always use `./scripts/test.sh --skip-slow`** (not `pytest` directly) — see `tests/README.md` for full test structure and commands.
 
 ### Writing Tests - MANDATORY for New Features
 
@@ -306,66 +113,44 @@ pytest tests/ --cov=src/weconnect_mcp -m "not real_api"
 **Example - Adding a New Command**:
 ```python
 # File: tests/commands/test_new_feature.py
-import pytest
 from weconnect_mcp.adapter import TestAdapter
 
 def test_new_command_success():
-    """Test successful command execution."""
     adapter = TestAdapter()
     result = adapter.new_command("TestVehicle")
-    
     assert result["success"] is True
     assert "message" in result
 
 def test_new_command_vehicle_not_found():
-    """Test error when vehicle doesn't exist."""
     adapter = TestAdapter()
     result = adapter.new_command("NonExistent")
-    
     assert result["success"] is False
-    assert "error" in result
     assert "not found" in result["error"].lower()
 
 def test_new_command_invalidates_cache():
-    """Test that command invalidates cache."""
     adapter = TestAdapter()
-    
-    # Execute command
     adapter.new_command("TestVehicle")
-    
-    # Verify cache was invalidated
     assert adapter._last_fetch_time is None
 ```
 
 **Example - Adding a New State Getter**:
 ```python
 # File: tests/tools/test_get_new_status.py
-import pytest
 from weconnect_mcp.adapter import TestAdapter
 
 def test_get_new_status_success():
-    """Test successful status retrieval."""
     adapter = TestAdapter()
     status = adapter.get_new_status("TestVehicle")
-    
     assert status is not None
-    # Test specific fields
-    assert hasattr(status, 'field_name')
 
 def test_get_new_status_vehicle_not_found():
-    """Test None returned for non-existent vehicle."""
     adapter = TestAdapter()
-    status = adapter.get_new_status("NonExistent")
-    
-    assert status is None
+    assert adapter.get_new_status("NonExistent") is None
 
 def test_get_new_status_handles_none_values():
-    """Test graceful handling of None values from VW API."""
     adapter = TestAdapter()
     status = adapter.get_new_status("VehicleWithPartialData")
-    
-    # Should not crash, should return model with None fields
-    assert status is not None
+    assert status is not None  # Should not crash, fields may be None
 ```
 
 ### Test Development Workflow
@@ -396,55 +181,7 @@ doors = adapter.get_vehicle_doors("TestVehicle")
 assert doors.lock_state == "locked"
 ```
 
-### Integration Tests
-
-For real VW API testing, use scripts (not pytest):
-```bash
-# Located in scripts/
-./scripts/vehicle_command.sh ID7 lock_vehicle
-./scripts/vehicle_command.sh Golf get_battery_status
-```
-
-## Development Scripts
-
-Located in `scripts/` for setup, testing, and server management:
-
-```bash
-# Setup & Environment
-./scripts/setup.sh              # ONE-TIME: Create venv, install deps, create config
-./scripts/activate_venv.sh      # Activate virtual environment
-
-# Testing
-./scripts/test.sh --skip-slow   # Run mock tests only (~7s, 197 tests)
-./scripts/test.sh               # Run all tests including real API (~30s, 215 tests)
-./scripts/test.sh --skip-slow -v # Verbose mode
-
-# Server Management
-./scripts/start_server_fg.sh    # Start in foreground (logs to console)
-./scripts/start_server_bg.sh    # Start in background (logs to logs/server.log)
-./scripts/stop_server_bg.sh     # Stop background server
-
-# AI Integration Configuration
-./scripts/create_claude_config.sh           # Generate Claude Desktop config
-./scripts/create_github_copilot_config.sh   # Generate GitHub Copilot config
-./scripts/create_copilot_desktop_config.sh  # Generate Copilot Desktop config
-
-# Manual Testing (requires real VW credentials)
-./scripts/vehicle_command.sh <vehicle_id> <command>
-# Examples:
-./scripts/vehicle_command.sh ID7 start_charging
-./scripts/vehicle_command.sh Golf lock_vehicle
-```
-
-**When to use scripts**:
-- `setup.sh` - First time setup only (developer, not agent)
-- `test.sh` - Always use for testing (not `pytest` directly)
-- `start_server_*.sh` - When testing server functionality
-- `vehicle_command.sh` - Manual testing with real vehicles during development
-
-**When NOT to use scripts**:
-- In CI/CD (no scripts configured yet)
-- In automated environments without VW credentials
+For real VW API testing, use `./scripts/vehicle_command.sh <vehicle_id> <command>` (requires VW credentials).
 
 ## Common Patterns & Anti-Patterns
 
@@ -473,15 +210,6 @@ def lock_vehicle(self, vehicle_id: str) -> dict[str, Any]:
     # ... execute command ...
     self.invalidate_cache()  # Force fresh data on next read
     return {"success": True}
-```
-
-### ✅ DO: Use Descriptive Variable Names
-```python
-# Good
-charging_power_kw = charging.power.value if charging.power is not None else None
-
-# Bad
-p = charging.power.value
 ```
 
 ## MCP-Specific Guidelines
@@ -563,31 +291,7 @@ def get_vehicle_info(self, vehicle_id: str) -> Optional[VehicleModel]:
 ### Commits
 - Use conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`
 - Keep commits atomic (one logical change)
-- Run tests before committing: `pytest tests/ -v`
-
-### Branches
-- `main`: Production-ready code
-- Feature branches: `feature/description`
-- Bugfix branches: `fix/description`
-
-## Performance Considerations
-
-1. **Caching is critical** - VW API has strict rate limits
-2. **Lazy loading** - Don't fetch data until needed
-3. **Batch operations** - Get all vehicles at once, not one by one
-4. **Connection pooling** - `carconnectivity` handles this
-
-## Security Notes
-
-- **Credentials**: Never commit `config.json` or `.netrc` files
-- **Token storage**: `tokenstore.json` is gitignored
-- **Logging**: Don't log sensitive data (VINs OK, tokens NOT OK)
-
-## When to Ask for Help
-
-- Adding new vehicle features? Check `carconnectivity` library docs first
-- MCP protocol questions? Check MCP SDK documentation
-- VW API behaving weird? It's normal - VW API is unreliable, handle gracefully
+- Run tests before committing: `./scripts/test.sh --skip-slow`
 
 ## Quick Reference
 
@@ -614,22 +318,6 @@ python -m weconnect_mcp.server
 # Test with MCP inspector
 npx @modelcontextprotocol/inspector python -m weconnect_mcp.server
 ```
-
-## Validation & CI/CD
-
-**No GitHub Actions or automated CI/CD configured**
-
-Manual pre-commit validation steps:
-1. Run mock tests: `./scripts/test.sh --skip-slow` → Must show **197 passed, 18 deselected**
-2. Visual code review for style compliance
-3. Check no sensitive data in commits (`config.json` is gitignored)
-
-**Real API tests**: Marked with `@pytest.mark.real_api`, require valid VW credentials in `src/config.json`. These will fail in:
-- Remote/cloud environments without credentials
-- CI/CD pipelines (no credentials available)
-- Any environment where `config.json` doesn't contain real VW account details
-
-This is **expected behavior** - only mock tests need to pass for code contributions.
 
 ---
 
