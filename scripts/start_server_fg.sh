@@ -31,4 +31,5 @@ if [ -f "$VENV_ACTIVATE" ]; then
 fi
 
 echo "Starting server (foreground) with config=${CONFIG}"
-"$VENV_PYTHON" "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile "$TOKENSTORE" --log-level DEBUG "$@"
+PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}" \
+  "$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli "${CONFIG}" --tokenstorefile "$TOKENSTORE" --log-level DEBUG "$@"

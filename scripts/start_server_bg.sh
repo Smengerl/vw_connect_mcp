@@ -29,10 +29,10 @@ echo "Starting server (background) with config=${CONFIG}"
 if [ "$IS_WINDOWS" = true ]; then
   # On Windows, use 'start' command for background execution
   echo "Note: Server runs in background. Check logs at: ${LOG_FILE}"
-  cmd /c "cd \"$ROOT_DIR\" && \"$VENV_PYTHON\" src/weconnect_mcp/cli/mcp_server_cli.py \"$CONFIG\" --tokenstorefile \"$TOKENSTORE\" --transport=http > \"$LOG_FILE\" 2>&1 &"
+  cmd /c "cd \"$ROOT_DIR\" && set PYTHONPATH=$ROOT_DIR/src;%PYTHONPATH% && \"$VENV_PYTHON\" -m weconnect_mcp.cli.mcp_server_cli \"$CONFIG\" --tokenstorefile \"$TOKENSTORE\" --transport=http > \"$LOG_FILE\" 2>&1 &"
 else
   # On Unix-like systems, use nohup
-  nohup "$VENV_PYTHON" "${ROOT_DIR}/src/weconnect_mcp/cli/mcp_server_cli.py" "${CONFIG}" --tokenstorefile "$TOKENSTORE" --transport=http > "${LOG_FILE}" 2>&1 &
+  nohup env PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}" "$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli "${CONFIG}" --tokenstorefile "$TOKENSTORE" --transport=http > "${LOG_FILE}" 2>&1 &
   PID=$!
   echo $PID > "${PID_FILE}"
   echo "Server started with PID=${PID}, logs -> ${LOG_FILE}, pidfile -> ${PID_FILE}"
