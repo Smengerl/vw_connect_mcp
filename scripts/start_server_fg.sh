@@ -12,23 +12,14 @@ CONFIG=${1:-$ROOT_DIR/src/config.json}
 LOG_DIR=${LOG_DIR:-$ROOT_DIR/logs}
 TOKENSTORE="/tmp/tokenstore"
 
-# Source the shared detection library
-# shellcheck source=./lib/detect_python.sh
-source "$(dirname "$0")/lib/detect_python.sh"
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
 
-# Detect Python and get venv paths
-detect_python || exit 1
-get_venv_paths "$VENV_DIR"
-get_venv_activate_script "$VENV_DIR"
+# Initialize and activate venv
+init_venv_or_exit "$VENV_DIR"
 
 mkdir -p "${LOG_DIR}"
-
-echo "Activating virtualenv"
-# Source activation script if it exists
-if [ -f "$VENV_ACTIVATE" ]; then
-  # shellcheck disable=SC1090
-  source "$VENV_ACTIVATE"
-fi
 
 echo "Starting server (foreground) with config=${CONFIG}"
 PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}" \

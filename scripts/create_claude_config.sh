@@ -1,6 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to help find the correct Python path for Claude Desktop config
 # Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
+
+set -euo pipefail
 
 echo "🔍 Finding Python paths for Claude Desktop configuration..."
 echo ""
@@ -21,24 +23,20 @@ echo "Project directory: $PROJECT_DIR"
 echo "OS: $OS_TYPE"
 echo ""
 
-if [ -d "$PROJECT_DIR/.venv" ]; then
-    get_venv_paths "$PROJECT_DIR/.venv"
-    echo "Virtual environment found!"
-    echo ""
-    
-    echo "Python executable in venv:"
-    echo "   $VENV_PYTHON"
-    echo ""
-    echo "Use this path in your Claude Desktop config:"
-    echo "   \"command\": \"$VENV_PYTHON\""
-    PYTHON_PATH="$VENV_PYTHON"
-    echo ""
-else
-    echo "No virtual environment found at $PROJECT_DIR/.venv"
-    echo ""
-    echo "Using system Python: $PYTHON_BIN"
-    PYTHON_PATH="$PYTHON_BIN"
-fi
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
+
+# Initialize venv (activates automatically)
+init_venv_or_exit "$PROJECT_DIR/.venv"
+PYTHON_PATH="$VENV_PYTHON"
+echo ""
+echo "Python executable in venv:"
+echo "   $PYTHON_PATH"
+echo ""
+echo "Use this path in your Claude Desktop config:"
+echo "   \"command\": \"$PYTHON_PATH\""
+echo ""
 
 # Create tmp directory if it doesn't exist
 mkdir -p "$PROJECT_DIR/tmp/claude_desktop"

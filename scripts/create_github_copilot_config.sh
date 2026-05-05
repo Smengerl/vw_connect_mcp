@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to configure GitHub Copilot MCP Server for WeConnect
 # Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 
-set -e  # Exit on error
+set -euo pipefail
 
 # Auto-detect project directory (script is in scripts/ subdirectory)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,19 +23,14 @@ echo "Project directory: $PROJECT_DIR"
 echo "OS: $OS_TYPE"
 echo ""
 
-# Find Python executable
-if [ -d "$PROJECT_DIR/.venv" ]; then
-    get_venv_paths "$PROJECT_DIR/.venv"
-    PYTHON_PATH="$VENV_PYTHON"
-    echo "✅ Virtual environment found: $PYTHON_PATH"
-else
-    PYTHON_PATH="$PYTHON_BIN"
-    if [ -z "$PYTHON_PATH" ]; then
-        echo "❌ Error: No Python found!"
-        exit 1
-    fi
-    echo "⚠️  Using system Python: $PYTHON_PATH"
-fi
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
+
+# Initialize venv (activates automatically)
+init_venv_or_exit "$PROJECT_DIR/.venv"
+PYTHON_PATH="$VENV_PYTHON"
+echo "✅ Using virtual environment: $PYTHON_PATH"
 
 echo ""
 

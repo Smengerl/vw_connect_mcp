@@ -20,25 +20,25 @@ PORT=${1:-8080}
 LOG_DIR=${LOG_DIR:-$ROOT_DIR/logs}
 TOKENSTORE="/tmp/tokenstore"
 
-source "$(dirname "$0")/lib/detect_python.sh"
-detect_python || exit 1
-get_venv_paths "$VENV_DIR"
-get_venv_activate_script "$VENV_DIR"
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
+
+# Initialize and activate venv
+init_venv_or_exit "$VENV_DIR"
 
 mkdir -p "${LOG_DIR}"
 
-if [ -f "$VENV_ACTIVATE" ]; then
-  # shellcheck disable=SC1090
-  source "$VENV_ACTIVATE"
-fi
-
 # Load environment variables from .env file
-if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+if [ -f "$ROOT_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"
+  set +a
 fi
 
-# Check if MCP_API_KEY is set
-if [ -z "$MCP_API_KEY" ]; then
+# Check if all required environment variables are set
+if [ -z "${MCP_API_KEY:-}" ]; then
   echo "❌ ERROR: MCP_API_KEY is not set. This is required for secure deployment."
   echo "   Generate a key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
   exit 1

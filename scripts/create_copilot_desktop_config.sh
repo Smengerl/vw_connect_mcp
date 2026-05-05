@@ -1,6 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to generate a valid mcp.json for Microsoft Copilot Desktop
 # Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
+
+set -euo pipefail
 
 echo "🔧 Generating Copilot Desktop MCP configuration..."
 echo ""
@@ -21,15 +23,14 @@ echo "Project directory: $PROJECT_DIR"
 echo "OS: $OS_TYPE"
 echo ""
 
-# Detect Python path
-if [ -d "$PROJECT_DIR/.venv" ]; then
-    get_venv_paths "$PROJECT_DIR/.venv"
-    PYTHON_PATH="$VENV_PYTHON"
-    echo "Using virtualenv Python: $PYTHON_PATH"
-else
-    PYTHON_PATH="$PYTHON_BIN"
-    echo "Using system Python: $PYTHON_PATH"
-fi
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
+
+# Initialize venv (activates automatically)
+init_venv_or_exit "$PROJECT_DIR/.venv"
+PYTHON_PATH="$VENV_PYTHON"
+echo "Using virtual environment: $PYTHON_PATH"
 
 echo ""
 

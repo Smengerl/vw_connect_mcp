@@ -5,14 +5,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Source the shared detection library
-# shellcheck source=./lib/detect_python.sh
-source "$(dirname "$0")/lib/detect_python.sh"
+# Source venv init helper
+# shellcheck source=./lib/init_venv.sh
+source "$(dirname "$0")/lib/init_venv.sh"
 
-# Detect Python and get venv paths
-detect_python || exit 1
-get_venv_paths "$ROOT_DIR/.venv"
-get_venv_activate_script "$ROOT_DIR/.venv"
+# Initialize and activate venv
+init_venv_or_exit "$ROOT_DIR/.venv"
 
 # Print usage information
 usage() {
@@ -58,12 +56,7 @@ for arg in "$@"; do
     esac
 done
 
-echo "Activating virtualenv"
-# Source activation script
-if [ -f "$VENV_ACTIVATE" ]; then
-  # shellcheck disable=SC1090
-  source "$VENV_ACTIVATE"
-fi
+
 
 # Build pytest command
 PYTEST_CMD=("$VENV_PYTHON" -m pytest "${ROOT_DIR}/tests/" --capture=no)

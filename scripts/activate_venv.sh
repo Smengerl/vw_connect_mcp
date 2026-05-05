@@ -19,14 +19,8 @@ get_venv_activate_script "$VENV_DIR"
 if [ ! -f "$VENV_ACTIVATE" ]; then
   echo "Virtualenv not found at $VENV_DIR"
   echo "Run ./scripts/setup.sh to create it first."
-  exit 1
+  return 1 2>/dev/null || exit 1
 fi
 
-# Source the activation script
-if [ -f "$VENV_ACTIVATE" ]; then
-  # shellcheck disable=SC1090
-  source "$VENV_ACTIVATE"
-else
-  echo "Could not find activation script at $VENV_ACTIVATE"
-  exit 1
-fi
+# shellcheck disable=SC1090
+source "$VENV_ACTIVATE"

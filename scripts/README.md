@@ -195,6 +195,36 @@ Generate MCP configuration for Microsoft Copilot Desktop.
 
 ---
 
+### test_mcp_auth.sh
+Run a full MCP OAuth flow against a running server and validate authenticated access via `tools/list`.
+
+```bash
+# Default host
+./scripts/test_mcp_auth.sh
+
+# Custom host
+./scripts/test_mcp_auth.sh http://localhost:8080
+```
+
+**Requirements:**
+- Running MCP server (default: `http://localhost:8080`)
+- `.env` file in project root with `MCP_API_KEY=...`
+- Existing `.venv` (script activates it automatically)
+- `curl` available in your shell
+
+**What it does (end-to-end):**
+1. Checks `GET /health`
+2. Loads OAuth metadata from `/.well-known/oauth-authorization-server`
+3. Registers a test client (`client_credentials`)
+4. Requests an access token from `token_endpoint`
+5. Calls MCP `tools/list` with `Authorization: Bearer <token>`
+
+**Typical use case:**
+- Quick smoke test after local startup or deployment changes
+- Verify OAuth + MCP endpoint wiring before configuring external clients (VS Code, Claude, Copilot Desktop)
+
+---
+
 ## Development Notes
 
 ### Running Tests Before Commit
