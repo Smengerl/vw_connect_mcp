@@ -19,7 +19,7 @@ services:
       PORT: "8080"
     volumes:
       # Persist the OAuth token store between restarts to avoid repeated logins
-      - tokenstore:/tmp/tokenstore
+      - tokenstore:/tmp/ts
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c",

@@ -63,4 +63,5 @@ CMD python -m weconnect_mcp.cli.mcp_server_cli \
     /app/config.json \
     --transport http \
     --port "${PORT:-8080}" \
+    --tokenstorefile /tmp/ts/token \
     --log-level INFO
