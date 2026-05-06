@@ -54,9 +54,6 @@ cat << EOF > "$CONFIG_FILE"
         "$PROJECT_DIR/logs/mcp_server.log"
       ],
       "cwd": "$PROJECT_DIR",
-      "env": {
-        "PYTHONPATH": "$PROJECT_DIR/src"
-      },
       "type": "stdio"
     }
   },

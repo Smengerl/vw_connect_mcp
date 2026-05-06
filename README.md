@@ -91,7 +91,7 @@ cd weconnect_mvp
 The script will:
 - ✅ Detect your Python installation
 - ✅ Create a virtual environment at `.venv/`
-- ✅ Install all dependencies
+- ✅ Install the project in editable mode (`pip install -e .`)
 - ✅ Create configuration template
 
 **Manual Installation (Alternative):**
@@ -101,7 +101,13 @@ git clone https://github.com/Smengerl/weconnect_mvp.git
 cd weconnect_mvp
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e .
+```
+
+For running tests locally, install test extras:
+
+```bash
+pip install -e ".[test]"
 ```
 
 #### Windows-Specific Notes
@@ -384,10 +390,7 @@ The server uses the standard MCP protocol and works with all MCP-compatible tool
         "-m",
         "weconnect_mcp.cli.mcp_server_cli",
         "/path/to/your/config.json"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/weconnect_mvp/src"
-      }
+      ]
     }
   }
 }

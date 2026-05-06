@@ -8,8 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir --prefix=/install .
 
 
 # ── Stage 2: lean runtime image ──────────────────────────────────────────────
@@ -29,9 +30,6 @@ COPY --from=builder /install /usr/local
 
 # Copy application source
 COPY src/ ./src/
-
-# Make the src/ directory importable as a Python package root
-ENV PYTHONPATH=/app/src
 
 # Writable directory for token store (carconnectivity caches OAuth tokens here).
 # The CLI passes /tmp/tokenstore as a FILE PREFIX, not a directory.

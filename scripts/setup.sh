@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Create or recreate the .venv virtual environment and install from requirements.txt
+# Create or recreate the .venv virtual environment and install the local package in editable mode
 # Works on macOS, Linux, and Windows (Git Bash / WSL / MinGW)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
-REQ_FILE="$ROOT_DIR/requirements.txt"
 
 # Source the shared detection library
 # shellcheck source=./lib/detect_python.sh
@@ -30,11 +29,6 @@ echo "Repository root: $ROOT_DIR"
 echo "OS: $OS_TYPE"
 echo "System Python: $PYTHON_BIN"
 
-if [ ! -f "$REQ_FILE" ]; then
-  echo "requirements.txt not found at $REQ_FILE" >&2
-  exit 1
-fi
-
 echo "Using Python: $PYTHON_BIN"
 
 if [ -d "$VENV_DIR" ]; then
@@ -54,8 +48,8 @@ echo "Creating virtualenv at $VENV_DIR"
 echo "Upgrading pip inside venv..."
 "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
 
-echo "Installing requirements from $REQ_FILE"
-"$VENV_PIP" install -r "$REQ_FILE"
+echo "Installing project in editable mode"
+"$VENV_PIP" install -e "$ROOT_DIR"
 
 # Setup configuration file
 CONFIG_EXAMPLE="$ROOT_DIR/src/config.example.json"

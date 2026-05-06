@@ -22,5 +22,4 @@ init_venv_or_exit "$VENV_DIR"
 mkdir -p "${LOG_DIR}"
 
 echo "Starting server (foreground) with config=${CONFIG}"
-PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}" \
-  "$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli "${CONFIG}" --tokenstorefile "$TOKENSTORE" --log-level DEBUG "$@"
+"$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli "${CONFIG}" --tokenstorefile "$TOKENSTORE" --log-level DEBUG "$@"

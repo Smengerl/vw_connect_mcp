@@ -49,10 +49,7 @@ cat << EOF > "$CONFIG_FILE"
         "weconnect_mcp.cli.mcp_server_cli",
         "$PROJECT_DIR/src/config.json"
       ],
-      "cwd": "$PROJECT_DIR",
-      "env": {
-        "PYTHONPATH": "$PROJECT_DIR/src"
-      }
+      "cwd": "$PROJECT_DIR"
     }
   }
 }

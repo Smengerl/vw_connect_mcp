@@ -11,7 +11,7 @@
 ### 1. Project Structure ✅
 - ✅ README.md exists and is comprehensive (562 lines)
 - ✅ LICENSE.txt exists (Beer-ware License, Revision 42)
-- ✅ requirements.txt exists (project dependencies defined)
+- ✅ pyproject.toml exists (project metadata and dependencies defined)
 - ✅ pytest.ini configured with custom markers (real_api, slow, carconnectivity)
 - ✅ tests/ directory exists with 23 test files
 - ✅ scripts/ directory exists with 10 shell scripts

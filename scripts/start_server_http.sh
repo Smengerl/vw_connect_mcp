@@ -72,8 +72,7 @@ echo "   Port:      ${PORT}"
 echo "   Auth:      $([ -n "${MCP_API_KEY:-}" ] && echo 'API-Key enabled' || echo 'NONE (unsecured!)')"
 echo ""
 
-PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}" \
-  "$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli \
+"$VENV_PYTHON" -m weconnect_mcp.cli.mcp_server_cli \
   "${CONFIG}" \
   --transport http \
   --port ${PORT} \

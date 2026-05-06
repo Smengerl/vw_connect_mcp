@@ -138,7 +138,7 @@ When invoked, perform these checks in order:
 # Essential files exist
 test -f README.md && echo "✅ README.md exists"
 test -f LICENSE.txt && echo "✅ LICENSE.txt exists"
-test -f requirements.txt && echo "✅ requirements.txt exists"
+test -f pyproject.toml && echo "✅ pyproject.toml exists"
 test -f pytest.ini && echo "✅ pytest.ini exists"
 test -d tests && echo "✅ tests directory exists"
 test -d scripts && echo "✅ scripts directory exists"
