@@ -199,15 +199,15 @@ Generate MCP configuration for Microsoft Copilot Desktop.
 Run a full MCP OAuth flow against a running server and validate authenticated access via `tools/list`.
 
 ```bash
-# Default host
+# Default host (=localhost:8089)
 ./scripts/test_mcp_auth.sh
 
-# Custom host
-./scripts/test_mcp_auth.sh http://localhost:8080
+# Test a custom host
+./scripts/test_mcp_auth.sh http://localhost:8089
 ```
 
 **Requirements:**
-- Running MCP server (default: `http://localhost:8080`)
+- Running MCP server (default: `http://localhost:8089`)
 - `.env` file in project root with `MCP_API_KEY=...`
 - Existing `.venv` (script activates it automatically)
 - `curl` available in your shell

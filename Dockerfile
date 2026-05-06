@@ -45,6 +45,9 @@ ENV MCP_API_KEY=""
 ENV VW_USERNAME=""
 ENV VW_PASSWORD=""
 ENV VW_SPIN=""
+# Default port for Railway (Railway injects its own PORT env var at runtime).
+# For local Docker, the host-side mapping in docker-compose.yml maps the
+# external port 8089 to this internal container port 8080.
 ENV PORT=8080
 
 # Health-check: the /health endpoint is added in mcp_server.py (Stufe 1)
@@ -58,10 +61,11 @@ EXPOSE $PORT
 COPY src/config.example.json /app/config.json
 
 # Shell form so that $PORT is expanded at runtime.
-# Railway injects PORT automatically; locally it defaults to 8080.
+# Railway injects PORT automatically; default in image is 8080.
+# Local Docker users access the server via the host port (8089) defined in docker-compose.yml.
 CMD python -m weconnect_mcp.cli.mcp_server_cli \
     /app/config.json \
     --transport http \
-    --port "${PORT:-8080}" \
+    --port "$PORT" \
     --tokenstorefile /tmp/ts/token \
     --log-level INFO

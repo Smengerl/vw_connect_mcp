@@ -191,7 +191,7 @@ Alternatively, kill the process via PID.
 
 #### 3. Starting the server directly via Python
 ```bash
-python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8765
+python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8089
 ```
 
 
@@ -207,12 +207,12 @@ The MCP server can be started with several command-line parameters to control it
 | `--log-level`       | `INFO`                                    | Set logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `--log-file`        | (stderr only)                             | Path to log file (if not set, logs to stderr only)              |
 | `--transport`       | `stdio`                                   | Transport mode: `stdio` (for AI) or `http` (for API)            |
-| `--port`            | `8667`                                    | Port for HTTP mode                                               |
+| `--port`            | `8089`                                    | Port for HTTP mode (only relevant with `--transport http`)       |
 
 **Example:**
 
 ```bash
-python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --log-file server.log --transport http --port 8765
+python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --log-file server.log --transport http --port 8089
 ```
 
 ---
@@ -397,20 +397,60 @@ The server uses the standard MCP protocol and works with all MCP-compatible tool
 
 ### HTTP Mode for API Access
 
-You can also start the server in HTTP mode for programmatic access or local testing of the cloud setup:
+You can also start the server in HTTP mode for programmatic access or local testing of the cloud setup.
 
+> **Port strategy for HTTP mode**
+> - **Railway / cloud**: Railway injects `$PORT` automatically (default in image: `8080`). No manual configuration needed.
+> - **Local Docker**: Container runs internally on `8080`; `docker-compose.yml` maps host port **`8089`** → container port `8080`. Access via `http://localhost:8089`.
+> - **Local CLI (no Docker)**: `start_server_http.sh` defaults to port **`8089`**. Use a different port only when that port is already in use.
+>
+> Using a non-standard port (`8089`) for local Docker/CLI avoids conflicts when multiple MCP servers are running side by side.
+
+**Via script (recommended):**
+```bash
+# Reads credentials from .env automatically
+./scripts/start_server_http.sh          # starts on http://localhost:8089 (default)
+./scripts/start_server_http.sh 8090     # override port if needed
+```
+
+**Inline (manual override):**
 ```bash
 MCP_API_KEY=your-secret-key \
 VW_USERNAME=your@email.com \
 VW_PASSWORD=yourpassword \
 VW_SPIN=1234 \
-./scripts/start_server_http.sh 8080
+./scripts/start_server_http.sh 8089
 ```
 
-The server will then be available at `http://localhost:8080`.
+The server will then be available at `http://localhost:8089`.
 
-- MCP endpoint: `http://localhost:8080/mcp`
-- Health check: `http://localhost:8080/health`
+- MCP endpoint: `http://localhost:8089/mcp`
+- Health check: `http://localhost:8089/health`
+
+**Connecting AI clients (VS Code Copilot, Claude Code) to a local HTTP server:**
+```json
+// VS Code: %APPDATA%\Code\User\mcp.json
+{
+  "servers": {
+    "weconnect": {
+      "type": "http",
+      "url": "http://localhost:8089/mcp",
+      "headers": { "Authorization": "Bearer <YOUR_MCP_API_KEY>" }
+    }
+  }
+}
+```
+```json
+// Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "weconnect": {
+      "url": "http://localhost:8089/mcp",
+      "headers": { "Authorization": "Bearer <YOUR_MCP_API_KEY>" }
+    }
+  }
+}
+```
 
 ---
 
@@ -479,17 +519,20 @@ cp .env.example .env   # fill in your real credentials
 docker compose up --build
 ```
 
-The server is then available at `http://localhost:8080`.
+The server is then available at `http://localhost:8089`.
 
 **Manual Docker run:**
 ```bash
 docker build -t weconnect-mcp .
-docker run -p 8080:8080 \
+docker run -p 8089:8080 \
   -e VW_USERNAME="your@email.com" \
   -e VW_PASSWORD="yourpassword" \
   -e VW_SPIN="1234" \
   -e MCP_API_KEY="your-secret-key" \
   weconnect-mcp
+# -p host_port:container_port
+# Container always runs on 8080 internally; use 8089 on the host to avoid
+# port conflicts when multiple MCP servers run locally.
 ```
 
 ---

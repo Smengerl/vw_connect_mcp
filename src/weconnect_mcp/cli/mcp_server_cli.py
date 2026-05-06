@@ -25,7 +25,7 @@ os.environ['PYTHONWARNINGS'] = 'ignore'
 from weconnect_mcp.cli import logging_config
 
 DEFAULT_TRANSPORT = "stdio"
-DEFAULT_PORT = 8765
+DEFAULT_PORT = 8089
 
 
 def _maybe_patch_config_from_env(config_path: str) -> str:

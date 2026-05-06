@@ -2,11 +2,11 @@
 # test_mcp_auth.sh – Führt den vollständigen MCP OAuth-Flow durch und ruft tools/list auf
 #
 # Usage:
-#   ./scripts/test_mcp_auth.sh [http://localhost:8080]
+#   ./scripts/test_mcp_auth.sh [http://localhost:8089]
 
 set -euo pipefail
 
-HOST="${1:-http://localhost:8080}"
+HOST="${1:-http://localhost:8089}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/../.env"

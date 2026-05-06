@@ -7,7 +7,7 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Railway injects $PORT at runtime; our CMD uses ${PORT:-8080}.
+# Railway injects $PORT at runtime; image default is 8080 (ENV PORT=8080 in Dockerfile).
 # healthcheckPath must respond 200 without authentication.
 healthcheckPath = "/health"
 healthcheckTimeout = 300     # seconds – VW API login takes up to 30s + build overhead

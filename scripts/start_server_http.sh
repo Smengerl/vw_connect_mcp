@@ -3,7 +3,10 @@
 #
 # Usage:
 #   ./scripts/start_server_http.sh [port]          # reads MCP_API_KEY from env
-#   MCP_API_KEY=secret ./scripts/start_server_http.sh 8080
+#   MCP_API_KEY=secret ./scripts/start_server_http.sh 8089
+#
+# Port default is 8089 to avoid conflicts when multiple MCP servers run locally.
+# Use 8080 only when replicating the Railway/cloud setup on a dedicated machine.
 #
 # Environment variables (all optional if config.json is complete):
 #   MCP_API_KEY   Bearer token clients must send (REQUIRED for secure deployment)
@@ -16,7 +19,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
 CONFIG=${CONFIG:-$ROOT_DIR/src/config.json}
-PORT=${1:-8080}
+PORT=${1:-8089}
 LOG_DIR=${LOG_DIR:-$ROOT_DIR/logs}
 TOKENSTORE="/tmp/tokenstore"
 
