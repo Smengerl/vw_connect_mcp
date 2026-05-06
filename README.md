@@ -521,20 +521,6 @@ docker compose up --build
 
 The server is then available at `http://localhost:8089`.
 
-**Manual Docker run:**
-```bash
-docker build -t weconnect-mcp .
-docker run -p 8089:8080 \
-  -e VW_USERNAME="your@email.com" \
-  -e VW_PASSWORD="yourpassword" \
-  -e VW_SPIN="1234" \
-  -e MCP_API_KEY="your-secret-key" \
-  weconnect-mcp
-# -p host_port:container_port
-# Container always runs on 8080 internally; use 8089 on the host to avoid
-# port conflicts when multiple MCP servers run locally.
-```
-
 ---
 
 ### Environment Variables (Cloud / Docker)
