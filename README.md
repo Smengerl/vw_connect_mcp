@@ -5,6 +5,21 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
+> [!WARNING]
+> **VW API Access Currently Blocked for Third-Party and Open-Source Projects**
+>
+> As of May 2026, Volkswagen has shut down the brand-app interface previously used by this project
+> and other third-party tools (Home Assistant, EVCC, openWB, …). Third-party clients — including
+> this MCP server — are **no longer able to connect** to VW's backend.
+>
+> The new interface requires cryptographic device attestation ("client assertion") proving that API
+> requests originate from an official VW app on an unmodified device. Open-source projects cannot
+> obtain this credential without a formal, paid partnership with VW Group Info Services. As of
+> June 2026, **no simple alternative is known** for open-source projects. VW has stated they are
+> in dialogue with the open-source community, but no concrete solution has been announced.
+>
+> [Transition to next-generation vehicle data interfaces](https://drivesomethinggreater.com/newsroom/short-news/2026-4-02-Transition) (April 2, 2026)
+
 **MCP Server for Volkswagen Vehicles**  
 A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
 
@@ -26,6 +41,7 @@ A developer-focused server that exposes information from VW vehicles via a Model
 Get up and running in 3 steps:
 
 1. **Install**
+
    ```bash
    git clone https://github.com/Smengerl/weconnect_mvp.git
    cd weconnect_mvp
@@ -36,18 +52,21 @@ Get up and running in 3 steps:
    Edit `src/config.json` with your VW credentials (username, password, spin)
 
 3. **Use with AI Assistant**
-   
+
    **Option A: Claude Desktop**
+
    ```bash
    ./scripts/create_claude_config.sh  # Copy output to Claude config
    ```
+
    Restart Claude Desktop and ask: *"What vehicles are available?"*
-   
+
    **Option B: GitHub Copilot (VS Code)**
 
    ```bash
    ./scripts/create_github_copilot_config.sh  # Follow instructions to add to VS Code mcp.json
-   ```   
+   ```
+
    Restart VS Code and ask in Copilot Chat: *"What vehicles are available?"*
 
    **Option C: Cloud deployment (ChatGPT, Claude.ai, …)**  
@@ -66,7 +85,6 @@ For detailed instructions, see sections below.
 - **API-Key Authentication**: Bearer token auth for secure public HTTP endpoints
 - **Flexible CLI**: Multiple transport modes (stdio for local, HTTP for cloud)
 - **Configurable**: Credentials via config file or environment variables (for Docker / Railway)
-
 
 ## Getting Started
 
@@ -89,6 +107,7 @@ cd weconnect_mvp
 ```
 
 The script will:
+
 - ✅ Detect your Python installation
 - ✅ Create a virtual environment at `.venv/`
 - ✅ Install the project in editable mode (`pip install -e .`)
@@ -125,16 +144,17 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
    - Turn OFF: `python.exe`, `python3.exe`, `python3.x.exe`
 
 3. **Verify your Python installation:**
+
    ```bash
    # Should return a path like: C:\Program Files\PythonXXX\python.exe
    where python
    ```
 
 4. **Run diagnostic tool:**
+
    ```powershell
    & .\scripts\diagnose_python.ps1
    ```
-
 
 ### Configuration
 
@@ -142,11 +162,13 @@ The server requires a configuration file (default: `src/config.json`).
 **You must create this file based on the provided example and add your VW credentials.**
 
 **Step 1: Copy the example configuration**
+
 ```bash
 cp src/config.example.json src/config.json
 ```
 
 **Step 2: Edit the configuration with your VW credentials**
+
 ```bash
 # Use your preferred editor
 nano src/config.json
@@ -154,8 +176,8 @@ nano src/config.json
 code src/config.json
 ```
 
-
 **Configuration Parameters:**
+
 - `username`: Your VW WeConnect account email
 - `password`: Your VW WeConnect account password
 - `spin`: Your VW S-PIN (4 digits, required for some vehicle commands)
@@ -171,6 +193,7 @@ This file is automatically excluded via `.gitignore` to protect your credentials
 ## Usage
 
 The server supports two transport modes depending on the AI agent you want to use:
+
 - **stdio**: When running MCP server locally on the same machine as your AI agent (Claude Desktop, VS Code Copilot)
 - **http**: For cloud deployment or when the local AI agent requires this mode (e.g. ChatGPT)
 
@@ -179,16 +202,19 @@ The server supports two transport modes depending on the AI agent you want to us
 You can start the MCP server using the provided CLI scripts or directly via Python:
 
 #### 1. Starting the server in foreground (with logs to console)
+
 ```bash
 ./scripts/start_server_fg.sh
 ```
 
 #### 2. Starting the server in background (with logs to file)
+
 ```bash
 ./scripts/start_server_bg.sh
 ```
 
 If started in the background, stop the server using the script:
+
 ```bash
 ./scripts/stop_server.sh
 ```
@@ -196,11 +222,10 @@ If started in the background, stop the server using the script:
 Alternatively, kill the process via PID.
 
 #### 3. Starting the server directly via Python
+
 ```bash
 python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8089
 ```
-
-
 
 ### CLI Parameters
 
@@ -304,6 +329,7 @@ cd /path/to/weconnect_mvp
 ```
 
 Reload Claude Desktop and ask questions like:
+
 - "What vehicles are available?"
 - "Show me my car's battery status"
 - "Are my doors locked?"
@@ -403,6 +429,7 @@ The server uses the standard MCP protocol and works with all MCP-compatible tool
 You can also start the server in HTTP mode for programmatic access or local testing of the cloud setup.
 
 > **Port strategy for HTTP mode**
+>
 > - **Railway / cloud**: Railway injects `$PORT` automatically (default in image: `8080`). No manual configuration needed.
 > - **Local Docker**: Container runs internally on `8080`; `docker-compose.yml` maps host port **`8089`** → container port `8080`. Access via `http://localhost:8089`.
 > - **Local CLI (no Docker)**: `start_server_http.sh` defaults to port **`8089`**. Use a different port only when that port is already in use.
@@ -410,6 +437,7 @@ You can also start the server in HTTP mode for programmatic access or local test
 > Using a non-standard port (`8089`) for local Docker/CLI avoids conflicts when multiple MCP servers are running side by side.
 
 **Via script (recommended):**
+
 ```bash
 # Reads credentials from .env automatically
 ./scripts/start_server_http.sh          # starts on http://localhost:8089 (default)
@@ -417,6 +445,7 @@ You can also start the server in HTTP mode for programmatic access or local test
 ```
 
 **Inline (manual override):**
+
 ```bash
 MCP_API_KEY=your-secret-key \
 VW_USERNAME=your@email.com \
@@ -431,6 +460,7 @@ The server will then be available at `http://localhost:8089`.
 - Health check: `http://localhost:8089/health`
 
 **Connecting AI clients (VS Code Copilot, Claude Code) to a local HTTP server:**
+
 ```json
 // VS Code: %APPDATA%\Code\User\mcp.json
 {
@@ -443,6 +473,7 @@ The server will then be available at `http://localhost:8089`.
   }
 }
 ```
+
 ```json
 // Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json
 {
@@ -475,12 +506,14 @@ Tools called before the VW adapter is ready return a friendly `"Server is still 
 [Railway](https://railway.com) is a platform-as-a-service that builds and runs your Docker container automatically. It detects the `Dockerfile` and `railway.toml` in this repo with zero configuration.
 
 **Step 1 – Install Railway CLI and log in**
+
 ```bash
 brew install railway     # macOS; see https://docs.railway.com/guides/cli for other OSes
 railway login
 ```
 
 **Step 2 – Create project and deploy**
+
 ```bash
 cd /path/to/weconnect_mvp
 railway init             # creates a new Railway project linked to this directory
@@ -500,11 +533,13 @@ railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.t
 Or go to: **railway.com → your project → service → Variables**
 
 **Step 4 – Get the public URL**
+
 ```bash
 railway domain           # e.g. https://weconnectmcp-production.up.railway.app
 ```
 
 **Step 5 – Verify**
+
 ```bash
 curl https://<your-subdomain>.up.railway.app/health
 # → {"status": "ok", "ready": true, "service": "weconnect-mcp"}
@@ -517,6 +552,7 @@ Every `git push` followed by `railway up` redeploys the service.
 ### Option B: Docker (local or any host)
 
 **Local test with Docker Compose:**
+
 ```bash
 cp .env.example .env   # fill in your real credentials
 docker compose up --build
@@ -540,6 +576,7 @@ Credentials and the API key are passed via environment variables — **never put
 | `CORS_ORIGINS` | optional | Comma-separated allowed origins (default: `*`) |
 
 Generate a strong API key:
+
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
@@ -561,6 +598,7 @@ Configure → Actions → select MCP → enter URL and `Authorization: Bearer <k
 
 **GitHub Copilot (VS Code) via remote server:**  
 Add to `.vscode/mcp.json`:
+
 ```json
 {
   "servers": {
@@ -603,6 +641,7 @@ Run the test suite with:
 ```
 
 **Test Structure:**
+
 - **197 fast mock tests** - Run in ~4 seconds, no VW credentials needed
 - **18 slow real API tests** - Require valid VW account in `src/config.json`
 
@@ -636,6 +675,7 @@ The project includes a custom GitHub Copilot agent to ensure publication readine
 - ✅ CLI scripts documentation
 
 **Usage:**
+
 ```bash
 # Via GitHub Copilot
 @workspace /agent publication-readiness Run publication check
@@ -675,7 +715,7 @@ Contributions are welcome! Please see `CONTRIBUTING.md` and follow the code of c
 
 ## License
 
-This project is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0) — see `LICENSE.txt` for details or visit http://creativecommons.org/licenses/by-sa/4.0/
+This project is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0) — see `LICENSE.txt` for details or visit <http://creativecommons.org/licenses/by-sa/4.0/>
 
 ---
 
