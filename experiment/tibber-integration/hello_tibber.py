@@ -3,7 +3,15 @@
 
 Runs the OAuth2 Authorization Code + PKCE flow against Tibber, stores the
 tokens locally (gitignored), and then makes a couple of read-only calls to
-prove the connection works: list homes, then list vehicles.
+prove the connection works: list homes, list vehicles, then dump the full
+device detail (all capabilities Tibber reports) for each vehicle found.
+
+The full-detail dump exists so the raw shape of Tibber's data can be
+compared by eye against the target Pydantic models in
+../../src/weconnect_mcp/adapter/abstract_adapter.py (ChargingModel,
+RangeModel, PositionModel, ...) — the fields the MCP server currently
+exposes for VW-direct data — before deciding how a Tibber-backed adapter
+would map onto that shape.
 
 Usage:
     1. Register an OAuth2 client at https://data-api.tibber.com/clients/manage/
@@ -14,12 +22,14 @@ Usage:
     2. cp .env.example .env  and fill in client id/secret
     3. python hello_tibber.py
 
-This intentionally focuses on the *login* first; reading detailed vehicle
-capabilities (SoC, range, ...) is a thin follow-up once auth works.
+Note: this prints your real vehicle data (VIN, capability values) to your
+own terminal for inspection — nothing here is written to a file or
+committed anywhere.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -84,8 +94,36 @@ def main() -> int:
             f"(deviceId={v.get('id')}, homeId={v.get('homeId')})"
         )
 
-    print("\nDone. Next step: fetch device detail (SoC/range/charging) via "
-          "api.device(homeId, deviceId).")
+    print("\n→ Full device detail per vehicle (everything Tibber reports)")
+    for v in vehicles:
+        info = v.get("info", {})
+        label = f"{info.get('brand', '?')} {info.get('model', '')}".strip()
+        print(f"\n{'=' * 70}\n{label or v.get('id')}\n{'=' * 70}")
+
+        detail = api.device(v["homeId"], v["id"])
+
+        print("\n-- raw JSON (compare against abstract_adapter.py models) --")
+        print(json.dumps(detail, indent=2, ensure_ascii=False))
+
+        capabilities = detail.get("capabilities", [])
+        print(f"\n-- capabilities ({len(capabilities)} total) --")
+        if not capabilities:
+            print("  (none reported)")
+        for cap in capabilities:
+            unit = f" {cap.get('unit')}" if cap.get("unit") else ""
+            print(
+                f"  {cap.get('id', '?'):<32} = {cap.get('value')!r}{unit}"
+                f"   ({cap.get('description', '')})"
+            )
+
+    print(
+        "\nDone. Compare the capability ids/values above against "
+        "TIBBER_API.md §5.2 and the target models in "
+        "../../src/weconnect_mcp/adapter/abstract_adapter.py "
+        "(ChargingModel, RangeModel/DriveModel, PositionModel, ...) to see "
+        "how much of the MCP server's current vehicle-state shape Tibber "
+        "can actually fill."
+    )
     return 0
 
 

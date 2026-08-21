@@ -24,6 +24,32 @@ This is a *different* API from the older Tibber GraphQL API
 (`developer.tibber.com`, used for prices/consumption/Pulse) — that one does
 not expose vehicles at all.
 
+### 1.1 Background: Enode (Tibber's backend for VW)
+
+Tibber does not appear to talk to VW/CARIAD directly for this integration.
+The device `id` returned for our paired vehicle is unpadded-base64url text
+that decodes to `"volkswagen enode vehicle:<uuid>"` (confirmed live,
+2026-08-21, see §7) — i.e. Tibber's VW support is itself built on
+**[Enode](https://enode.com)**, a third-party middleware/aggregator API.
+
+What Enode is: an API platform that gives one unified integration surface
+across 30+ EV brands (VW Group included) plus solar inverters, home
+batteries, and thermostats, so a company like Tibber doesn't have to build
+and maintain 30 separate manufacturer integrations. Energy retailers,
+charging networks, and smart-home platforms use it the same way.
+
+Why this matters for scope/limitations here: **Enode's own API supports
+write operations** for EVs — start/stop charging, smart-charging
+activation, charging schedules (per Enode's public docs, not independently
+verified by us). The fact that the *Tibber* Data API (§5) exposes only
+`GET` endpoints therefore looks like **a deliberate choice by Tibber**, not
+a technical ceiling imposed by Enode — Tibber likely keeps charging control
+inside its own app/orchestration layer rather than exposing it publicly. If
+direct control ever becomes a hard requirement, going straight to Enode
+(a separate integration, with its own partner/access process — not explored
+here) would be the technically-possible route; going through Tibber's
+public API is not, today.
+
 This doc is the durable record of what that API is, what it offers, and
 how to connect to it, so this doesn't need to be re-researched in a future
 session. **Keep this updated** as we build against it — append dated
@@ -156,30 +182,65 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://data-api.tibber.com/v1/hom
 Filter the devices list for the vehicle device (category/type indicates
 "vehicle"), then match by VIN if multiple vehicles are present.
 
-### 5.2 Vehicle data fields (exact capability ids, from evcc source, see §6)
+### 5.2 Vehicle data fields (confirmed live, 2026-08-21, see §7)
 
-The device detail response has shape
-`{ id, externalId, info:{ name, brand, model }, capabilities: [ { id, description, value, unit } ] }`.
+Full device detail response shape, confirmed against our own paired VW
+(`GET /v1/homes/{homeId}/devices/{deviceId}`), values redacted/genericized
+here per the redaction convention in the sibling FINDING.md:
 
-**Correction from live testing (2026-08-21, see §7):** evcc's source
-suggested `externalId` is always `vendor:VIN` (e.g.
-`tesla:5YJSA1E26MF1234567`), split on `:` to get the VIN. For our VW device
-(routed through Enode, see the deviceId note below), `externalId` was
-observed to be the **bare VIN with no vendor prefix at all** — no `:` in it.
-So: don't assume a fixed separator is present; a real implementation should
-try splitting on `:` and fall back to the whole string if there's no match
-(this is what `Device.VIN()` in evcc's `api.go` already does, and what our
-Python client should do too once VIN extraction is added — not implemented
-yet, `hello_tibber.py` currently just prints the raw `externalId`).
+```json
+{
+  "id": "<base64url, decodes to 'volkswagen enode vehicle:<uuid>'>",
+  "externalId": "<bare VIN, no vendor prefix>",
+  "info": { "name": "ID.7", "brand": "Volkswagen", "model": "ID.7" },
+  "supportedHistory": { "resolutions": [] },
+  "status": { "lastSeen": "<ISO 8601 timestamp>" },
+  "attributes": [
+    { "id": "vinNumber", "value": "<VIN>" },
+    { "id": "isOnline", "value": true }
+  ],
+  "capabilities": [
+    { "id": "storage.stateOfCharge", "description": "state of charge", "value": 74, "unit": "%" },
+    { "id": "storage.targetStateOfCharge", "description": "target state of charge", "value": 80, "unit": "%" },
+    { "id": "range.remaining", "description": "estimated remaining driving range", "value": 356000, "unit": "m" },
+    { "id": "connector.status", "description": "vehicle plug status", "value": "disconnected",
+      "availableValues": ["connected", "disconnected", "unknown"] },
+    { "id": "charging.status", "description": "vehicle charging status", "value": "idle",
+      "availableValues": ["charging", "idle", "unknown"] }
+  ]
+}
+```
 
-The `id` (device id) is an **unpadded base64url string** — decoding it is
-informative for debugging: for our VW vehicle it decoded to
-`volkswagen enode vehicle:<uuid>`, i.e. plain text `"<backend> <category>:<uuid>"`,
-base64url-encoded. This is a nice independent confirmation that Tibber's VW
-integration is backed by **Enode** under the hood (matches the background
-research in the original conversation this doc started from). Treat the id
-as opaque either way — don't rely on this internal structure in code, it's
-just useful for a human debugging a live response.
+Notes on fields beyond `capabilities`:
+- `attributes` — a separate array (not `capabilities`) for mostly-static
+  identity data; observed `vinNumber` (duplicates `externalId` for this
+  vehicle) and `isOnline` (bool, connectivity status — this is the
+  `attributes` category mentioned in the API overview as "seldom changing
+  properties").
+- `status.lastSeen` — ISO 8601 timestamp of last update from the vehicle;
+  useful as a staleness indicator, no such field exists per-capability.
+- `supportedHistory.resolutions` — empty array for this vehicle, i.e.
+  `GET .../history` has nothing to return for it (history support is
+  device-category/vendor dependent, not guaranteed for vehicles).
+- Numeric capabilities carry a `unit` field; enum-valued ones
+  (`connector.status`, `charging.status`) instead carry `availableValues`
+  listing every possible value — useful for building an exhaustive mapping
+  without guessing.
+
+`externalId` was confirmed to be the **bare VIN, no `vendor:` prefix** —
+this contradicts evcc's own doc comment (`Device.VIN()` in `api.go`)
+suggesting a `vendor:VIN` format like `tesla:5YJSA1E26MF1234567`. Real
+implementations should try splitting on `:` and fall back to the whole
+string if there's no match (that's what evcc's own code already does
+defensively, and what our Python client should do too once VIN extraction
+is added — not implemented yet; `hello_tibber.py` currently just prints
+the raw `externalId`).
+
+The `id` (device id) is an **unpadded base64url string**; decoding it is
+informative for debugging — see §1.1 for what it revealed (Tibber's VW
+integration is Enode-backed). Treat it as opaque in code regardless — don't
+rely on this internal structure, it's just useful for a human inspecting a
+live response.
 
 Relevant capability ids and their reported values:
 
@@ -191,9 +252,14 @@ Relevant capability ids and their reported values:
 | `connector.status` | Plug status | `connected` / `disconnected` / `unknown` |
 | `charging.status` | Charging status | `charging` / `idle` / `unknown` |
 
-Static identity (`info.brand`, `info.model`, `info.name`) plus the VIN come
-from the device list entry; the numeric/enum values above come from the
-device *detail* call.
+This is confirmed to be the **complete capability set** for this vehicle —
+no doors/windows/tyres/lights/climatization/position/maintenance data of
+any kind, unlike what the VW-direct `carconnectivity` adapter exposes (see
+`src/weconnect_mcp/adapter/mixins/state_extraction_mixin.py` for that full
+shape). A Tibber-backed adapter could only ever fill a small slice of the
+MCP server's current `ChargingModel`/`RangeModel` fields — nothing else in
+`abstract_adapter.py` (doors, windows, tyres, lights, climatization,
+position, maintenance) has a Tibber equivalent.
 
 ### 5.3 Mandatory request header
 
@@ -311,6 +377,41 @@ Tibber.
   to read the actual capability values (SoC, range, charging/plug status)
   — `hello_tibber.py` currently stops after listing vehicles. That's the
   next concrete step, then wiring this into the MCP adapter.
+
+### 2026-08-21 — device-detail dump + Enode background documented
+- Extended `hello_tibber.py` to fetch and print full device detail
+  (`api.device(homeId, deviceId)`) for every vehicle found — raw JSON plus
+  a per-capability table — so the shape can be visually compared against
+  the MCP server's current target models in `abstract_adapter.py`. Ran it
+  live; confirmed the full response shape now written into §5.2 (the
+  `attributes` array with `vinNumber`/`isOnline`, `status.lastSeen`,
+  `supportedHistory.resolutions`, and that `capabilities` really is only
+  the same 5 entries already documented — nothing more was hiding).
+- **Conclusion from the comparison:** Tibber's data can only ever populate
+  a thin slice of `ChargingModel`/`RangeModel` — SoC, target SoC, range,
+  plug/charging status. Everything else the MCP server currently exposes
+  via `carconnectivity` (doors, windows, tyres, lights, climatization,
+  position, maintenance) has **no Tibber equivalent** — confirmed absent
+  from the capability list, not just unmapped. Any Tibber-backed adapter
+  path would need to either accept that reduced feature set or combine
+  Tibber with another data source for the rest.
+- Added §1.1 documenting Enode as the middleware Tibber's VW integration is
+  built on (per the device-id decoding finding from the previous session)
+  and noting that Enode's own API supports write operations (start/stop
+  charging etc.) even though Tibber's public Data API doesn't expose any —
+  so the read-only limitation in §5 looks like Tibber's own product choice,
+  not a hard ceiling from Enode.
+- **Process note, unrelated to the API itself:** while tidying up after
+  this test run, a cleanup command mistakenly deleted the real, working
+  `.env` and `.tibber_tokens.json` (mistook them for leftover test
+  artifacts from an earlier, unrelated gitignore check in this same
+  session). `.tibber_tokens.json` is inconsequential — it regenerates on
+  next run via the browser flow. `.env` (client id/secret) is only a
+  problem if the client secret wasn't saved anywhere outside this
+  directory, since Tibber shows it once at client-creation time; if lost,
+  the fix is registering a new OAuth2 client. Flagging this here in case a
+  future session needs the context for why credentials had to be
+  re-entered.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
