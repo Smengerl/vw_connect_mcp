@@ -1,8 +1,9 @@
 # Tibber Data API as an indirect path to VW vehicle data
 
-**Status:** Login-flow Hello World implemented (Python, `hello_tibber.py` +
-`tibber_client.py`), not yet run against a live registered client. API
-confirmed **read-only** (no control/command endpoints exist as of this
+**Status:** **Confirmed working end-to-end (2026-08-21, live test, see §7).**
+OAuth client registered, browser login/pairing completed, and the VW vehicle
+was correctly returned from `GET /v1/homes` → `GET /v1/homes/{id}/devices`.
+API confirmed **read-only** (no control/command endpoints exist as of this
 writing) — see §5.
 **Maintained by:** Simon Gerlach (simon.gerlach@gmail.com)
 **Started:** 2026-08-21
@@ -159,8 +160,28 @@ Filter the devices list for the vehicle device (category/type indicates
 
 The device detail response has shape
 `{ id, externalId, info:{ name, brand, model }, capabilities: [ { id, description, value, unit } ] }`.
-`externalId` is `vendor:VIN` (e.g. `tesla:5YJSA1E26MF1234567`) — split on `:`
-to get the VIN. Relevant capability ids and their reported values:
+
+**Correction from live testing (2026-08-21, see §7):** evcc's source
+suggested `externalId` is always `vendor:VIN` (e.g.
+`tesla:5YJSA1E26MF1234567`), split on `:` to get the VIN. For our VW device
+(routed through Enode, see the deviceId note below), `externalId` was
+observed to be the **bare VIN with no vendor prefix at all** — no `:` in it.
+So: don't assume a fixed separator is present; a real implementation should
+try splitting on `:` and fall back to the whole string if there's no match
+(this is what `Device.VIN()` in evcc's `api.go` already does, and what our
+Python client should do too once VIN extraction is added — not implemented
+yet, `hello_tibber.py` currently just prints the raw `externalId`).
+
+The `id` (device id) is an **unpadded base64url string** — decoding it is
+informative for debugging: for our VW vehicle it decoded to
+`volkswagen enode vehicle:<uuid>`, i.e. plain text `"<backend> <category>:<uuid>"`,
+base64url-encoded. This is a nice independent confirmation that Tibber's VW
+integration is backed by **Enode** under the hood (matches the background
+research in the original conversation this doc started from). Treat the id
+as opaque either way — don't rely on this internal structure in code, it's
+just useful for a human debugging a live response.
+
+Relevant capability ids and their reported values:
 
 | Capability id | Meaning | Unit / values |
 |---|---|---|
@@ -262,6 +283,34 @@ Tibber.
   three you'd select; it's actually auto-included, and only
   `data-api-homes-read` + `data-api-vehicles-read` need active selection).
   §4 corrected accordingly.
+
+### 2026-08-21 — live end-to-end success: login + vehicle read confirmed
+- Registered a real OAuth2 client at `data-api.tibber.com/clients/manage/`
+  with the corrected scopes from §4 and redirect URI
+  `http://localhost:8515/callback`.
+- Ran `hello_tibber.py` end-to-end for the first time: browser login/consent
+  completed, tokens issued and cached (`.tibber_tokens.json`, confirmed
+  still gitignored/not committed), `GET /v1/homes` returned exactly one
+  home, and `GET /v1/homes/{id}/devices` correctly returned the paired VW
+  ID.7 as a vehicle device.
+- **This is the first live confirmation that the whole chain works**:
+  Tibber pairing → OAuth2 client → auth code + PKCE flow → homes → devices
+  → a real VW vehicle, with no VW BFF access involved at any point.
+- Two corrections to §5.2 from what was actually observed in the response
+  (see there for detail): (a) `externalId` for this VW/Enode-backed vehicle
+  is the bare VIN, not `vendor:VIN` as evcc's Tesla example suggested — code
+  must not assume the `:` separator is always present; (b) the device `id`
+  is unpadded-base64url and decodes to human-readable
+  `"<backend> <category>:<uuid>"` text — decoding ours confirmed the VW
+  integration is Enode-backed under the hood.
+- Real VIN, home address, and device id from this run are deliberately
+  **not** reproduced verbatim in this document, same rationale as the
+  sibling `vw-device-flow-attestation-bypass/FINDING.md` — only the
+  structural/format findings are kept.
+- **Not yet done:** fetching device *detail* (`GET .../devices/{deviceId}`)
+  to read the actual capability values (SoC, range, charging/plug status)
+  — `hello_tibber.py` currently stops after listing vehicles. That's the
+  next concrete step, then wiring this into the MCP adapter.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
