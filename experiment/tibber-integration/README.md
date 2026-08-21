@@ -78,7 +78,7 @@ log. Modelled on evcc's implementation
    them without opening a browser.
 
 Expected output: your Tibber home(s) and the VW vehicle(s) paired to the
-account, with their `externalId` (`vendor:VIN`) and device id.
+account, followed by the full raw device detail (see below).
 
 ## Security
 
@@ -93,3 +93,90 @@ account, with their `externalId` (`vendor:VIN`) and device id.
 - The Tibber Data API is **read-only** — there is no charging/climate
   control endpoint (see `TIBBER_API.md` §5). This PoC can read status only.
 - `offline_access` scope is required to receive a refresh token.
+
+## Data point comparison: Tibber Data API vs. CarConnectivity
+
+This project's current MCP adapter reads vehicle state from
+[`CarConnectivity`](https://github.com/tillsteinbach/CarConnectivity)
+(specifically its generic `vehicle`/`ElectricVehicle` model plus the
+`doors`/`windows`/`lights`/`climatization`/`window_heating`/`position`/
+`maintenance`/`battery`/`charging`/`drive` submodules — see
+`src/weconnect_mcp/adapter/mixins/state_extraction_mixin.py` and
+`src/weconnect_mcp/adapter/abstract_adapter.py` for exactly what's
+currently extracted). The table below compares every data point exposed by
+that model against what the Tibber Data API's 5 vehicle capabilities
+(confirmed complete set, see `TIBBER_API.md` §5.2) can actually provide,
+so it's clear at a glance how much of a migration to Tibber would cost in
+lost data.
+
+Legend: ✓ available · — not available via this source.
+
+| Category | Data point | CarConnectivity (attribute) | Tibber Data API (field) | CarConnectivity | Tibber |
+|---|---|---|---|:---:|:---:|
+| **Identity** | VIN | `vehicle.vin` | `externalId` / `attributes[vinNumber]` | ✓ | ✓ |
+| | Brand / manufacturer | `vehicle.manufacturer` | `info.brand` | ✓ | ✓ |
+| | Model | `vehicle.model` | `info.model` | ✓ | ✓ |
+| | Name / nickname | `vehicle.name` | `info.name` | ✓ | ✓ |
+| | Model year | `vehicle.model_year` | — | ✓ | — |
+| | License plate | `vehicle.license_plate` | — | ✓ | — |
+| | Vehicle type (car/van/…) | `vehicle.type` | — | ✓ | — |
+| | Steering wheel position | `vehicle.specification.steering_wheel_position` | — | ✓ | — |
+| | Gearbox type | `vehicle.specification.gearbox` | — | ✓ | — |
+| | Odometer (total distance) | `vehicle.odometer` | — | ✓ | — |
+| | Vehicle state (parked/driving/…) | `vehicle.state` | — | ✓ | — |
+| | Online/connection state | `vehicle.connection_state` | `attributes[isOnline]` | ✓ | ✓ |
+| | Last-seen timestamp | *(per-attribute internal, not surfaced as a vehicle-level field)* | `status.lastSeen` | — | ✓ |
+| | Outside temperature | `vehicle.outside_temperature` | — | ✓ | — |
+| | Software version | `vehicle.software.version` | — | ✓ | — |
+| | Vehicle images | `vehicle.images` | — | ✓ | — |
+| **Battery / charging** | State of charge (%) | `drive.level` (`ElectricDrive`) | `storage.stateOfCharge` | ✓ | ✓ |
+| | Target charge limit (%) | `charging.settings.target_level` | `storage.targetStateOfCharge` | ✓ | ✓ |
+| | Range (km) | `drives.total_range` / `drive.range` | `range.remaining` | ✓ | ✓ |
+| | Plug connected state | `charging.connector.connection_state` | `connector.status` | ✓ | ✓ |
+| | Charging active state | `charging.state` (`CHARGING`/`READY_FOR_CHARGING`/`OFF`/`ERROR`) | `charging.status` (`charging`/`idle`/`unknown`) | ✓ *(richer enum)* | ✓ *(coarser)* |
+| | Charging power (kW) | `charging.power` | — | ✓ | — |
+| | Charging rate | `charging.rate` | — | ✓ | — |
+| | Charging type (AC/DC) | `charging.type` | — | ✓ | — |
+| | Estimated time/date charged | `charging.estimated_date_reached` | — | ✓ | — |
+| | Max charging current | `charging.settings.maximum_current` | — | ✓ | — |
+| | Plug auto-unlock setting | `charging.settings.auto_unlock` | — | ✓ | — |
+| | Connector lock state | `charging.connector.lock_state` | — | ✓ | — |
+| | External power present | `charging.connector.external_power` | — | ✓ | — |
+| | Battery total/available capacity (kWh) | `drive.battery.total_capacity` / `.available_capacity` | — | ✓ | — |
+| | Battery temperature (cur/min/max) | `drive.battery.temperature` / `_min` / `_max` | — | ✓ | — |
+| | Fuel tank level (%, combustion) | `drive.level` (`CombustionDrive`) | — *(n/a, EV only anyway)* | ✓ | — |
+| | AdBlue range/level (diesel) | `drive.adblue_range` / `.adblue_level` | — *(n/a)* | ✓ | — |
+| **Doors** | Lock/open state (overall + per door) | `vehicle.doors` (+ 6 individual doors) | — | ✓ | — |
+| **Windows** | Open state (overall + per window) | `vehicle.windows` (+ 4 individual windows) | — | ✓ | — |
+| **Window heating** | Heating state (overall + front/rear) | `vehicle.window_heatings` | — | ✓ | — |
+| **Lights** | Exterior light state (left/right) | `vehicle.lights` | — | ✓ | — |
+| **Tyres** | Pressure / temperature per tyre | *(referenced in our mixin, but no `tyres` module exists in the installed `carconnectivity==0.9.2` — resolves to `None` today)* | — | ✗ *(not in this lib version)* | — |
+| **Climatization** | State (off/heating/cooling/ventilation) | `climatization.state` | — | ✓ | — |
+| | Target temperature | `climatization.settings.target_temperature` | — | ✓ | — |
+| | Estimated time remaining | `climatization.estimated_date_reached` | — | ✓ | — |
+| | Seat heating enabled | `climatization.settings.seat_heating` | — | ✓ | — |
+| | Climatization-at-unlock enabled | `climatization.settings.climatization_at_unlock` | — | ✓ | — |
+| | Without-external-power setting | `climatization.settings.climatization_without_external_power` | — | ✓ | — |
+| | Heater source | `climatization.settings.heater_source` | — | ✓ | — |
+| **Location** | Latitude / longitude | `vehicle.position.latitude` / `.longitude` | — | ✓ | — |
+| | Altitude | `vehicle.position.altitude` | — | ✓ | — |
+| | Heading | `vehicle.position.heading` | — | ✓ | — |
+| | Position type (parked/moving) | `vehicle.position.position_type` | — | ✓ | — |
+| **Maintenance** | Inspection due date/distance | `maintenance.inspection_due_at` / `_after` | — | ✓ | — |
+| | Oil service due date/distance | `maintenance.oil_service_due_at` / `_after` | — | ✓ | — |
+
+**Bottom line:** of the 51 distinct data points listed above, CarConnectivity
+provides **49** (everything except tyres, which isn't in the installed
+library version, and a vehicle-level last-seen timestamp, which it doesn't
+surface). Tibber provides **11**: VIN, brand, model, name, online state,
+the 5 charging-related capabilities, and one field — last-seen — that
+CarConnectivity doesn't even have. Everything physical (doors, windows,
+tyres, lights, window heating), all of climatization, GPS position, and
+maintenance schedule has **no Tibber equivalent at all** —
+not a mapping gap, but data Tibber's API genuinely does not expose (see
+`TIBBER_API.md` §5 — confirmed to be the complete capability set for our
+paired vehicle). A Tibber-backed adapter would only ever be a
+charging/range-status source, not a drop-in replacement for the
+`carconnectivity` VW-direct adapter — see `TIBBER_API.md` §1.1 for why
+(Tibber's own product scoping, not a technical ceiling from Enode
+underneath it).
