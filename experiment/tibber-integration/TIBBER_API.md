@@ -851,6 +851,38 @@ not a default either way.
   (confirmed via the same cached credentials used throughout this
   session).
 
+### 2026-08-21 — fixed the Claude Desktop / VS Code secret-injection gap
+- First of the flagged follow-up gaps addressed. Simon asked for
+  proposals first; presented three options (embed secrets in the
+  generated MCP client config's `env` block / file-only / file + env
+  override) and picked file + env override, mirroring
+  `_maybe_patch_config_from_env()`'s existing precedence for the
+  carconnectivity backend exactly.
+- `_build_tibber_adapter()` now accepts an optional `config_path`: loads
+  `client_id`/`client_secret`/`redirect_uri`/`token_path` from a JSON file
+  if given, then lets `TIBBER_*` env vars override those values — same
+  precedence VW credentials already have. New template
+  `src/tibber_config.example.json`; `src/tibber_config.json` and
+  `tibber_tokens.json` added to `.gitignore`.
+- `create_claude_config.sh` / `create_github_copilot_config.sh` now
+  generate configs pointing at `src/tibber_config.json` with
+  `--backend tibber` explicit, with a pre-flight check that prints setup
+  instructions if the file is missing, and a note on how to switch to
+  `carconnectivity` manually. No secrets need to go into
+  `claude_desktop_config.json`/`mcp.json` any more.
+- **Verified live under `env -i`** (completely empty environment — the
+  actual condition Claude Desktop launches the server under, not just a
+  simulation): the exact command the generated Claude Desktop config
+  would run (`mcp_server_cli src/tibber_config.json --backend tibber
+  --transport stdio`) starts successfully using only the file, zero env
+  vars. Also verified env-var override still wins when both a file and
+  env vars are present.
+- Still open from the original flagged list: `start_server_bg.sh` still
+  doesn't forward extra args (so `--backend carconnectivity` still can't
+  reach it that way); the Dockerfile `CMD` still doesn't pass `--backend`
+  explicitly; and the Tibber-token-file-into-a-headless-container gap for
+  Docker/Railway is untouched — next items to go through one at a time.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
