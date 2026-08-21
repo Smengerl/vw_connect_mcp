@@ -63,7 +63,7 @@ class CacheMixin:
         Updates the cache timestamp to now. Should be called after _fetch_data().
         """
         self._last_fetch_time = datetime.now()
-        logger.info("Fetched fresh data from VW servers")
+        logger.debug("Cache timestamp updated")
     
     def invalidate_cache(self) -> None:
         """Invalidate cache to force fresh data fetch on next access.
