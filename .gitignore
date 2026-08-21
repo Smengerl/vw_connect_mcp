@@ -1,6 +1,10 @@
 # Configuration files with sensitive data
 src/config.json
+src/tibber_config.json
 claude_desktop_config.json
+
+# Tibber OAuth token cache (produced by tibber_login_cli)
+tibber_tokens.json
 
 # Environment files with credentials
 .env

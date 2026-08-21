@@ -1,0 +1,6 @@
+{
+    "client_id": "your-tibber-client-id-here",
+    "client_secret": "your-tibber-client-secret-here",
+    "redirect_uri": "http://localhost:8515/callback",
+    "token_path": "./tibber_tokens.json"
+}

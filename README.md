@@ -56,12 +56,13 @@ Get up and running in 3 steps:
    ```
 
 2. **Configure**  
-   Default backend is **Tibber** (read-only, works today) — register an OAuth2 client and run the
-   one-time login, see [Choosing a Backend](#choosing-a-backend):
+   Default backend is **Tibber** (read-only, works today) — register an OAuth2 client, then:
    ```bash
-   export TIBBER_CLIENT_ID="..." TIBBER_CLIENT_SECRET="..."
-   python -m weconnect_mcp.cli.tibber_login_cli
+   cp src/tibber_config.example.json src/tibber_config.json
+   # edit src/tibber_config.json with your client_id/client_secret
+   python -m weconnect_mcp.cli.tibber_login_cli   # one-time interactive login
    ```
+   See [Choosing a Backend](#choosing-a-backend) for where to get the client id/secret.  
    (Or, if VW access is available to you: edit `src/config.json` with your VW credentials and
    pass `--backend carconnectivity` everywhere below.)
 
@@ -83,12 +84,11 @@ Get up and running in 3 steps:
 
    Restart VS Code and ask in Copilot Chat: *"What vehicles are available?"*
 
-   > ⚠️ **Note (Tibber backend):** `create_claude_config.sh` / `create_github_copilot_config.sh`
-   > don't currently inject `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET`/`TIBBER_TOKEN_PATH` into the
-   > generated config's `env` block. Since Claude Desktop / VS Code launch the server with their
-   > own environment (not your shell's `export`s), add those three variables to the generated
-   > config's `"env"` object by hand, or the server will fail to start with a clear
-   > "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set" error.
+   > Both scripts point the generated config at `src/tibber_config.json` — no secrets need to go
+   > into the Claude Desktop / VS Code config itself, since Claude Desktop and VS Code launch the
+   > server with their own environment (not your shell's `export`s), which is exactly why a file
+   > is used here instead of environment variables. Verified live with a completely empty
+   > environment (`env -i`), matching how those apps actually launch the server.
 
    **Option C: Cloud deployment (ChatGPT, Claude.ai, …)**  
    Deploy to Railway (or any Docker host) – see [Cloud Deployment](#cloud-deployment) below.
@@ -133,7 +133,18 @@ third-party access, switch back with `--backend carconnectivity`.
 1. **Register an OAuth2 client** at <https://data-api.tibber.com/clients/manage/> — see
    [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) for the
    exact scopes to select and redirect URI to use.
-2. **Set credentials as environment variables** (never commit these):
+2. **Provide credentials** — two options, and you can mix them (environment variables override
+   the file when both are present):
+
+   **Option A — file** (recommended for Claude Desktop / VS Code Copilot: those launch the server
+   with their own environment, not your shell's, so `export`ed variables never reach it):
+   ```bash
+   cp src/tibber_config.example.json src/tibber_config.json
+   # edit src/tibber_config.json with your client_id/client_secret
+   ```
+   `src/tibber_config.json` is gitignored, same as `src/config.json` for the VW backend.
+
+   **Option B — environment variables** (recommended for Docker/Railway):
    ```bash
    export TIBBER_CLIENT_ID="your-client-id"
    export TIBBER_CLIENT_SECRET="your-client-secret"
@@ -145,10 +156,15 @@ third-party access, switch back with `--backend carconnectivity`.
    ```bash
    python -m weconnect_mcp.cli.tibber_login_cli
    ```
-4. **Start the server** — no config file needed, `tibber` is the default backend:
+4. **Start the server** — `tibber` is the default backend, and the config file is optional
+   (pass it if you used Option A above):
    ```bash
-   python -m weconnect_mcp.cli.mcp_server_cli
+   python -m weconnect_mcp.cli.mcp_server_cli [src/tibber_config.json]
    ```
+
+`./scripts/create_claude_config.sh` and `./scripts/create_github_copilot_config.sh` (see
+[Quick Start](#quick-start)) already generate configs pointing at `src/tibber_config.json` — no
+manual editing of the generated MCP client config needed.
 
 ### Setting Up the CarConnectivity Backend (VW-direct, currently blocked)
 
