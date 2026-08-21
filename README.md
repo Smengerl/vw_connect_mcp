@@ -19,6 +19,13 @@
 > in dialogue with the open-source community, but no concrete solution has been announced.
 >
 > [Transition to next-generation vehicle data interfaces](https://drivesomethinggreater.com/newsroom/short-news/2026-4-02-Transition) (April 2, 2026)
+>
+> **Workaround available**: this server now supports a second, read-only backend via the
+> [Tibber Data API](https://data-api.tibber.com/docs/) (Tibber is an official VW integration
+> partner and can still reach VW vehicle data). It's the **default backend** for exactly this
+> reason. See [Choosing a Backend](#choosing-a-backend) below — and
+> [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md)
+> for the full research behind it.
 
 **MCP Server for Volkswagen Vehicles**  
 A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
@@ -49,7 +56,14 @@ Get up and running in 3 steps:
    ```
 
 2. **Configure**  
-   Edit `src/config.json` with your VW credentials (username, password, spin)
+   Default backend is **Tibber** (read-only, works today) — register an OAuth2 client and run the
+   one-time login, see [Choosing a Backend](#choosing-a-backend):
+   ```bash
+   export TIBBER_CLIENT_ID="..." TIBBER_CLIENT_SECRET="..."
+   python -m weconnect_mcp.cli.tibber_login_cli
+   ```
+   (Or, if VW access is available to you: edit `src/config.json` with your VW credentials and
+   pass `--backend carconnectivity` everywhere below.)
 
 3. **Use with AI Assistant**
 
@@ -69,6 +83,13 @@ Get up and running in 3 steps:
 
    Restart VS Code and ask in Copilot Chat: *"What vehicles are available?"*
 
+   > ⚠️ **Note (Tibber backend):** `create_claude_config.sh` / `create_github_copilot_config.sh`
+   > don't currently inject `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET`/`TIBBER_TOKEN_PATH` into the
+   > generated config's `env` block. Since Claude Desktop / VS Code launch the server with their
+   > own environment (not your shell's `export`s), add those three variables to the generated
+   > config's `"env"` object by hand, or the server will fail to start with a clear
+   > "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set" error.
+
    **Option C: Cloud deployment (ChatGPT, Claude.ai, …)**  
    Deploy to Railway (or any Docker host) – see [Cloud Deployment](#cloud-deployment) below.
 
@@ -79,19 +100,71 @@ For detailed instructions, see sections below.
 ## Features
 
 - **MCP Server**: Provides a standard MCP interface for accessing vehicle data
-- **Volkswagen Integration**: Connects to VW vehicles using the `carconnectivity` library
+- **Two selectable backends** (`--backend` flag, see [Choosing a Backend](#choosing-a-backend)):
+  - **Tibber** (default) — read-only, via the Tibber Data API; works today
+  - **CarConnectivity** — VW-direct via the `carconnectivity` library; currently blocked by VW
 - **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, ChatGPT, Claude.ai and other MCP-compatible tools
 - **Cloud Deployable**: Ships with `Dockerfile`, `docker-compose.yml` and Railway config for one-command cloud deployment
 - **API-Key Authentication**: Bearer token auth for secure public HTTP endpoints
 - **Flexible CLI**: Multiple transport modes (stdio for local, HTTP for cloud)
 - **Configurable**: Credentials via config file or environment variables (for Docker / Railway)
 
+## Choosing a Backend
+
+The server supports two vehicle-data backends, selected with `--backend {tibber,carconnectivity}`:
+
+| | **`tibber`** (default) | **`carconnectivity`** |
+|---|---|---|
+| Status | ✅ Works today | ❌ Blocked by VW (see warning above) |
+| Data source | [Tibber Data API](https://data-api.tibber.com/docs/) (Tibber is an official VW integration partner) | VW WeConnect directly, via the `carconnectivity` library |
+| Access | **Read-only** — no lock/unlock, climate, charging, or light control | Full read + control |
+| Data available | Identity (VIN, brand, model, name, online state) + charging/range (SoC, target SoC, range, plug status, charging state) — electric vehicles only | Everything: doors, windows, tyres, lights, climate, GPS position, maintenance, plus full control |
+| Setup | OAuth2 client + one-time interactive login (below) | `src/config.json` with VW username/password/spin |
+| Background | [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md) | this README |
+
+**Why Tibber is the default**: it's the only backend that currently works. It trades away vehicle
+control and most read data (doors, climate, position, maintenance — see the full 51-point
+comparison in [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md))
+for read-only charging/range status that keeps working despite VW's block. If VW restores
+third-party access, switch back with `--backend carconnectivity`.
+
+### Setting Up the Tibber Backend (default)
+
+1. **Register an OAuth2 client** at <https://data-api.tibber.com/clients/manage/> — see
+   [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) for the
+   exact scopes to select and redirect URI to use.
+2. **Set credentials as environment variables** (never commit these):
+   ```bash
+   export TIBBER_CLIENT_ID="your-client-id"
+   export TIBBER_CLIENT_SECRET="your-client-secret"
+   export TIBBER_REDIRECT_URI="http://localhost:8515/callback"   # optional, this is the default
+   export TIBBER_TOKEN_PATH="./tibber_tokens.json"                # optional, this is the default
+   ```
+3. **Run the one-time interactive login** (opens a browser; only needs to be done once — the
+   server itself never opens a browser, it only refreshes the resulting token non-interactively):
+   ```bash
+   python -m weconnect_mcp.cli.tibber_login_cli
+   ```
+4. **Start the server** — no config file needed, `tibber` is the default backend:
+   ```bash
+   python -m weconnect_mcp.cli.mcp_server_cli
+   ```
+
+### Setting Up the CarConnectivity Backend (VW-direct, currently blocked)
+
+Requires `src/config.json` with VW credentials — see [Configuration](#configuration) below — and
+`--backend carconnectivity` on every invocation. Currently fails to connect (`AuthenticationError`)
+because VW blocks third-party access; kept for when/if that changes.
+
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.8+
-- VW account credentials (username, password, and optionally a spin)
+- For the **Tibber** backend (default): a Tibber account with a VW vehicle paired to it, and an
+  OAuth2 client registered at data-api.tibber.com (see [Choosing a Backend](#choosing-a-backend))
+- For the **CarConnectivity** backend: VW account credentials (username, password, and optionally
+  a spin) — currently non-functional, see warning above
 - (Recommended) Virtual environment
 
 ### Installation
@@ -158,7 +231,11 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
 
 ### Configuration
 
-The server requires a configuration file (default: `src/config.json`).  
+**This section applies to the `carconnectivity` backend only.** The default `tibber` backend
+needs no config file — see [Setting Up the Tibber Backend](#setting-up-the-tibber-backend-default)
+above instead.
+
+The `carconnectivity` backend requires a configuration file (default: `src/config.json`).  
 **You must create this file based on the provided example and add your VW credentials.**
 
 **Step 1: Copy the example configuration**
@@ -224,8 +301,17 @@ Alternatively, kill the process via PID.
 #### 3. Starting the server directly via Python
 
 ```bash
-python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --port 8089
+# Default backend (tibber) -- no config file needed:
+python -m weconnect_mcp.cli.mcp_server_cli --port 8089
+
+# Explicit VW-direct backend (currently blocked by VW, see warning above):
+python -m weconnect_mcp.cli.mcp_server_cli path/to/config.json --backend carconnectivity --port 8089
 ```
+
+> `./scripts/start_server_fg.sh` forwards extra arguments, so
+> `./scripts/start_server_fg.sh "" 8765 --backend carconnectivity` works too.
+> `./scripts/start_server_bg.sh` does **not** currently forward extra arguments — use the direct
+> Python invocation above if you need `--backend carconnectivity` in the background.
 
 ### CLI Parameters
 
@@ -233,17 +319,24 @@ The MCP server can be started with several command-line parameters to control it
 
 | Parameter           | Default                                   | Description                                                      |
 |---------------------|-------------------------------------------|------------------------------------------------------------------|
-| `config`            | (required)                                | Path to the configuration file                                   |
-| `--tokenstorefile`  | `/tmp/tokenstore`                         | Path for the token store file                                    |
+| `config`            | (none)                                    | Path to the configuration file. Required for `--backend carconnectivity`; unused (and optional) for `--backend tibber` |
+| `--backend`         | `tibber`                                  | Vehicle data backend: `tibber` (read-only, works today) or `carconnectivity` (VW-direct, currently blocked) — see [Choosing a Backend](#choosing-a-backend) |
+| `--tokenstorefile`  | `/tmp/tokenstore`                         | Path for the token store file (`carconnectivity` backend only — `tibber` uses `TIBBER_TOKEN_PATH` instead) |
 | `--log-level`       | `INFO`                                    | Set logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `--log-file`        | (stderr only)                             | Path to log file (if not set, logs to stderr only)              |
 | `--transport`       | `stdio`                                   | Transport mode: `stdio` (for AI) or `http` (for API)            |
 | `--port`            | `8089`                                    | Port for HTTP mode (only relevant with `--transport http`)       |
 
-**Example:**
+**Example (Tibber, default backend):**
 
 ```bash
-python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --log-file server.log --transport http --port 8089
+python -m weconnect_mcp.cli.mcp_server_cli --log-level DEBUG --log-file server.log --transport http --port 8089
+```
+
+**Example (CarConnectivity, VW-direct — currently blocked by VW):**
+
+```bash
+python -m weconnect_mcp.cli.mcp_server_cli src/config.json --backend carconnectivity --log-level DEBUG --log-file server.log --transport http --port 8089
 ```
 
 ---
@@ -494,12 +587,24 @@ The server ships with a `Dockerfile` and supports full cloud deployment, enablin
 
 ### Architecture
 
-In HTTP/cloud mode the server starts two things independently:
+In HTTP/cloud mode the server starts two things independently, for either backend:
 
 1. **HTTP server** starts immediately → cloud health checks pass right away
-2. **VW OAuth login** runs in the background (takes up to 30 s) → `/health` reports `"ready": false` until complete, then `"ready": true`
+2. **Backend login/connect** runs in the background (VW OAuth login for `carconnectivity`, a
+   non-interactive token refresh for `tibber`) → `/health` reports `"ready": false` until
+   complete, then `"ready": true`
 
-Tools called before the VW adapter is ready return a friendly `"Server is still starting"` error instead of crashing.
+Tools called before the backend is ready return a friendly `"Server is still starting"` error instead of crashing.
+
+> ⚠️ **Tibber backend + cloud deployment — token file caveat.** The Tibber OAuth login is a
+> one-time *interactive* step (browser + human click) that cannot run inside a headless
+> container. You must run `python -m weconnect_mcp.cli.tibber_login_cli` **locally** first, then
+> get the resulting token file into the container at the path `TIBBER_TOKEN_PATH` points to.
+> Neither the current `Dockerfile` nor `docker-compose.yml` sets up a volume/mount for this yet
+> (the existing `tokenstore` volume is for the `carconnectivity` backend's VW token only) — that's
+> a follow-up, not yet done. Until it is, cloud deployment of the `tibber` backend needs a manual
+> way to get the token file into the container (e.g. `docker cp`, a custom volume, or a secret
+> file mount on your host).
 
 ### Option A: Railway (recommended)
 
@@ -521,7 +626,17 @@ railway up --detach      # builds the Docker image and deploys it
 ```
 
 **Step 3 – Set secret environment variables**  
-Never put credentials in the repository. Set them in the Railway dashboard instead:
+Never put credentials in the repository. Set them in the Railway dashboard instead.
+
+For the default **`tibber`** backend (see the token-file caveat above before deploying):
+
+```bash
+railway variables set TIBBER_CLIENT_ID="your-client-id"
+railway variables set TIBBER_CLIENT_SECRET="your-client-secret"
+railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+For the **`carconnectivity`** backend (currently blocked by VW):
 
 ```bash
 railway variables set VW_USERNAME="your@email.com"
@@ -529,6 +644,10 @@ railway variables set VW_PASSWORD="yourpassword"
 railway variables set VW_SPIN="1234"
 railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 ```
+
+The Dockerfile's `CMD` doesn't currently pass `--backend` explicitly, so the container uses the
+`tibber` default. If you need `carconnectivity` in the container, edit the `CMD` line in
+`Dockerfile` to add `--backend carconnectivity` (not done as part of this change).
 
 Or go to: **railway.com → your project → service → Variables**
 
@@ -566,14 +685,18 @@ The server is then available at `http://localhost:8089`.
 
 Credentials and the API key are passed via environment variables — **never put them in the repository**:
 
-| Variable | Required | Description |
+| Variable | Required for | Description |
 |---|---|---|
-| `VW_USERNAME` | ✅ | VW WeConnect account e-mail |
-| `VW_PASSWORD` | ✅ | VW WeConnect account password |
-| `VW_SPIN` | ✅ | 4-digit S-PIN |
-| `MCP_API_KEY` | ✅ | Bearer token clients must send for authentication |
-| `PORT` | auto | HTTP port (Railway injects this automatically; default: `8080`) |
-| `CORS_ORIGINS` | optional | Comma-separated allowed origins (default: `*`) |
+| `TIBBER_CLIENT_ID` | `tibber` (default) | OAuth2 client id from data-api.tibber.com |
+| `TIBBER_CLIENT_SECRET` | `tibber` (default) | OAuth2 client secret |
+| `TIBBER_REDIRECT_URI` | `tibber`, optional | Default: `http://localhost:8515/callback` |
+| `TIBBER_TOKEN_PATH` | `tibber`, optional | Default: `./tibber_tokens.json` — must point at a token file produced locally by `tibber_login_cli` and present in the container, see the caveat above |
+| `VW_USERNAME` | `carconnectivity` | VW WeConnect account e-mail |
+| `VW_PASSWORD` | `carconnectivity` | VW WeConnect account password |
+| `VW_SPIN` | `carconnectivity` | 4-digit S-PIN |
+| `MCP_API_KEY` | both | Bearer token clients must send for authentication |
+| `PORT` | both, auto | HTTP port (Railway injects this automatically; default: `8080`) |
+| `CORS_ORIGINS` | both, optional | Comma-separated allowed origins (default: `*`) |
 
 Generate a strong API key:
 
@@ -651,6 +774,9 @@ For detailed test documentation, see [tests/README.md](tests/README.md)
 
 ## Additional Documentation
 
+- **[experiment/tibber-integration/TIBBER_API.md](experiment/tibber-integration/TIBBER_API.md)** - Full Tibber Data API research, architecture analysis, and session log behind the default backend
+- **[experiment/tibber-integration/README.md](experiment/tibber-integration/README.md)** - Tibber OAuth setup PoC and the full 51-point data comparison against `carconnectivity`
+- **[experiment/vw-device-flow-attestation-bypass/FINDING.md](experiment/vw-device-flow-attestation-bypass/FINDING.md)** - Why VW-direct access (the `carconnectivity` backend) is currently blocked
 - **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
 - **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
 - **[tests/README.md](tests/README.md)** - Test suite overview

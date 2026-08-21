@@ -2,14 +2,7 @@
 
 Two backends are available (--backend flag):
 
-  carconnectivity (default)  VW-direct via the carconnectivity library.
-      Environment variables (override config.json for cloud/container
-      deployments):
-        VW_USERNAME     VW account e-mail
-        VW_PASSWORD     VW account password
-        VW_SPIN         4-digit S-PIN
-
-  tibber                     Read-only, via the Tibber Data API. See
+  tibber (default)           Read-only, via the Tibber Data API. See
       experiment/tibber-integration/TIBBER_API.md for background — no
       config.json needed, only these environment variables:
         TIBBER_CLIENT_ID       Required. OAuth2 client id.
@@ -19,6 +12,19 @@ Two backends are available (--backend flag):
       Run `python -m weconnect_mcp.cli.tibber_login_cli` once, interactively,
       before starting the server with this backend — see that module's
       docstring.
+      This is the default because VW currently blocks third-party direct
+      access (see experiment/vw-device-flow-attestation-bypass/FINDING.md) —
+      the carconnectivity backend below will fail to connect until that
+      changes.
+
+  carconnectivity             VW-direct via the carconnectivity library.
+      Currently broken (VW blocks third-party BFF access, see FINDING.md
+      above) — kept for when/if direct access is restored.
+      Environment variables (override config.json for cloud/container
+      deployments):
+        VW_USERNAME     VW account e-mail
+        VW_PASSWORD     VW account password
+        VW_SPIN         4-digit S-PIN
 
   MCP_API_KEY     Bearer token clients must send (HTTP mode only).
                   If unset, the server runs WITHOUT authentication.
@@ -121,7 +127,7 @@ def _build_tibber_adapter():
     )
 
 
-def run_server_from_cli(config_path: Optional[str] = None, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None, backend: str = "carconnectivity"):
+def run_server_from_cli(config_path: Optional[str] = None, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None, backend: str = "tibber"):
     from weconnect_mcp.server.mcp_server import get_server
 
     # Resolve API key: CLI argument > env variable > None (no auth)
@@ -258,7 +264,7 @@ def run_server_from_cli(config_path: Optional[str] = None, tokenstore_file: Opti
 def build_parser():
     parser = argparse.ArgumentParser(prog='weconnect-mvp-server', description='Start MCP server for vehicles')
     parser.add_argument('config', nargs='?', default=None, help='Path to configuration file (required for --backend carconnectivity, unused for --backend tibber)')
-    parser.add_argument('--backend', default='carconnectivity', choices=['carconnectivity', 'tibber'], help="Vehicle data backend (default: carconnectivity). 'tibber' reads via the Tibber Data API instead of VW-direct -- see TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET/TIBBER_REDIRECT_URI/TIBBER_TOKEN_PATH env vars and weconnect_mcp.cli.tibber_login_cli.")
+    parser.add_argument('--backend', default='tibber', choices=['carconnectivity', 'tibber'], help="Vehicle data backend (default: tibber, since carconnectivity/VW-direct is currently blocked by VW -- see experiment/vw-device-flow-attestation-bypass/FINDING.md). 'tibber' reads via the Tibber Data API instead -- see TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET/TIBBER_REDIRECT_URI/TIBBER_TOKEN_PATH env vars and weconnect_mcp.cli.tibber_login_cli.")
     default_temp = os.path.join(tempfile.gettempdir(), 'tokenstore')
     parser.add_argument('--tokenstorefile', default=default_temp, help=f'Token storage path (default: {default_temp})')
     default_level_name = next((name for name, val in logging_config.LEVEL_MAP.items() if val == logging_config.DEFAULT_LOG_LEVEL), str(logging_config.DEFAULT_LOG_LEVEL))
