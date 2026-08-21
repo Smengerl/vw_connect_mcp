@@ -793,6 +793,33 @@ not a default either way.
   MCP protocol itself (only `get_server()` construction was verified, not
   a live tool call through a connected MCP client).
 
+### 2026-08-21 — MCP tool/resource/prompt descriptions rewritten for Tibber
+- Simon asked for the server's self-description (AI_INSTRUCTIONS.md,
+  resource/prompt/command descriptions) to be updated to match what's
+  actually true running the Tibber backend, described on its own terms
+  rather than hedged for both backends ("ohne car_connectivity
+  parallel").
+- Updated `command_tools.py` (all 10 commands marked not supported),
+  `read_tools.py` and `resources.py` (3 read tools / 9 resources marked
+  not supported — doors, climate, position, windows, tyres, type, window
+  heating, lights, maintenance — the rest annotated with exactly which
+  fields are real vs. always-null), `prompts.py` (all 20 prompt
+  descriptions tagged NOT USABLE / PARTIALLY USABLE against Tibber —
+  every single one depends on GPS position and/or a command to some
+  degree, confirmed none survive fully intact), and a full rewrite of
+  `AI_INSTRUCTIONS.md`.
+- This did **not** touch tool/resource/prompt *registrations* or the
+  TibberAdapter itself — descriptions only, as asked. Verified live that
+  the updated descriptions are what `get_server()`/`get_tools()` actually
+  returns for a running TibberAdapter.
+- **Flagged, not done**: `README.md`'s own "AI Integration" section has
+  its own tool table (separate from AI_INSTRUCTIONS.md) that is now
+  stale relative to this change — AI_INSTRUCTIONS.md's own maintainer
+  note requires all five locations (README, AI_INSTRUCTIONS.md,
+  read_tools.py, command_tools.py, resources.py, prompts.py) to stay in
+  sync, but README.md wasn't in scope for this request. Worth doing in a
+  follow-up.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
