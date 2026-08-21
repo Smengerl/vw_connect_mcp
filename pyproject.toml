@@ -15,6 +15,7 @@ dependencies = [
     "mcp==1.25.0",
     "fastmcp==2.14.1",
     "pydantic==2.12.5",
+    "httpx==0.28.1",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,7 @@ dev = [
 
 [project.scripts]
 weconnect-mcp = "weconnect_mcp.cli.mcp_server_cli:main"
+weconnect-tibber-login = "weconnect_mcp.cli.tibber_login_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

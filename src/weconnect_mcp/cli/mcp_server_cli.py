@@ -1,9 +1,25 @@
-"""CLI shim to start MCP server with carconnectivity adapter.
+"""CLI shim to start MCP server with a vehicle-data adapter.
 
-Environment variables (override config.json for cloud/container deployments):
-  VW_USERNAME     VW account e-mail
-  VW_PASSWORD     VW account password
-  VW_SPIN         4-digit S-PIN
+Two backends are available (--backend flag):
+
+  carconnectivity (default)  VW-direct via the carconnectivity library.
+      Environment variables (override config.json for cloud/container
+      deployments):
+        VW_USERNAME     VW account e-mail
+        VW_PASSWORD     VW account password
+        VW_SPIN         4-digit S-PIN
+
+  tibber                     Read-only, via the Tibber Data API. See
+      experiment/tibber-integration/TIBBER_API.md for background — no
+      config.json needed, only these environment variables:
+        TIBBER_CLIENT_ID       Required. OAuth2 client id.
+        TIBBER_CLIENT_SECRET   Required. OAuth2 client secret.
+        TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
+        TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
+      Run `python -m weconnect_mcp.cli.tibber_login_cli` once, interactively,
+      before starting the server with this backend — see that module's
+      docstring.
+
   MCP_API_KEY     Bearer token clients must send (HTTP mode only).
                   If unset, the server runs WITHOUT authentication.
 """
@@ -76,8 +92,36 @@ def _maybe_patch_config_from_env(config_path: str) -> str:
     return tmp.name
 
 
-def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None):
-    from weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
+def _build_tibber_adapter():
+    """Build a TibberAdapter from environment variables.
+
+    Raises RuntimeError with a clear message if required env vars are
+    missing, so the failure is obvious in server logs at startup rather
+    than surfacing as a confusing later error.
+    """
+    from weconnect_mcp.adapter.tibber_adapter import TibberAdapter
+
+    client_id = os.environ.get("TIBBER_CLIENT_ID")
+    client_secret = os.environ.get("TIBBER_CLIENT_SECRET")
+    redirect_uri = os.environ.get("TIBBER_REDIRECT_URI", "http://localhost:8515/callback")
+    token_path = os.environ.get("TIBBER_TOKEN_PATH", "./tibber_tokens.json")
+
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set to use "
+            "--backend tibber. Register an OAuth2 client at "
+            "https://data-api.tibber.com/clients/manage/ first."
+        )
+
+    return TibberAdapter(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=redirect_uri,
+        token_path=token_path,
+    )
+
+
+def run_server_from_cli(config_path: Optional[str] = None, tokenstore_file: Optional[str] = None, transport: str = DEFAULT_TRANSPORT, port: int = DEFAULT_PORT, log_level: int = logging_config.DEFAULT_LOG_LEVEL, log_file: Optional[str] = None, api_key: Optional[str] = None, backend: str = "carconnectivity"):
     from weconnect_mcp.server.mcp_server import get_server
 
     # Resolve API key: CLI argument > env variable > None (no auth)
@@ -92,12 +136,22 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
 
     logger = logging_config.get_logger(__name__)
 
-    # Apply env-variable credential overrides (for cloud/container deployments)
-    effective_config_path = _maybe_patch_config_from_env(config_path)
-    if effective_config_path != config_path:
-        logger.info("VW credentials overridden from environment variables")
+    if backend == "carconnectivity":
+        if not config_path:
+            raise RuntimeError("A config file path is required for --backend carconnectivity.")
+        from weconnect_mcp.adapter.carconnectivity_adapter import CarConnectivityAdapter
 
-    logger.debug("Starting adapter with config: %s", effective_config_path)
+        # Apply env-variable credential overrides (for cloud/container deployments)
+        effective_config_path = _maybe_patch_config_from_env(config_path)
+        if effective_config_path != config_path:
+            logger.info("VW credentials overridden from environment variables")
+
+        logger.debug("Starting adapter with config: %s", effective_config_path)
+    elif backend == "tibber":
+        effective_config_path = None
+        logger.debug("Starting Tibber adapter (config file not used for this backend)")
+    else:
+        raise RuntimeError(f"Unknown backend: {backend!r} (expected 'carconnectivity' or 'tibber')")
 
     if transport == "http":
         # ── HTTP / cloud mode ─────────────────────────────────────────────────
@@ -137,27 +191,30 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
             def honk_and_flash(self, v, d=None): return self._delegate.honk_and_flash(v, d)  # type: ignore[override]
 
         proxy = _AdapterProxy(StartingAdapter())
-        real_adapter: list[CarConnectivityAdapter] = []
+        real_adapter: list[AbstractAdapter] = []
 
         server = get_server(proxy, api_key=resolved_api_key)
 
-        def _connect_vw() -> None:
+        def _connect_backend() -> None:
             try:
-                adapter = CarConnectivityAdapter(
-                    config_path=effective_config_path,
-                    tokenstore_file=tokenstore_file,
-                )
+                if backend == "carconnectivity":
+                    adapter = CarConnectivityAdapter(
+                        config_path=effective_config_path,
+                        tokenstore_file=tokenstore_file,
+                    )
+                    # Re-apply after CarConnectivity.__init__() may have reset
+                    # levels by reading log_level from its own config file.
+                    logging_config.apply_third_party_levels(log_level)
+                else:
+                    adapter = _build_tibber_adapter()
                 adapter.__enter__()
                 real_adapter.append(adapter)
                 proxy._swap(adapter)
-                # Re-apply after CarConnectivity.__init__() may have reset levels
-                # by reading log_level from its own config file.
-                logging_config.apply_third_party_levels(log_level)
-                logger.info("VW adapter connected – server fully ready")
+                logger.info("%s adapter connected – server fully ready", backend)
             except Exception as exc:
-                logger.error("VW adapter failed to connect: %s", exc)
+                logger.error("%s adapter failed to connect: %s", backend, exc)
 
-        threading.Thread(target=_connect_vw, daemon=True, name="vw-connect").start()
+        threading.Thread(target=_connect_backend, daemon=True, name=f"{backend}-connect").start()
 
         try:
             from starlette.middleware import Middleware as ASGIMiddleware
@@ -185,7 +242,11 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
 
     else:
         # ── stdio mode (local) ────────────────────────────────────────────────
-        with CarConnectivityAdapter(config_path=effective_config_path, tokenstore_file=tokenstore_file) as adapter:
+        if backend == "carconnectivity":
+            adapter_cm = CarConnectivityAdapter(config_path=effective_config_path, tokenstore_file=tokenstore_file)
+        else:
+            adapter_cm = _build_tibber_adapter()
+        with adapter_cm as adapter:
             logger.debug("Starting MCP server")
             server = get_server(adapter, api_key=resolved_api_key)
             try:
@@ -196,7 +257,8 @@ def run_server_from_cli(config_path: str, tokenstore_file: Optional[str] = None,
 
 def build_parser():
     parser = argparse.ArgumentParser(prog='weconnect-mvp-server', description='Start MCP server for vehicles')
-    parser.add_argument('config', help='Path to configuration file')
+    parser.add_argument('config', nargs='?', default=None, help='Path to configuration file (required for --backend carconnectivity, unused for --backend tibber)')
+    parser.add_argument('--backend', default='carconnectivity', choices=['carconnectivity', 'tibber'], help="Vehicle data backend (default: carconnectivity). 'tibber' reads via the Tibber Data API instead of VW-direct -- see TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET/TIBBER_REDIRECT_URI/TIBBER_TOKEN_PATH env vars and weconnect_mcp.cli.tibber_login_cli.")
     default_temp = os.path.join(tempfile.gettempdir(), 'tokenstore')
     parser.add_argument('--tokenstorefile', default=default_temp, help=f'Token storage path (default: {default_temp})')
     default_level_name = next((name for name, val in logging_config.LEVEL_MAP.items() if val == logging_config.DEFAULT_LOG_LEVEL), str(logging_config.DEFAULT_LOG_LEVEL))
@@ -235,6 +297,7 @@ def main(argv=None):
         log_level=log_level,
         log_file=args.log_file,
         api_key=args.api_key,
+        backend=args.backend,
     )
 
 if __name__ == '__main__':
