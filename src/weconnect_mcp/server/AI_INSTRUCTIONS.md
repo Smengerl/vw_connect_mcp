@@ -1,67 +1,72 @@
-# AI Instructions for WeConnect MCP Server
+# AI Instructions for WeConnect MCP Server (Tibber backend)
 
-**Purpose**: Access Volkswagen WeConnect vehicle data and control via Model Context Protocol (MCP)
+**Purpose**: Access Volkswagen vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — used because direct VW WeConnect API access is currently blocked to third parties (see `experiment/vw-device-flow-attestation-bypass/FINDING.md`). Tibber's VW integration is backed by Enode (see `experiment/tibber-integration/TIBBER_API.md` §1.1).
 
 **Key Features**:
-- Read vehicle data (battery, doors, climate, position, etc.)
-- Control vehicle remotely (lock, climate, charging, lights)
-- Automatic caching (5 minutes) to respect VW API rate limits
-- Support for BEV (electric), PHEV (hybrid), and combustion vehicles
+- Read a small, confirmed set of vehicle data: identity (VIN, brand, model, name, online state) and charging/range status (state of charge, target SOC, range, plug status, charging state)
+- Automatic caching (5 minutes) to be a polite API citizen
+- Electric vehicles only — Tibber's VW integration only ever reports EVs
 
-**Critical Limitation** ⚠️:
-As of February 2026, the VW WeConnect API does **NOT** provide license plate information. This is a Volkswagen API limitation, not a limitation of this server. All vehicles return `license_plate: null`. You cannot search or filter by license plate.
+**Critical Limitation** ⚠️ — **this backend is read-only, full stop**:
+The Tibber Data API has no write/command endpoints at all (confirmed by reading its full OpenAPI schema — see `experiment/tibber-integration/TIBBER_API.md` §5). **Every command tool** (lock/unlock, climate control, charging start/stop, lights, window heating) **always returns `{"success": false}`**, regardless of vehicle or parameters. This is not a bug or a missing feature — the underlying API genuinely cannot do this. If a user asks to lock the car, start charging, or precondition the cabin, tell them directly that this server currently cannot do that (see "What This Server Cannot Do" below) rather than attempting the command and hoping.
+
+**Second limitation** — narrow read surface: doors, windows, tyres, lights, climatization status, window heating status, GPS position, maintenance schedule, odometer, license plate, model year, and software version are **not available**. Only identity + charging/range data exists. See "What This Server Can Do" below for the complete list — there is nothing beyond it.
 
 ---
 
 ## MCP Server Architecture
 
-This server provides **both Tools and Resources** via the Model Context Protocol:
+This server provides **both Tools and Resources** via the Model Context Protocol. The tool/resource *registrations* are shared code (the same `read_tools.py` / `command_tools.py` / `resources.py` also back a VW-direct `carconnectivity` backend on other branches) — but every description below reflects what's **actually true when this server is running the Tibber backend**, not a generic dual-backend description.
 
 ### **MCP Tools** (Preferred for AI Assistants)
 - **18 total tools**: 8 read-only tools + 10 command tools
-- **Read tools** (`readOnlyHint: true`, `idempotentHint: true`):
+- **Read tools that work** (`readOnlyHint: true`, `idempotentHint: true`):
   - `get_vehicles()` - List all vehicles
-  - `get_vehicle_info(vehicle_id)` - Basic vehicle info
-  - `get_vehicle_state(vehicle_id)` - Complete state snapshot
-  - `get_vehicle_doors(vehicle_id)` - Door status
-  - `get_battery_status(vehicle_id)` - Battery quick check (BEV/PHEV)
-  - `get_climatization_status(vehicle_id)` - Climate control status
-  - `get_charging_status(vehicle_id)` - Charging details (BEV/PHEV)
-  - `get_vehicle_position(vehicle_id)` - GPS location
-- **Command tools** (`readOnlyHint: false`):
-  - `lock_vehicle(vehicle_id)`, `unlock_vehicle(vehicle_id)` - Door control
-  - `start_climatization(vehicle_id, target_temp_celsius)`, `stop_climatization(vehicle_id)` - Climate control
-  - `start_charging(vehicle_id)`, `stop_charging(vehicle_id)` - Charging control (BEV/PHEV)
-  - `flash_lights(vehicle_id, duration_seconds)`, `honk_and_flash(vehicle_id, duration_seconds)` - Locator
-  - `start_window_heating(vehicle_id)`, `stop_window_heating(vehicle_id)` - Window defrost
+  - `get_vehicle_info(vehicle_id)` - Identity: manufacturer, model, name, online state
+  - `get_vehicle_state(vehicle_id)` - Same data as `get_vehicle_info` (no richer snapshot exists for this backend)
+  - `get_battery_status(vehicle_id)` - Battery level, range, charging flag
+  - `get_charging_status(vehicle_id)` - Charging state, plug status, target/current SOC
+- **Read tools that always fail** (registered, but the underlying data doesn't exist — always return a "not found" error, never a crash):
+  - `get_vehicle_doors(vehicle_id)`, `get_climatization_status(vehicle_id)`, `get_vehicle_position(vehicle_id)`
+- **Command tools — all 10 always fail** (`readOnlyHint: false`, always return `{"success": false, "error": "Not supported: the Tibber Data API is read-only..."}`):
+  - `lock_vehicle`, `unlock_vehicle`, `start_climatization`, `stop_climatization`, `start_charging`, `stop_charging`, `flash_lights`, `honk_and_flash`, `start_window_heating`, `stop_window_heating`
 
 ### **MCP Resources** (Alternative Access Pattern)
 - **URI-based data access** with server-side caching
-- **14 resources** (all read-only, prefixed with `res_` to distinguish from tools):
-  - `data://vehicles` (`res_get_vehicles`) - List all vehicles
-  - `data://vehicle/{vehicle_id}/info` (`res_get_vehicle_info`) - Basic vehicle information
-  - `data://vehicle/{vehicle_id}/state` (`res_get_vehicle_state`) - Complete vehicle state snapshot
-  - `data://vehicle/{vehicle_id}/doors` (`res_get_vehicle_doors`) - Door lock/open status
-  - `data://vehicle/{vehicle_id}/windows` (`res_get_vehicle_windows`) - Window open/closed status
-  - `data://vehicle/{vehicle_id}/tyres` (`res_get_vehicle_tyres`) - Tyre pressure and temperature
-  - `data://vehicle/{vehicle_id}/type` (`res_get_vehicle_type`) - Vehicle propulsion type (BEV/PHEV/ICE)
-  - `data://vehicle/{vehicle_id}/charging` (`res_get_charging_state`) - Detailed charging status (BEV/PHEV)
-  - `data://vehicle/{vehicle_id}/climate` (`res_get_climatization_state`) - Climate control status
-  - `data://vehicle/{vehicle_id}/maintenance` (`res_get_maintenance_info`) - Service schedule information
-  - `data://vehicle/{vehicle_id}/range` (`res_get_range_info`) - Range and fuel/battery levels
-  - `data://vehicle/{vehicle_id}/window-heating` (`res_get_window_heating_state`) - Window heating/defrost status
-  - `data://vehicle/{vehicle_id}/lights` (`res_get_lights_state`) - Lights status
-  - `data://vehicle/{vehicle_id}/position` (`res_get_position`) - GPS location
-  - `data://vehicle/{vehicle_id}/battery` (`res_get_battery_status`) - Quick battery check (BEV/PHEV)
+- **14 resources** (all read-only, prefixed with `res_`), same split as tools:
+  - **Work**: `data://vehicles`, `data://vehicle/{id}/info`, `data://vehicle/{id}/state`, `data://vehicle/{id}/charging`, `data://vehicle/{id}/range`, `data://vehicle/{id}/battery`
+  - **Always error** (no Tibber data): `data://vehicle/{id}/doors`, `.../windows`, `.../tyres`, `.../type`, `.../climate`, `.../maintenance`, `.../window-heating`, `.../lights`, `.../position`
 - **When to use**: When you need declarative data references or server-side caching semantics
 - **When NOT to use**: Most AI interactions should use Tools (more intuitive function-call interface)
 
 ### **Recommendation for AI Assistants**
-**Always use Tools** (not Resources) for interactive conversations. Tools provide:
-- Better error handling with JSON responses
-- Clearer intent (read vs. command)
-- Consistent return format
-- Automatic cache invalidation after commands
+**Always use Tools** (not Resources) for interactive conversations.
+
+---
+
+## What This Server CAN Do
+
+Only these data points exist, for electric vehicles only:
+
+| Data | Tool/Resource |
+|---|---|
+| VIN, brand, model, name | `get_vehicles()`, `get_vehicle_info()` |
+| Online/connection state | `get_vehicle_info()` |
+| Battery level (%) | `get_battery_status()` |
+| Electric range (km) | `get_battery_status()` |
+| Target SOC (%) | `get_charging_status()` |
+| Plug connected (bool) | `get_charging_status()` (`is_plugged_in`) |
+| Charging state (charging/idle) | `get_charging_status()` |
+
+That's the entire surface. `charging_power_kw` and `remaining_time_minutes` are always present as fields in the JSON but always `null` — Tibber doesn't report them.
+
+## What This Server CANNOT Do
+
+**No commands, ever** — lock/unlock doors, start/stop climate control, start/stop charging, flash lights, honk, or window heating. The Tibber Data API has no write endpoint. Every command tool call returns `{"success": false, "error": "Not supported: the Tibber Data API is read-only (no command endpoints exist)."}`.
+
+**No physical/location/maintenance data** — door lock state, window state, tyre pressure, exterior lights, climatization state, window heating state, GPS position, service/inspection schedule, odometer, license plate, model year, software version. All the corresponding tools/resources exist (for interface compatibility with the VW-direct backend) but always return a "not found" error — that's expected, not a bug.
+
+**If a user asks for any of the above**: say plainly that this server (running the Tibber backend) cannot do it, and why (Tibber's public API is read-only and only reports charging/range data) — don't try the tool and then explain the failure, and don't imply it might work "sometimes."
 
 ---
 
@@ -71,540 +76,131 @@ This server provides **both Tools and Resources** via the Model Context Protocol
 **Always start here!** Call `get_vehicles()` to see what vehicles are available.
 
 ```python
-# First command in any conversation about vehicles
 get_vehicles()
-# Returns: [{"vin": "WVWZZZ...", "name": "Golf", "model": "Golf 8", "license_plate": null}, ...]
+# Returns: [{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7", "license_plate": null}]
 ```
 
 ### 2. Identify Vehicles
 Use either:
-- **Vehicle name** (preferred): `"Golf"`, `"ID.7"`, `"T7"` - easier for humans to read
-- **VIN**: `"WVWZZZAUZPW123456"` - unique identifier
+- **Vehicle name** (preferred): `"ID.7"` - easier for humans to read
+- **VIN**: `"WVWZZZED4SE003938"` - unique identifier
 
-Both formats work automatically. The system resolves them internally.
+Both formats work automatically. `license_plate` is always `null` (not available via Tibber).
 
 ### 3. Read Vehicle Data
-Use the `get_*` tools to access cached vehicle data.
+Use `get_vehicles`, `get_vehicle_info`, `get_battery_status`, `get_charging_status`. Nothing else returns real data — see "What This Server CAN Do" above.
 
-### 4. Control Vehicle
-Use the command tools (`lock_*`, `start_*`, `stop_*`) to control the vehicle. These automatically invalidate the cache.
+### 4. Do NOT Attempt Control
+There is no working command in this deployment. If the user wants to lock the car, precondition the cabin, or start charging, tell them this server can only read status, not control the vehicle.
 
----
 ---
 
 ## Available Tools (Complete Reference)
 
-All tools return JSON data. Data is cached for 5 minutes. Cache auto-refreshes after control commands.
+All tools return JSON data. Data is cached for 5 minutes.
 
 ### Discovery & Basic Info
 
 **`get_vehicles()`**
 - **Purpose**: List all available vehicles
-- **Returns**: Array of vehicles with VIN, name, model (license_plate always null)
-- **When to use**: Always use this first to discover what vehicles exist
-- **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "Golf", "model": "Golf 8", "license_plate": null}]`
+- **Returns**: Array of vehicles with VIN, name, model (`license_plate` always `null`)
+- **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7", "license_plate": null}]`
 
 **`get_vehicle_info(vehicle_id)`**
-- **Purpose**: Get basic vehicle information
+- **Purpose**: Get basic vehicle identity
 - **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Manufacturer, model, software version, year, odometer, connection state
-- **Example**: `get_vehicle_info("Golf")` → `{"model": "Golf 8", "odometer": 15432, ...}`
+- **Returns**: `manufacturer`, `model`, `name`, `connection_state` ("online"/"offline"). `license_plate`, `odometer`, `state`, `type`, `software_version`, `model_year` are always `null`.
+- **Example**: `get_vehicle_info("ID.7")` → `{"model": "ID.7", "manufacturer": "Volkswagen", "connection_state": "online", "odometer": null, ...}`
 
 **`get_vehicle_state(vehicle_id)`**
-- **Purpose**: Complete state snapshot (all systems combined)
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Comprehensive overview of all vehicle systems
-- **When to use**: When you need everything at once, or user asks for "full status"
-- **Example**: `get_vehicle_state("Golf")` → `{doors: {...}, windows: {...}, battery: {...}, ...}`
-
-### Physical Components
-
-**`get_vehicle_doors(vehicle_id)`**
-- **Purpose**: Door lock and open/closed status
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Lock state (locked/unlocked) and open state for each door
-- **Example**: `get_vehicle_doors("Golf")` → `{"lock_state": "locked", "front_left": {"open": false, "locked": true}, ...}`
+- **Purpose**: Same identity data as `get_vehicle_info` — there is no richer combined snapshot for this backend (no doors/windows/climate/tyres to add).
 
 ### Energy & Range
 
 **`get_battery_status(vehicle_id)`**
-- **Purpose**: Quick battery check for electric vehicles
+- **Purpose**: Quick battery check
 - **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Vehicle types**: BEV/PHEV only (returns error for combustion)
 - **Returns**: Battery level (%), electric range (km), charging status
-- **When to use**: Quick check before departure, or user asks "how much charge?"
-- **Example**: `get_battery_status("ID.7")` → `{"battery_level_percent": 85, "range_km": 320, "is_charging": false}`
+- **Example**: `get_battery_status("ID.7")` → `{"battery_level_percent": 74, "range_km": 346.0, "is_charging": false}`
 
 **`get_charging_status(vehicle_id)`**
-- **Purpose**: Detailed charging analysis
+- **Purpose**: Charging/plug status
 - **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Vehicle types**: BEV/PHEV only
-- **Returns**: Power (kW), remaining time, cable status, target SOC, charging state
-- **When to use**: User asks about charging details, or monitoring active charging session
-- **Example**: `get_charging_status("ID.7")` → `{"is_charging": true, "charging_power_kw": 11.0, "remaining_time_minutes": 45, ...}`
+- **Returns**: `is_charging`, `is_plugged_in`, `charging_state` ("charging"/"idle"), `target_soc_percent`, `current_soc_percent`. `charging_power_kw` and `remaining_time_minutes` are always `null`.
+- **Example**: `get_charging_status("ID.7")` → `{"is_charging": false, "is_plugged_in": false, "charging_state": "idle", "target_soc_percent": 80, "current_soc_percent": 74}`
 
-### Climate & Comfort
+### Not Available (documented for completeness — always fail)
 
-**`get_climate_status(vehicle_id)`**
-- **Purpose**: Climate control system status
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: State (off/heating/cooling/ventilation), target temperature, estimated time
-- **Example**: `get_climate_status("Golf")` → `{"state": "heating", "target_temperature_celsius": 22.0, "is_active": true, ...}`
-
-### Location
-
-**`get_vehicle_position(vehicle_id)`**
-- **Purpose**: GPS location and heading
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Latitude, longitude, heading (0°=North, 90°=East, 180°=South, 270°=West)
-- **Example**: `get_vehicle_position("Golf")` → `{"latitude": 48.1351, "longitude": 11.5820, "heading": 45.0}`
-
-### Maintenance
-
-**`get_maintenance_info(vehicle_id)`**
-- **Purpose**: Service schedule information
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Inspection and oil service due dates/distances
-- **Example**: `get_maintenance_info("Golf")` → `{"inspection_due_date": "2026-06-15", "inspection_due_distance_km": 5000, ...}`
+**`get_vehicle_doors(vehicle_id)`**, **`get_climatization_status(vehicle_id)`**, **`get_vehicle_position(vehicle_id)`** — all return `{"error": "..."}`. Don't call these unless you need to demonstrate/confirm they're unsupported.
 
 ---
 
 ## Available Resources (URI-Based Data Access)
 
-Resources provide **alternative access** to vehicle data via URIs. They return the **same data** as tools but use a different access pattern. All resource names are prefixed with `res_` to distinguish them from tools. Most AI assistants should prefer **Tools** for better integration.
-
-### Discovery & Basic Info Resources
-
-**`data://vehicles`** (res_get_vehicles)
-- **Purpose**: List all available vehicles
-- **Returns**: Array of vehicles with VIN, name, model (license_plate always null)
-- **Equivalent Tool**: `get_vehicles()`
-
-**`data://vehicle/{vehicle_id}/info`** (res_get_vehicle_info)
-- **Purpose**: Basic vehicle information
-- **Returns**: Manufacturer, model, software version, year, odometer, connection state
-- **Equivalent Tool**: `get_vehicle_info(vehicle_id)`
-
-**`data://vehicle/{vehicle_id}/state`** (res_get_vehicle_state)
-- **Purpose**: Complete state snapshot
-- **Returns**: All vehicle systems combined
-- **Equivalent Tool**: `get_vehicle_state(vehicle_id)`
-
-**`data://vehicle/{vehicle_id}/type`** (res_get_vehicle_type)
-- **Purpose**: Vehicle propulsion type
-- **Returns**: Type: `"electric"` (BEV), `"combustion"`, or `"plug-in_hybrid"` (PHEV)
-- **When to use**: Determine if battery/charging features are available
-
-### Physical Components Resources
-
-**`data://vehicle/{vehicle_id}/doors`** (res_get_vehicle_doors)
-- **Purpose**: Door lock and open/closed status
-- **Returns**: Lock state and status for each door
-- **Equivalent Tool**: `get_vehicle_doors(vehicle_id)`
-
-**`data://vehicle/{vehicle_id}/windows`** (res_get_vehicle_windows)
-- **Purpose**: Window open/closed status
-- **Returns**: Status for all windows
-
-**`data://vehicle/{vehicle_id}/tyres`** (res_get_vehicle_tyres)
-- **Purpose**: Tyre pressure and temperature
-- **Returns**: Pressure (bar/psi) and temperature for all tyres
-
-**`data://vehicle/{vehicle_id}/lights`** (res_get_lights_state)
-- **Purpose**: Vehicle lights status
-- **Returns**: Left/right light on/off status
-
-### Energy & Range Resources
-
-**`data://vehicle/{vehicle_id}/battery`** (res_get_battery_status)
-- **Purpose**: Quick battery check
-- **Vehicle types**: BEV/PHEV only
-- **Returns**: Battery level (%), electric range (km), charging status
-- **Equivalent Tool**: `get_battery_status(vehicle_id)`
-
-**`data://vehicle/{vehicle_id}/charging`** (res_get_charging_state)
-- **Purpose**: Detailed charging status
-- **Vehicle types**: BEV/PHEV only
-- **Returns**: Power (kW), remaining time, cable status, target SOC, charging state
-- **Equivalent Tool**: `get_charging_status(vehicle_id)`
-
-**`data://vehicle/{vehicle_id}/range`** (res_get_range_info)
-- **Purpose**: Range and fuel/battery levels
-- **Returns**: Total range, electric range (BEV/PHEV), combustion range (PHEV/ICE), battery/tank levels
-
-### Climate & Comfort Resources
-
-**`data://vehicle/{vehicle_id}/climate`** (res_get_climatization_state)
-- **Purpose**: Climate control status
-- **Returns**: State (off/heating/cooling), target temperature, window/seat heating
-- **Equivalent Tool**: `get_climatization_status(vehicle_id)` (note: tools use different naming)
-
-**`data://vehicle/{vehicle_id}/window-heating`** (res_get_window_heating_state)
-- **Purpose**: Window heating/defrost status
-- **Returns**: Front and rear window heating state
-
-### Location Resources
-
-**`data://vehicle/{vehicle_id}/position`** (res_get_position)
-- **Purpose**: GPS location
-- **Returns**: Latitude, longitude, heading (0°=North, 90°=East, 180°=South, 270°=West)
-- **Equivalent Tool**: `get_vehicle_position(vehicle_id)`
-
-### Maintenance Resources
-
-**`data://vehicle/{vehicle_id}/maintenance`** (res_get_maintenance_info)
-- **Purpose**: Service schedule information
-- **Returns**: Inspection and oil service due dates/distances
-- **Note**: Also available as tool `get_maintenance_info(vehicle_id)`
+Same split as tools. Working: `data://vehicles`, `data://vehicle/{id}/info`, `data://vehicle/{id}/state`, `data://vehicle/{id}/charging`, `data://vehicle/{id}/range`, `data://vehicle/{id}/battery`. Always error: `data://vehicle/{id}/doors`, `.../windows`, `.../tyres`, `.../type`, `.../climate`, `.../maintenance`, `.../window-heating`, `.../lights`, `.../position`. See each resource's `description` field (in `resources.py`) for the specific reason.
 
 ---
 
-## Control Commands (Write Operations)
+## Control Commands (Write Operations) — ALL UNSUPPORTED
 
-All control commands return `{"success": true/false, "message": "...", "error": "..."}` and automatically invalidate the cache.
+Every command tool below is registered (for interface compatibility) but **always returns `{"success": false, "error": "Not supported: the Tibber Data API is read-only (no command endpoints exist)."}`** — regardless of vehicle state, parameters, or retries. Do not attempt workarounds (retrying, waiting, checking status first) — the result will not change, because the underlying API has no endpoint to call.
 
-### Door Control
+- `lock_vehicle(vehicle_id)`, `unlock_vehicle(vehicle_id)`
+- `start_climatization(vehicle_id, target_temp_celsius=None)`, `stop_climatization(vehicle_id)`
+- `start_charging(vehicle_id)`, `stop_charging(vehicle_id)`
+- `flash_lights(vehicle_id, duration_seconds=None)`, `honk_and_flash(vehicle_id, duration_seconds=None)`
+- `start_window_heating(vehicle_id)`, `stop_window_heating(vehicle_id)`
 
-**`lock_vehicle(vehicle_id)`**
-- **Action**: Lock all doors
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: `lock_vehicle("Golf")` → `{"success": true, "message": "Vehicle locked"}`
-
-**`unlock_vehicle(vehicle_id)`**
-- **Action**: Unlock all doors
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: `unlock_vehicle("Golf")` → `{"success": true, "message": "Vehicle unlocked"}`
-
-### Climate Control
-
-**`start_climatization(vehicle_id, target_temp_celsius=None)`**
-- **Action**: Start pre-heating or pre-cooling
-- **Parameters**:
-  - `vehicle_id` - Vehicle name or VIN
-  - `target_temp_celsius` (optional) - Target temperature in Celsius (if supported by vehicle)
-- **Examples**:
-  - `start_climatization("Golf")` - Uses last temperature setting
-  - `start_climatization("Golf", 22.0)` - Sets target to 22°C
-
-**`stop_climatization(vehicle_id)`**
-- **Action**: Stop climate control
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: `stop_climatization("Golf")`
-
-**`start_window_heating(vehicle_id)`**
-- **Action**: Activate window heating/defrosting
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: `start_window_heating("Golf")`
-
-**`stop_window_heating(vehicle_id)`**
-- **Action**: Deactivate window heating
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: `stop_window_heating("Golf")`
-
-### Charging Control (BEV/PHEV only)
-
-**`start_charging(vehicle_id)`**
-- **Action**: Start charging session
-- **Requirements**: 
-  - ⚠️ **CRITICAL**: Vehicle must be plugged in (cable connected)
-  - ⚠️ **CRITICAL**: Current SOC (State of Charge) must be below target SOC
-  - ⚠️ **CRITICAL**: Always verify charging actually started after sending command (VW API may fail silently)
-- **Pre-command validation workflow**:
-  1. Call `get_charging_status(vehicle_id)` to check:
-     - `is_plugged_in` must be `true` (or `plug_connection_state` is `"connected"`)
-     - `current_soc_percent` must be less than `target_soc_percent`
-  2. If not plugged in: Inform user "Cannot start charging - vehicle not plugged in"
-  3. If SOC >= target: Inform user "Cannot start charging - battery already at/above target SOC ({current}% >= {target}%)"
-  4. Only if both conditions met: Send `start_charging()` command
-- **Post-command verification workflow**:
-  1. Send `start_charging()` command
-  2. Wait 10-15 seconds for command to propagate
-  3. Call `get_charging_status(vehicle_id)` again
-  4. Verify `is_charging` is `true` and `charging_state` is `"charging"`
-  5. If NOT charging: Inform user "Charging command sent but vehicle did not start charging - check vehicle display for errors"
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: See "Charging Session Management (Safe Workflow)" in Common Usage Patterns below
-
-**`stop_charging(vehicle_id)`**
-- **Action**: Stop charging session
-- **Requirements**:
-  - ⚠️ **CRITICAL**: Vehicle must be currently charging
-  - ⚠️ **WARNING**: Check SOC before stopping - warn user if stopping prematurely
-  - ⚠️ **CRITICAL**: Always verify charging actually stopped after sending command
-- **Pre-command validation workflow**:
-  1. Call `get_charging_status(vehicle_id)` to check:
-     - `is_charging` must be `true` (or `charging_state` is `"charging"`)
-     - Check `current_soc_percent` vs `target_soc_percent` for warnings
-  2. If NOT charging: Inform user "Cannot stop charging - vehicle is not currently charging"
-  3. If SOC < 20%: **WARN** user "⚠️ Battery very low ({current}%) - are you sure you want to stop charging?"
-  4. If SOC < target - 10%: **WARN** user "⚠️ Battery at {current}% (target: {target}%) - stopping charging now will leave battery well below target"
-  5. Only if user confirms (or no warnings): Send `stop_charging()` command
-- **Post-command verification workflow**:
-  1. Send `stop_charging()` command
-  2. Wait 10-15 seconds for command to propagate
-  3. Call `get_charging_status(vehicle_id)` again
-  4. Verify `is_charging` is `false` and `charging_state` is NOT `"charging"`
-  5. If STILL charging: Inform user "Stop charging command sent but vehicle is still charging - check vehicle display or try again"
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Example**: See "Stop Charging (Safe Workflow)" in Examples section below
-
-### Locator Features
-
-**`flash_lights(vehicle_id, duration_seconds=None)`**
-- **Action**: Flash headlights to locate vehicle in parking lot
-- **Parameters**:
-  - `vehicle_id` - Vehicle name or VIN
-  - `duration_seconds` (optional) - Flash duration in seconds (if supported by vehicle)
-- **Examples**:
-  - `flash_lights("Golf")` - Flash with default duration
-  - `flash_lights("Golf", 10)` - Flash for 10 seconds
-
-**`honk_and_flash(vehicle_id, duration_seconds=None)`**
-- **Action**: Honk horn and flash lights simultaneously
-- **Parameters**:
-  - `vehicle_id` - Vehicle name or VIN
-  - `duration_seconds` (optional) - Duration in seconds (if supported by vehicle)
-- **Examples**:
-  - `honk_and_flash("Golf")` - Use default duration
-  - `honk_and_flash("Golf", 5)` - Honk and flash for 5 seconds
+If a user asks to control the vehicle, respond directly: "This server currently only reads vehicle status via Tibber (read-only API) — it can't lock/unlock, control climate, or start/stop charging." Do not call the command tool "to check" — the answer is always the same and calling it wastes a round trip.
 
 ---
 
 ## Common Usage Patterns
 
-### Quick Battery Check (Electric Vehicle)
+### Quick Battery Check
 ```python
-# 1. Discover vehicles
 get_vehicles()
-
-# 2. Check battery
 get_battery_status("ID.7")
-# Result: Battery at 85%, 320 km range, not charging
+# Result: Battery at 74%, 346 km range, not charging
 ```
 
-### Full Status Report
+### Charging Status Check
 ```python
-# 1. Discover vehicles
 get_vehicles()
-
-# 2. Get comprehensive state
-get_vehicle_state("Golf")
-# Result: All systems status in one call
+get_charging_status("ID.7")
+# Result: {"is_charging": false, "is_plugged_in": false, "current_soc_percent": 74, "target_soc_percent": 80}
 ```
 
-### Pre-Trip Check
+### Basic Vehicle Identity
 ```python
-# 1. Check battery/fuel
-get_battery_status("ID.7")  # or get_vehicle_state() for combustion
-
-# 2. Check doors are closed and locked
-get_vehicle_doors("ID.7")
-
-# 3. Check location
-get_vehicle_position("ID.7")
+get_vehicles()
+get_vehicle_info("ID.7")
+# Result: {"manufacturer": "Volkswagen", "model": "ID.7", "connection_state": "online"}
 ```
 
-### Remote Climate Control
-```python
-# 1. Check current climate state
-get_climate_status("Golf")
-
-# 2. Start pre-heating to 22°C
-start_climatization("Golf", 22.0)
-
-# 3. Verify it started (cache auto-refreshes after command)
-get_climate_status("Golf")
-# Result: state = "heating", target = 22°C
-```
-
-### Charging Session Management (Safe Workflow)
-```python
-# === STARTING CHARGING ===
-
-# 1. Check detailed charging status BEFORE attempting to start
-charging = get_charging_status("ID.7")
-# Result: {"is_plugged_in": true, "current_soc_percent": 45, "target_soc_percent": 80, "is_charging": false}
-
-# 2. Validate prerequisites
-if not charging["is_plugged_in"]:
-    # Error: Cannot start charging - vehicle not plugged in
-    return
-
-if charging["current_soc_percent"] >= charging["target_soc_percent"]:
-    # Error: Cannot start charging - battery at 45% already at/above target 80%
-    return
-
-# 3. Prerequisites met - send start command
-result = start_charging("ID.7")
-# Result: {"success": true}
-
-# 4. CRITICAL: Wait for command to propagate (10-15 seconds)
-wait(15)
-
-# 5. Verify charging actually started
-charging_verify = get_charging_status("ID.7")
-# Result: {"is_charging": true, "charging_state": "charging", "charging_power_kw": 11.0}
-
-if not charging_verify["is_charging"]:
-    # Error: Charging command sent but vehicle did not start charging
-    # Possible causes: Vehicle error, charger error, API failure
-    # Action: Ask user to check vehicle display for error messages
-
-# 6. Monitor progress (optional)
-battery = get_battery_status("ID.7")
-# Result: {"battery_level_percent": 45, "is_charging": true}
-
-
-# === STOPPING CHARGING ===
-
-# 1. Check if vehicle is currently charging BEFORE attempting to stop
-charging = get_charging_status("ID.7")
-# Result: {"is_charging": true, "current_soc_percent": 65, "target_soc_percent": 80}
-
-# 2. Validate vehicle is charging
-if not charging["is_charging"]:
-    # Error: Cannot stop charging - vehicle is not currently charging
-    return
-
-# 3. Check for warning conditions
-if charging["current_soc_percent"] < 20:
-    # WARNING: Battery very low (65%) - are you sure?
-    # Get user confirmation before proceeding
-
-if charging["current_soc_percent"] < charging["target_soc_percent"] - 10:
-    # WARNING: Battery at 65% (target: 80%) - well below target
-    # Get user confirmation before proceeding
-
-# 4. User confirmed or no warnings - send stop command
-result = stop_charging("ID.7")
-# Result: {"success": true}
-
-# 5. CRITICAL: Wait for command to propagate (10-15 seconds)
-wait(15)
-
-# 6. Verify charging actually stopped
-charging_verify = get_charging_status("ID.7")
-# Result: {"is_charging": false, "charging_state": "ready_for_charging"}
-
-if charging_verify["is_charging"]:
-    # Error: Stop charging command sent but vehicle is still charging
-    # Possible causes: Scheduled charging override, vehicle error, API failure
-    # Action: Ask user to check vehicle display or try again
-```
-
-### Vehicle Security
-```python
-# 1. Check lock status
-get_vehicle_doors("Golf")
-
-# 2. Lock vehicle if needed
-lock_vehicle("Golf")
-
-# 3. Verify it locked (cache auto-refreshes)
-get_vehicle_doors("Golf")
-```
-
-### Find Vehicle in Parking Lot
-```python
-# 1. Get GPS coordinates
-get_vehicle_position("Golf")
-
-# 2. Flash lights for 10 seconds
-flash_lights("Golf", 10)
-
-# Alternative: Honk and flash
-honk_and_flash("Golf", 5)
-```
+There is no meaningful pre-trip check, remote climate control, charging control, security, or "find my car" workflow with this backend — all of those need commands or position/door data that don't exist here.
 
 ---
 
 ## Best Practices (for AI Assistants)
 
-### 1. **Always Start with Discovery**
-- First command: `get_vehicles()` to see what's available
-- Validates vehicle exists before trying to access it
+### 1. Always Start with Discovery
+`get_vehicles()` first, to validate the vehicle exists and see its exact name/VIN.
 
-### 2. **Use Readable Vehicle Names**
-- Prefer: `"Golf"`, `"ID.7"` (easier for humans)
-- Avoid: Long VINs unless necessary
-- Both work, but names are more readable
+### 2. Use Readable Vehicle Names
+Prefer `"ID.7"` over the full VIN.
 
-### 3. **Choose the Right Tool**
-- **Quick check**: `get_battery_status()` for electric vehicles
-- **Detailed analysis**: `get_charging_status()` for charging details
-- **Everything**: `get_vehicle_state()` for comprehensive overview
+### 3. Know the Boundary
+Only 3 tools return real data: `get_vehicles`, `get_vehicle_info`/`get_vehicle_state`, `get_battery_status`, `get_charging_status`. Everything else — physical status, climate, position, maintenance, and every command — always fails. Don't guess; check "What This Server CAN Do" above before calling an unfamiliar tool.
 
-### 4. **Verify Vehicle Type**
-- Check vehicle type before using BEV/PHEV-only tools
-- `get_battery_status()` and `get_charging_status()` only work for electric/hybrid
-- Combustion vehicles will return errors for these tools
+### 4. Trust the Cache
+Data is cached for 5 minutes automatically. There is no cache-invalidation-after-command behavior to reason about, since no command ever succeeds.
 
-### 5. **Trust the Cache**
-- Data is cached for 5 minutes automatically
-- Cache refreshes automatically after any control command
-- No need to manually manage cache
+### 5. Handle Errors Gracefully
+Read tools that don't apply to this backend return `{"error": "..."}`. Command tools always return `{"success": false, "error": "..."}`. Neither indicates a transient failure worth retrying.
 
-### 6. **Handle Errors Gracefully**
-- All tools return JSON with `error` field if something fails
-- Common errors: vehicle not found, feature not supported, VW API unavailable
-- Always check for `error` field in responses
-
-### 7. **CRITICAL: Safe Charging Workflow** ⚠️
-**ALWAYS follow these workflows when controlling charging - DO NOT skip steps!**
-
-#### Starting Charging: `start_charging()`
-
-1. **Pre-command validation** (REQUIRED):
-   - Call `get_charging_status(vehicle_id)` BEFORE `start_charging()`
-   - Check `is_plugged_in` is `true` (or `plug_connection_state == "connected"`)
-   - Check `current_soc_percent < target_soc_percent`
-   - If either check fails: DO NOT send command, inform user of the reason
-
-2. **Send command** (only if validation passed):
-   - Call `start_charging(vehicle_id)`
-
-3. **Post-command verification** (REQUIRED):
-   - Wait 10-15 seconds for command to propagate to vehicle
-   - Call `get_charging_status(vehicle_id)` again
-   - Verify `is_charging` is `true` and `charging_state == "charging"`
-   - If NOT charging: Inform user that command was sent but charging did not start (possible vehicle/charger error)
-
-**Why this matters**: The VW API may return success but the vehicle may fail to start charging due to:
-- Vehicle-side errors (battery management system limits)
-- Charger errors (communication failure, power issues)
-- API propagation delays or failures
-- Physical issues (cable not fully connected despite reporting "plugged in")
-
-**Example failure scenario**: Vehicle reports `is_plugged_in: true` but cable is loosely connected → Command succeeds but charging never starts → Without verification, user thinks car is charging but returns to empty battery.
-
-#### Stopping Charging: `stop_charging()`
-
-1. **Pre-command validation** (REQUIRED):
-   - Call `get_charging_status(vehicle_id)` BEFORE `stop_charging()`
-   - Check `is_charging` is `true` (or `charging_state == "charging"`)
-   - If NOT charging: DO NOT send command, inform user "Vehicle is not currently charging"
-
-2. **Pre-command warnings** (REQUIRED - get user confirmation):
-   - If `current_soc_percent < 20%`: **WARN** "⚠️ Battery very low ({current}%) - are you sure you want to stop charging?"
-   - If `current_soc_percent < target_soc_percent - 10`: **WARN** "⚠️ Battery at {current}% (target: {target}%) - stopping now will leave battery well below target"
-   - Wait for user confirmation before proceeding if warnings issued
-   - If user wants to proceed anyway: Continue with command
-
-3. **Send command** (only if validation passed and warnings acknowledged):
-   - Call `stop_charging(vehicle_id)`
-
-4. **Post-command verification** (REQUIRED):
-   - Wait 10-15 seconds for command to propagate to vehicle
-   - Call `get_charging_status(vehicle_id)` again
-   - Verify `is_charging` is `false` and `charging_state` is NOT `"charging"`
-   - If STILL charging: Inform user that command was sent but charging did not stop (possible vehicle error)
-
-**Why this matters**: Stopping charging prematurely can leave the user stranded:
-- Very low SOC (< 20%): May not have enough range to reach next charger
-- Well below target: User set a target for a reason (planned trip range)
-- Silent failure: VW API may report success but vehicle continues charging (e.g., scheduled charging override)
-
-**Example warning scenario**: User says "stop charging my ID.7" → Battery at 15% (target 80%) → AI warns "⚠️ Battery very low (15%) and well below target (80%) - are you sure?" → User can reconsider or confirm they want to stop anyway.
+### 6. Don't Attempt Charging/Climate/Lock Workflows
+Unlike a VW-direct backend, there is no "verify command succeeded" pattern to follow here, because no command can succeed. If the user wants control, say so directly instead of running a doomed multi-step workflow.
 
 ---
 
@@ -612,53 +208,40 @@ honk_and_flash("Golf", 5)
 
 ### Caching Behavior
 - **Duration**: 5 minutes (300 seconds)
-- **Purpose**: Respect VW API rate limits, improve response time
-- **Auto-refresh**: Cache invalidates automatically after any control command
-- **Transparent**: No manual cache management needed
+- **Purpose**: Be a polite Tibber API citizen; Tibber's own docs ask clients to implement backoff and avoid excessive polling.
+- **No command-triggered invalidation is meaningful**: no command ever changes server-observable state.
 
 ### Vehicle Identification
-The system automatically resolves both vehicle names and VINs:
-- **Name**: `"Golf"`, `"ID.7"`, `"T7"` - matched case-insensitively
-- **VIN**: `"WVWZZZAUZPW123456"` - exact match
-- **License Plate**: NOT SUPPORTED (VW API limitation)
+- **Name**: `"ID.7"` etc. — matched case-insensitively
+- **VIN**: exact match. For our confirmed VW/Enode-backed vehicle, Tibber's `externalId` is the bare VIN (no vendor prefix, unlike some other brands Tibber supports) — see `experiment/tibber-integration/TIBBER_API.md` §5.2.
+- **License Plate**: NOT SUPPORTED (Tibber doesn't provide it — same net effect as the prior VW-API limitation, different root cause)
 
 ### Architecture (Internal)
-The server uses a modular mixin-based architecture:
-- **CacheMixin**: Handles data caching and invalidation
-- **VehicleResolutionMixin**: Resolves names/VINs to internal vehicle objects
-- **CommandMixin**: All 10 control commands (lock, climate, charging, lights)
-- **StateExtractionMixin**: Extracts state from carconnectivity vehicle objects
-- **Main Adapter**: Orchestrates mixins and provides public API
+The server uses a modular mixin-based architecture. With the Tibber backend specifically:
+- **CacheMixin**: Handles data caching and invalidation (shared with the VW-direct backend)
+- **VehicleResolutionMixin**: Resolves names/VINs to vehicle identifiers (shared)
+- **TibberStateExtractionMixin**: Extracts charging/range state from Tibber's 5-capability device-detail response
+- **TibberAdapter** (`src/weconnect_mcp/adapter/tibber_adapter.py`): Orchestrates the above; every command method and every physical/climate/position/maintenance read method is a fixed no-op/None by design, not a partial implementation
+- **TibberDataAPI** (`src/weconnect_mcp/adapter/tibber_client.py`): OAuth2 (Authorization Code + PKCE) client. Requires a token file produced once, interactively, by `weconnect_mcp.cli.tibber_login_cli` — the adapter itself never opens a browser.
 
 ---
 
 ## Known Limitations
 
-### 1. No License Plate Data (VW API Limitation)
-- **Issue**: VW WeConnect API does not provide license plate information (as of February 2026)
-- **Impact**: All vehicles show `license_plate: null`
-- **Workaround**: Use vehicle name or VIN instead
-- **Not fixable**: This is a Volkswagen API limitation, not a bug in this server
+### 1. Read-Only — No Control At All
+The Tibber Data API has no write endpoints (confirmed via its OpenAPI schema). This is permanent and structural, not a temporary rate limit or bug — see `experiment/tibber-integration/TIBBER_API.md` §5.
 
-### 2. VW API Rate Limiting
-- **Issue**: VW servers limit request frequency
-- **Mitigation**: 5-minute cache reduces API calls
-- **Impact**: Rapid repeated requests may be temporarily blocked
+### 2. Narrow Data Surface
+Only identity + 5 charging/range capabilities exist. Doors, windows, tyres, lights, climatization, window heating, position, maintenance, odometer, license plate, model year, software version: none of these have a Tibber equivalent. See the full 51-point comparison against the VW-direct `carconnectivity` library in `experiment/tibber-integration/README.md`.
 
-### 3. Token Expiration
-- **Issue**: Authentication tokens expire after several hours
-- **Mitigation**: Server automatically re-authenticates when needed
-- **Impact**: Occasional delays on first request after long idle periods
+### 3. Electric Vehicles Only
+Tibber's VW integration only ever reports EVs — combustion/PHEV fields in the data models are always empty for this backend.
 
-### 4. API Availability
-- **Issue**: VW servers can be temporarily unavailable
-- **Impact**: First connection after server start can take 10-30 seconds
-- **Retry**: Usually resolves itself within a minute
+### 4. Token Expiration / Auth
+Access tokens last ~1 hour and refresh automatically using a stored refresh token (~30 days). If the refresh token itself expires or is revoked, the server will fail to start with a clear `TibberAuthError` — re-run `weconnect_mcp.cli.tibber_login_cli` to re-authorize (a one-time interactive step; the running server can't do this itself, by design — see "Architecture" above).
 
-### 5. Command Execution Time
-- **Issue**: Control commands sent to VW API are not instant
-- **Impact**: Vehicle may take 5-30 seconds to execute command
-- **Best practice**: Check status again after 30 seconds if needed
+### 5. Cache Freshness
+Data is cached for 5 minutes; a very recent state change made through the Tibber/VW app itself may take up to 5 minutes to show up here.
 
 ---
 
@@ -669,213 +252,84 @@ All tools return consistent error format:
 ```json
 {
   "success": false,
-  "error": "Vehicle not found: Golf"
+  "error": "Not supported: the Tibber Data API is read-only (no command endpoints exist)."
+}
+```
+
+or, for a read tool with no data for this backend:
+
+```json
+{
+  "error": "Vehicle ID.7 not found"
 }
 ```
 
 ### Common Errors
 
 **"Vehicle not found"**
-- Cause: Invalid vehicle_id
-- Solution: Use `get_vehicles()` to see available vehicles
+- Cause: Invalid `vehicle_id`, or (for `get_vehicle_doors`/`get_climatization_status`/`get_vehicle_position`) simply that no such data exists for this backend
+- Solution: Use `get_vehicles()` to confirm the vehicle exists; if it does and the error persists on one of those three tools, that's expected — see "What This Server CANNOT Do"
 
-**"Vehicle does not support [feature]"**
-- Cause: Trying to use BEV/PHEV tool on combustion vehicle, or feature not available
-- Solution: Check vehicle type, try different tool
-
-**"VW API unavailable"** / **"Connection timeout"**
-- Cause: VW servers temporarily down
-- Solution: Wait 1-2 minutes and retry
-
-**"Authentication failed"**
-- Cause: Invalid credentials or token expired
-- Solution: Server will automatically re-authenticate, or restart server
+**"Not supported: the Tibber Data API is read-only..."**
+- Cause: Any command tool was called
+- Solution: None — inform the user this server cannot control the vehicle
 
 ---
 
 ## Examples (Copy-Paste Ready)
 
-### Example 1: Morning Vehicle Check
+### Example 1: Battery Check
 ```python
-# Discover vehicles
 vehicles = get_vehicles()
-# Result: [{"name": "ID.7", ...}]
+# Result: [{"name": "ID.7", "model": "ID.7", "vin": "WVWZZZ..."}]
 
-# Check battery level
 battery = get_battery_status("ID.7")
-# Result: {"battery_level_percent": 85, "range_km": 320}
-
-# Check doors are locked
-doors = get_vehicle_doors("ID.7")
-# Result: {"lock_state": "locked"}
-
-# All good! Ready to go.
+# Result: {"battery_level_percent": 74, "range_km": 346.0, "is_charging": false}
 ```
 
-### Example 2: Pre-Heat Before Departure
+### Example 2: Charging Status
 ```python
-# Check current climate state
-climate = get_climate_status("Golf")
-# Result: {"state": "off"}
-
-# Start heating to 22°C
-result = start_climatization("Golf", 22.0)
-# Result: {"success": true, "message": "Climatization started"}
-
-# Verify it's running (30 seconds later)
-climate = get_climate_status("Golf")
-# Result: {"state": "heating", "target_temperature_celsius": 22.0}
-```
-
-### Example 3: Charging Session (Safe Workflow)
-```python
-# 1. Check if vehicle is ready to charge
 charging = get_charging_status("ID.7")
-# Result: {"is_plugged_in": true, "current_soc_percent": 45, "target_soc_percent": 80, "is_charging": false}
-
-# 2. Validate prerequisites
-if not charging["is_plugged_in"]:
-    print("ERROR: Cannot start charging - vehicle not plugged in")
-    exit()
-
-if charging["current_soc_percent"] >= charging["target_soc_percent"]:
-    print(f"INFO: Battery already at target ({charging['current_soc_percent']}% >= {charging['target_soc_percent']}%)")
-    exit()
-
-# 3. Prerequisites met - start charging
-result = start_charging("ID.7")
-# Result: {"success": true, "message": "Charging started"}
-
-# 4. Wait for command to propagate
-wait(15)  # Wait 15 seconds
-
-# 5. Verify charging actually started
-charging_verify = get_charging_status("ID.7")
-# Result: {"is_charging": true, "charging_state": "charging", "charging_power_kw": 11.0, "remaining_time_minutes": 120}
-
-if charging_verify["is_charging"]:
-    print(f"SUCCESS: Charging started - {charging_verify['charging_power_kw']} kW, {charging_verify['remaining_time_minutes']} min remaining")
-else:
-    print("ERROR: Charging command sent but vehicle did not start charging - check vehicle display")
+# Result: {"is_charging": false, "is_plugged_in": false, "charging_state": "idle",
+#          "target_soc_percent": 80, "current_soc_percent": 74}
 ```
 
-### Example 4: Stop Charging (Safe Workflow with Warnings)
-```python
-# 1. Check if vehicle is currently charging
-charging = get_charging_status("ID.7")
-# Result: {"is_charging": true, "current_soc_percent": 45, "target_soc_percent": 80, "charging_power_kw": 11.0}
-
-# 2. Validate vehicle is actually charging
-if not charging["is_charging"]:
-    print("ERROR: Cannot stop charging - vehicle is not currently charging")
-    exit()
-
-# 3. Check for warning conditions
-warnings = []
-
-if charging["current_soc_percent"] < 20:
-    warnings.append(f"⚠️ Battery very low ({charging['current_soc_percent']}%) - stopping now may leave insufficient range")
-
-if charging["current_soc_percent"] < charging["target_soc_percent"] - 10:
-    warnings.append(f"⚠️ Battery at {charging['current_soc_percent']}% (target: {charging['target_soc_percent']}%) - stopping now will leave battery well below target")
-
-# 4. Display warnings and get confirmation
-if warnings:
-    for warning in warnings:
-        print(warning)
-    print("\nAre you sure you want to stop charging? (yes/no)")
-    # If user says no, exit without stopping
-    # If user confirms yes, continue
-
-# 5. User confirmed or no warnings - stop charging
-result = stop_charging("ID.7")
-# Result: {"success": true, "message": "Charging stopped"}
-
-# 6. Wait for command to propagate
-wait(15)  # Wait 15 seconds
-
-# 7. Verify charging actually stopped
-charging_verify = get_charging_status("ID.7")
-# Result: {"is_charging": false, "charging_state": "ready_for_charging", "current_soc_percent": 47}
-
-if not charging_verify["is_charging"]:
-    print(f"SUCCESS: Charging stopped - battery at {charging_verify['current_soc_percent']}%")
-else:
-    print("ERROR: Stop charging command sent but vehicle is still charging - check vehicle display or try again")
+### Example 3: User Asks to Start Charging
 ```
-
-### Example 5: Find Car in Parking Lot
-```python
-# Get location
-position = get_vehicle_position("Golf")
-# Result: {"latitude": 48.1351, "longitude": 11.5820}
-
-# Flash lights for 10 seconds to locate it
-result = flash_lights("Golf", 10)
-# Result: {"success": true}
+User: "Start charging my ID.7"
+AI: "I can't do that — this server reads vehicle status via Tibber's API, which is
+     read-only. It has no way to start or stop charging remotely. Current status:
+     74% charged, not plugged in, target 80%."
 ```
+(Do not call `start_charging()` first and then explain the failure — the outcome is
+always the same, so state the limitation directly.)
 
 ---
 
 ## Summary (TL;DR for AI Assistants)
 
 1. **Always start** with `get_vehicles()` to discover available vehicles
-2. **Use vehicle names** (e.g., "Golf") instead of VINs for readability
-3. **License plates DON'T WORK** - VW API doesn't provide them (as of Feb 2026)
-4. **Electric vehicles**: Use `get_battery_status()` for quick checks
-5. **Charging details**: Use `get_charging_status()` for detailed analysis
-6. **Cache is automatic** - 5 minutes, refreshes after commands, no manual management
-7. **Errors are JSON** - Check for `error` field in responses
-8. **Control commands** invalidate cache automatically - next read gets fresh data
+2. **Only 4 tools return real data**: `get_vehicles`, `get_vehicle_info`/`get_vehicle_state`, `get_battery_status`, `get_charging_status`
+3. **Everything else always fails**: physical status, climate, position, maintenance (no data), and all 10 commands (read-only API)
+4. **No control is possible** — if asked to lock/unlock/charge/climate/flash, say so directly, don't attempt the command
+5. **License plates DON'T WORK** — Tibber doesn't provide them
+6. **Cache is automatic** — 5 minutes, no command-triggered refresh (nothing to refresh)
+7. **Errors are JSON** — `{"error": ...}` for missing data, `{"success": false, "error": ...}` for commands
 
-**Most important**: Be helpful and proactive. If a user asks about their car, start with `get_vehicles()` to see what's available, then provide relevant information based on their question.
+**Most important**: Be upfront about the read-only, narrow-data nature of this backend. Don't run multi-step "verify the command worked" workflows — no command can work.
 
 ---
 
 ## Technical Reference: Tool & Resource Tags
 
-All tools and resources include **hierarchical tags** for MCP client filtering and organization:
+Unchanged from the underlying interface (tags describe intent, not backend support — check the description text of each tool/resource for whether it actually works with Tibber):
 
-### Tag Categories
+**Operation Type**: `read`, `write`/`command`
+**Functional Areas**: `discovery`, `vehicle-info`, `physical`, `energy`, `climate`, `location`, `security`
+**Specific Features**: `battery`, `charging`, `gps`, `comfort`, `locator`, `lights`, `horn`, `defrost`, `comprehensive`
+**Vehicle Type Filters**: `bev-phev`
 
-**Operation Type** (all items):
-- `read` - Read-only operations (8 read tools + 14 resources)
-- `write` - State-changing operations (synonym for `command`)
-- `command` - State-changing operations (10 command tools)
-
-**Functional Areas**:
-- `discovery` - Vehicle discovery (`get_vehicles`)
-- `vehicle-info` - Basic vehicle information (`get_vehicle_info`, `get_vehicle_state`)
-- `physical` - Physical components (`get_vehicle_doors`)
-- `energy` - Battery and charging (`get_battery_status`, `get_charging_status`, charging commands)
-- `climate` - Climate control (`get_climatization_status`, climatization commands, window heating)
-- `location` - GPS position (`get_vehicle_position`)
-- `security` - Door locks (`lock_vehicle`, `unlock_vehicle`)
-
-**Specific Features**:
-- `battery` - Battery status (BEV/PHEV)
-- `charging` - Charging control (BEV/PHEV)
-- `gps` - GPS location
-- `comfort` - Climate and comfort features
-- `locator` - Finding vehicle in parking lot
-- `lights` - Light control
-- `horn` - Horn control
-- `defrost` - Window heating/defrosting
-- `comprehensive` - Complete state snapshot
-
-**Vehicle Type Filters**:
-- `bev-phev` - Electric/hybrid vehicles only
-
-### Example Tag Combinations
-
-- `get_vehicles`: `{"discovery", "read"}`
-- `get_battery_status`: `{"energy", "read", "battery", "bev-phev"}`
-- `start_charging`: `{"command", "charging", "energy", "bev-phev", "write"}`
-- `lock_vehicle`: `{"command", "security", "write"}`
-- `flash_lights`: `{"command", "locator", "lights", "write"}`
-- `honk_and_flash`: `{"command", "locator", "lights", "horn", "write"}`
-
-**Usage**: MCP clients can filter tools by tags to show only relevant operations (e.g., show only `bev-phev` tools when working with electric vehicles, or only `read` tools when browsing data).
+**Usage**: MCP clients can filter tools by tags, but tags alone don't indicate Tibber support — always check the tool/resource `description` field, which is written per-backend-reality in this deployment.
 
 ---
 
@@ -887,7 +341,7 @@ The source of truth for the exposed interface is:
 - **Read tools**: `src/weconnect_mcp/server/mixins/read_tools.py`
 - **Command tools**: `src/weconnect_mcp/server/mixins/command_tools.py`
 - **Resources**: `src/weconnect_mcp/server/mixins/resources.py`
+- **Prompts**: `src/weconnect_mcp/server/mixins/prompts.py`
 - **Agent instructions**: this file (`AI_INSTRUCTIONS.md`)
 
-All four locations (README, AI_INSTRUCTIONS.md, read_tools.py, command_tools.py, resources.py) must stay consistent at all times.
-
+All five locations (README, AI_INSTRUCTIONS.md, read_tools.py, command_tools.py, resources.py, prompts.py) must stay consistent at all times. **This version of this file describes the Tibber backend specifically** (as requested — no dual-backend hedging); if the server is run with the `carconnectivity` backend instead, these descriptions do not apply and this file would need a corresponding rewrite back toward VW-direct capabilities.

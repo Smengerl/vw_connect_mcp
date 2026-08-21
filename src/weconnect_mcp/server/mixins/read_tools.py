@@ -2,6 +2,18 @@
 
 Provides read-only tools for vehicle data access.
 All tools are idempotent and read-only (no vehicle state changes).
+
+With the Tibber backend, the vehicle data available is limited to what the
+Tibber Data API's confirmed 5 capabilities cover: state of charge, target
+state of charge, remaining range, plug status, and charging status — plus
+basic identity (VIN, brand, model, name, online state). See
+experiment/tibber-integration/TIBBER_API.md §5.2 and the README's
+data-point comparison table for the full picture. Doors, windows, tyres,
+lights, climatization, window heating, GPS position, maintenance schedule,
+odometer, license plate, model year, software version, and vehicle
+type/propulsion have no Tibber equivalent at all — the corresponding tools
+below always return a "not found" error, not because of a bug but because
+that data genuinely does not exist in this backend.
 """
 
 from fastmcp import FastMCP
@@ -17,17 +29,20 @@ logger = logging_config.get_logger(__name__)
 
 def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     """Register all read-only tools with the MCP server.
-    
-    Registers 8 read tools for vehicle data access.
-    
+
+    Registers 8 read tools for vehicle data access. With the Tibber
+    backend, 3 of them (get_vehicle_doors, get_climatization_status,
+    get_vehicle_position) always return a "not found" error — see module
+    docstring.
+
     Args:
         mcp: FastMCP server instance
         adapter: Vehicle data adapter
     """
-    
+
     @mcp.tool(
         name="get_vehicles",
-        description="List all available vehicles with VIN, name, model, and license plate. Start here to discover which vehicles you can control.",
+        description="List all available vehicles with VIN, name, and model. Start here to discover which vehicles you can access. license_plate is always null (Tibber does not provide it).",
         tags={"discovery", "read"},
         annotations={"title": "Get All Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -36,10 +51,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         vehicles: List[VehicleListItem] = adapter.list_vehicles()
         logger.info("Listing %d vehicles via tool", len(vehicles))
         return json.dumps([v.model_dump() for v in vehicles])
-    
+
     @mcp.tool(
         name="get_vehicle_info",
-        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state",
+        description="Get basic vehicle identity: manufacturer, model, name, and online/connection state. Software version, model year, odometer, and license plate are always null (not available via Tibber).",
         tags={"vehicle-info", "read"},
         annotations={"title": "Get Vehicle Information", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -53,10 +68,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
         return json.dumps(vehicle.model_dump() if vehicle else {})
-    
+
     @mcp.tool(
         name="get_vehicle_state",
-        description="Get complete vehicle state snapshot including all available data: position, battery, doors, windows, climate, tyres, etc.",
+        description="Get vehicle identity plus energy state (this is the same identity data as get_vehicle_info — with the Tibber backend there is no combined doors/windows/climate/tyres snapshot to add; use get_energy_status/get_charging_status/get_battery_status for the rest).",
         tags={"vehicle-info", "read", "comprehensive"},
         annotations={"title": "Get Complete Vehicle State", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -70,10 +85,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
         return json.dumps(vehicle.model_dump() if vehicle else {})
-    
+
     @mcp.tool(
         name="get_vehicle_doors",
-        description="Get door lock status and open/closed state for all doors",
+        description="NOT SUPPORTED with the Tibber backend (no door data in the Tibber Data API). Always returns a not-found error.",
         tags={"physical", "read", "security"},
         annotations={"title": "Get Door Status", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -87,10 +102,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found"})
         return json.dumps(physical_status.doors.model_dump())
-    
+
     @mcp.tool(
         name="get_battery_status",
-        description="Quick battery check for electric/hybrid vehicles including battery level, electric range, and charging status (BEV/PHEV only)",
+        description="Quick battery check for electric vehicles: battery level (%), electric range (km), and whether it's currently charging. Fully supported by the Tibber backend.",
         tags={"energy", "read", "battery", "bev-phev"},
         annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -103,22 +118,22 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         if energy_status is None or energy_status.electric is None:
             logger.warning("Vehicle '%s' not found or doesn't have a battery", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
-        
+
         result = {
             "battery_level_percent": energy_status.electric.battery_level_percent,
             "range_km": energy_status.range.electric_km if energy_status.range else None,
             "is_charging": energy_status.electric.charging.is_charging if energy_status.electric.charging else False
         }
-        
+
         if energy_status.electric.charging and energy_status.electric.charging.is_charging:
             result["charging_power_kw"] = energy_status.electric.charging.charging_power_kw
             result["estimated_charge_time_minutes"] = energy_status.electric.charging.remaining_time_minutes
-        
+
         return json.dumps(result)
-    
+
     @mcp.tool(
         name="get_climatization_status",
-        description="Get climate control status including state (off/heating/cooling), target temperature, and estimated time remaining",
+        description="NOT SUPPORTED with the Tibber backend (no climate data in the Tibber Data API). Always returns a not-found error.",
         tags={"climate", "read", "comfort"},
         annotations={"title": "Get Climate Control Status", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -132,10 +147,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found or doesn't support climatization", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support climatization"})
         return json.dumps(climate_status.climatization.model_dump())
-    
+
     @mcp.tool(
         name="get_charging_status",
-        description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, cable status, and target SOC (BEV/PHEV only)",
+        description="Get charging status for electric vehicles: charging state (charging/idle), plug-connected state, target SOC, and current SOC. Supported by the Tibber backend, but charging_power_kw and remaining_time_minutes are always null (Tibber does not report them).",
         tags={"energy", "read", "charging", "bev-phev"},
         annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -149,10 +164,10 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found or doesn't support charging", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
         return json.dumps(energy_status.electric.charging.model_dump())
-    
+
     @mcp.tool(
         name="get_vehicle_position",
-        description="Get GPS position including latitude, longitude, and heading (0°=North, 90°=East, 180°=South, 270°=West)",
+        description="NOT SUPPORTED with the Tibber backend (no GPS data in the Tibber Data API). Always returns a not-found error.",
         tags={"location", "read", "gps"},
         annotations={"title": "Get Vehicle Position", "readOnlyHint": True, "idempotentHint": True}
     )

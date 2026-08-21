@@ -2,6 +2,15 @@
 
 Provides read-only resources for vehicle data access with URI-based addressing.
 Resources support server-side caching and are all idempotent read operations.
+
+With the Tibber backend, the vehicle data available is limited to what the
+Tibber Data API's confirmed 5 capabilities cover: state of charge, target
+state of charge, remaining range, plug status, and charging status — plus
+basic identity (VIN, brand, model, name, online state). See
+experiment/tibber-integration/TIBBER_API.md §5.2 and the README's
+data-point comparison table for the full picture. Resources for doors,
+windows, tyres, lights, climate, window heating, position, maintenance,
+and vehicle type have no Tibber equivalent and always return an error.
 """
 
 from fastmcp import FastMCP
@@ -22,7 +31,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicles",
         name="res_list_vehicles",
-        description="Get list of all available vehicles with basic information (VIN, name, model, license plate)",
+        description="Get list of all available vehicles with basic information (VIN, name, model). license_plate is always null (Tibber does not provide it).",
         tags={"vehicle-list", "read"},
         annotations={"title": "List All Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -34,7 +43,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/info",
         name="res_get_vehicle_info",
-        description="Get basic vehicle information including manufacturer, model, software version, year, odometer reading, and connection state",
+        description="Get basic vehicle identity: manufacturer, model, name, and online/connection state. Software version, model year, odometer, and license plate are always null (not available via Tibber).",
         tags={"vehicle-info", "read"},
         annotations={"title": "Get Vehicle Info", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -51,7 +60,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         "data://vehicle/{vehicle_id}/state",
         name="res_get_vehicle_state",
-        description="Get complete vehicle state including position, battery, doors, windows, climate control, and tyre information",
+        description="Get vehicle identity data (same as res_get_vehicle_info — the Tibber backend has no combined doors/windows/climate/tyre/position snapshot to add; use res_get_charging_state or res_get_range_info for energy data).",
         annotations={"title": "Get Complete Vehicle State", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_vehicle_state(
@@ -67,7 +76,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/doors",
         name="res_get_vehicle_doors",
-        description="Get door lock status and open/closed state for all doors",
+        description="NOT SUPPORTED with the Tibber backend (no door data in the Tibber Data API). Always returns an error.",
         tags={"physical", "read", "security"},
         annotations={"title": "Get Door Status", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -84,7 +93,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/windows",
         name="res_get_vehicle_windows",
-        description="Get open/closed status for all windows",
+        description="NOT SUPPORTED with the Tibber backend (no window data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Window Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_vehicle_windows(
@@ -100,7 +109,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/tyres",
         name="res_get_vehicle_tyres",
-        description="Get tyre pressure and temperature for all tyres",
+        description="NOT SUPPORTED with the Tibber backend (no tyre data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Tyre Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_vehicle_tyres(
@@ -116,7 +125,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/type",
         name="res_get_vehicle_type",
-        description="Get vehicle propulsion type: electric (BEV), combustion engine, or plug-in hybrid (PHEV)",
+        description="NOT SUPPORTED with the Tibber backend (propulsion type is not reported). Always returns an error — Tibber only ever surfaces electric vehicles, but doesn't label the field. Infer 'electric' from the presence of get_battery_status/get_charging_status data instead.",
         annotations={"title": "Get Vehicle Type", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_vehicle_type(
@@ -132,7 +141,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/charging",
         name="res_get_charging_state",
-        description="Get detailed charging status for electric/hybrid vehicles including charging power, remaining time, battery level, and charging state (BEV/PHEV only)",
+        description="Get charging status: charging state (charging/idle), plug-connected state, target SOC, and current SOC. Supported by the Tibber backend, but charging_power_kw and remaining_time_minutes are always null (Tibber does not report them).",
         annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_charging_state(
@@ -148,7 +157,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/climate",
         name="res_get_climatization_state",
-        description="Get climate control status including state, target temperature, and window/seat heating settings",
+        description="NOT SUPPORTED with the Tibber backend (no climate data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Climate Control Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_climatization_state(
@@ -164,7 +173,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/maintenance",
         name="res_get_maintenance_info",
-        description="Get service schedules including inspection and oil service due dates and remaining distances",
+        description="NOT SUPPORTED with the Tibber backend (no maintenance data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Maintenance Information", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_maintenance_info(
@@ -180,7 +189,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/range",
         name="res_get_range_info",
-        description="Get range information including total range, electric range (BEV/PHEV), combustion range (PHEV/ICE), and battery/fuel tank levels",
+        description="Get range information: total range and electric range (km) plus battery level (%). combustion_range_km/tank_level_percent are never present (Tibber only ever reports electric vehicles).",
         annotations={"title": "Get Range Information", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_range_info(
@@ -207,7 +216,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/window-heating",
         name="res_get_window_heating_state",
-        description="Get window heating/defrosting status for front and rear windows",
+        description="NOT SUPPORTED with the Tibber backend (no window heating data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Window Heating State", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_window_heating_state(
@@ -223,7 +232,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/lights",
         name="res_get_lights_state",
-        description="Get status of vehicle lights (left/right on/off)",
+        description="NOT SUPPORTED with the Tibber backend (no lights data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get Lights Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_lights_state(
@@ -239,7 +248,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/position",
         name="res_get_position",
-        description="Get vehicle GPS position including latitude, longitude, and heading (0=North, 90=East, 180=South, 270=West)",
+        description="NOT SUPPORTED with the Tibber backend (no GPS data in the Tibber Data API). Always returns an error.",
         annotations={"title": "Get GPS Position", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_position(
@@ -255,7 +264,7 @@ def register_resources(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.resource(
         uri="data://vehicle/{vehicle_id}/battery",
         name="res_get_battery_status",
-        description="Quick battery check including level, electric range, and charging status (BEV/PHEV only). Use get_charging_state for detailed charging information",
+        description="Quick battery check: level (%), electric range (km), and charging status. Fully supported by the Tibber backend. Use res_get_charging_state for the plug/charging-state details.",
         annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True}
     )
     def res_get_battery_status(

@@ -2,6 +2,21 @@
 
 Provides pre-built prompt templates for common agentic vehicle operations.
 Each prompt guides the AI through a complete workflow with safety checks.
+
+With the Tibber backend, every prompt below relies on at least one of:
+control commands (lock/unlock, climatization, charging start/stop, lights,
+window heating), GPS position, door/window/tyre/light status, or
+maintenance data — none of which the Tibber Data API provides (it is
+read-only and limited to identity + SoC/range/charging-state, see
+experiment/tibber-integration/TIBBER_API.md §5.2). Every prompt's
+`description` below is prefixed with its actual usability against the
+Tibber backend: NOT USABLE (depends entirely on unsupported
+tools/data), PARTIALLY USABLE (some steps work, others will fail), or
+USABLE (read-only, no unsupported dependency). The step-by-step prompt
+bodies themselves are unchanged from the CarConnectivity-oriented design
+— steps referencing unsupported tools will simply get a "not supported"
+or "not found" response from the tool, which the AI assistant should
+surface to the user rather than treat as a bug.
 """
 
 from fastmcp import FastMCP
@@ -20,7 +35,7 @@ def register_prompts(mcp: FastMCP) -> None:
     @mcp.prompt(
         name="safe_start_charging",
         title="Safe Start Charging",
-        description="Start vehicle charging with battery level and connection checks",
+        description="[PARTIALLY USABLE with Tibber: status checks work, but the actual start_charging step always fails — read-only backend] Start vehicle charging with battery level and connection checks",
         tags={"charging", "battery", "safety", "workflow"}
     )
     def safe_start_charging(vehicle_id: str) -> str:
@@ -47,7 +62,7 @@ If any check fails, explain why charging cannot start and suggest next steps."""
     @mcp.prompt(
         name="prepare_vehicle_for_departure",
         title="Prepare Vehicle for Departure",
-        description="Pre-heat cabin and unlock vehicle for immediate departure",
+        description="[NOT USABLE with Tibber: climate control, unlock, and door status are all unsupported by the read-only Tibber backend] Pre-heat cabin and unlock vehicle for immediate departure",
         tags={"departure", "climate", "unlock", "comfort", "workflow"}
     )
     def prepare_vehicle_for_departure(vehicle_id: str, target_temp_celsius: float = 21.0) -> str:
@@ -76,7 +91,7 @@ If any step fails, stop workflow and report issue to user."""
     @mcp.prompt(
         name="check_vehicle_health",
         title="Check Vehicle Health",
-        description="Comprehensive health check with battery, doors, climate, and location",
+        description="[PARTIALLY USABLE with Tibber: battery/charging check works, but doors, climate, and location all return not-found — read-only backend, no such data] Comprehensive health check with battery, doors, climate, and location",
         tags={"diagnostics", "health", "status", "monitoring"}
     )
     def check_vehicle_health(vehicle_id: str) -> str:
@@ -110,7 +125,7 @@ Format as structured report with sections."""
     @mcp.prompt(
         name="safe_stop_charging_and_prepare",
         title="Stop Charging and Prepare for Departure",
-        description="Stop charging session and immediately prepare vehicle for departure",
+        description="[NOT USABLE with Tibber: stop_charging, climate control, and unlock are all unsupported by the read-only Tibber backend] Stop charging session and immediately prepare vehicle for departure",
         tags={"charging", "departure", "climate", "unlock", "workflow"}
     )
     def safe_stop_charging_and_prepare(vehicle_id: str) -> str:
@@ -137,7 +152,7 @@ Skip steps if preconditions not met (e.g., not charging)."""
     @mcp.prompt(
         name="monitor_charging_session",
         title="Monitor Charging Session",
-        description="Monitor charging progress until target SOC is reached",
+        description="[PARTIALLY USABLE with Tibber: polling get_charging_status works, but the final stop_charging step always fails — read-only backend] Monitor charging progress until target SOC is reached",
         tags={"charging", "monitoring", "battery", "automation"}
     )
     def monitor_charging_session(vehicle_id: str, target_soc_percent: int = 80) -> str:
@@ -166,7 +181,7 @@ Note: This is a monitoring workflow - explain to user it requires periodic check
     @mcp.prompt(
         name="secure_vehicle",
         title="Secure Vehicle",
-        description="Lock vehicle and stop climate systems for safe parking",
+        description="[NOT USABLE with Tibber: lock, climate control, and door status are all unsupported by the read-only Tibber backend] Lock vehicle and stop climate systems for safe parking",
         tags={"security", "lock", "climate", "safety", "workflow"}
     )
     def secure_vehicle(vehicle_id: str) -> str:
@@ -194,7 +209,7 @@ If lock verification fails, retry once, then report security issue to user."""
     @mcp.prompt(
         name="locate_and_flash",
         title="Locate and Flash Lights",
-        description="Get vehicle position and flash lights to help find it in parking lot",
+        description="[NOT USABLE with Tibber: GPS position and light control are both unsupported by the read-only Tibber backend] Get vehicle position and flash lights to help find it in parking lot",
         tags={"location", "lights", "parking", "convenience"}
     )
     def locate_and_flash(vehicle_id: str, duration_seconds: int = 10) -> str:
@@ -220,7 +235,7 @@ This helps user find vehicle in parking lot or unfamiliar location."""
     @mcp.prompt(
         name="assess_parking_safety",
         title="Assess Parking Location Safety",
-        description="Evaluate parking location safety using vehicle position and external crime/safety data",
+        description="[NOT USABLE with Tibber: this prompt depends entirely on GPS position and door-lock status, both unsupported by the read-only Tibber backend] Evaluate parking location safety using vehicle position and external crime/safety data",
         tags={"safety", "location", "security", "parking", "external-data"}
     )
     def assess_parking_safety(vehicle_id: str) -> str:
@@ -255,7 +270,7 @@ Combine vehicle data with external safety information to provide comprehensive a
     @mcp.prompt(
         name="weather_optimized_departure",
         title="Weather-Optimized Departure Preparation",
-        description="Prepare vehicle considering current and forecasted weather conditions",
+        description="[NOT USABLE with Tibber: GPS position, climate control, window heating, and unlock are all unsupported by the read-only Tibber backend] Prepare vehicle considering current and forecasted weather conditions",
         tags={"weather", "departure", "climate", "comfort", "external-data"}
     )
     def weather_optimized_departure(vehicle_id: str, departure_time_minutes: int = 15) -> str:
@@ -294,7 +309,7 @@ Combines real-time weather with vehicle climate control for optimal comfort."""
     @mcp.prompt(
         name="charging_schedule_feasibility",
         title="Check Charging Schedule Feasibility",
-        description="Verify if current charging allows meeting user's schedule considering travel time",
+        description="[PARTIALLY USABLE with Tibber: charging/battery status works, but GPS position (needed for route calculation) is unsupported by the read-only Tibber backend] Verify if current charging allows meeting user's schedule considering travel time",
         tags={"charging", "planning", "schedule", "navigation", "external-data"}
     )
     def charging_schedule_feasibility(vehicle_id: str, destination_address: str, required_arrival_time: str) -> str:
@@ -344,7 +359,7 @@ Combines charging data, navigation, and time management for schedule feasibility
     @mcp.prompt(
         name="range_anxiety_advisor",
         title="Range Anxiety Advisor",
-        description="Assess range adequacy for planned trip using battery status, route, weather, and charging infrastructure",
+        description="[PARTIALLY USABLE with Tibber: battery status works, but GPS position (needed for the route/weather lookup) is unsupported by the read-only Tibber backend] Assess range adequacy for planned trip using battery status, route, weather, and charging infrastructure",
         tags={"range", "battery", "planning", "charging", "external-data", "navigation"}
     )
     def range_anxiety_advisor(vehicle_id: str, destination_address: str) -> str:
@@ -395,7 +410,7 @@ Eliminates range anxiety with comprehensive multi-factor analysis."""
     @mcp.prompt(
         name="smart_preconditioning_advisor",
         title="Smart Battery Preconditioning Advisor",
-        description="Optimize battery preconditioning based on weather, trip requirements, and electricity pricing",
+        description="[PARTIALLY USABLE with Tibber: battery/charging status works, but GPS position and the actual start_climatization step are unsupported by the read-only Tibber backend] Optimize battery preconditioning based on weather, trip requirements, and electricity pricing",
         tags={"battery", "charging", "optimization", "weather", "external-data", "cost"}
     )
     def smart_preconditioning_advisor(vehicle_id: str, planned_departure_time: str) -> str:
@@ -442,7 +457,7 @@ Combines weather, electricity pricing, and battery thermal management for optima
     @mcp.prompt(
         name="automated_travel_readiness_check",
         title="Automated Travel Readiness Check",
-        description="Comprehensive pre-departure check combining vehicle state, weather, traffic, and route conditions",
+        description="[PARTIALLY USABLE with Tibber: battery status works, but door status, GPS position, and climate control are unsupported by the read-only Tibber backend] Comprehensive pre-departure check combining vehicle state, weather, traffic, and route conditions",
         tags={"departure", "readiness", "comprehensive", "external-data", "automation"}
     )
     def automated_travel_readiness_check(vehicle_id: str, destination_address: str, departure_time: str) -> str:
@@ -518,6 +533,8 @@ Ultimate comprehensive check combining all vehicle and external data sources."""
         name="service_planning_advisor",
         title="Service & Maintenance Planning Advisor",
         description=(
+            "[NOT USABLE with Tibber: maintenance data, odometer, tyre status, and GPS position "
+            "(for workshop search) are all unsupported by the read-only Tibber backend] "
             "Evaluate upcoming service needs based on odometer, maintenance data, "
             "and manufacturer intervals. Optionally find nearby workshops and book appointments."
         ),
@@ -602,6 +619,8 @@ If no action is needed, confirm: "Vehicle {{vehicle_id}} is up to date – next 
         name="intelligent_charging_plan",
         title="Intelligent Cost-Optimised Charging Plan",
         description=(
+            "[PARTIALLY USABLE with Tibber: charging/battery status works, but GPS position and "
+            "the actual start_charging/stop_charging steps are unsupported by the read-only Tibber backend] "
             "Create a cost-optimised charging schedule considering electricity spot prices, "
             "weather (cold reduces range), vehicle state, and user calendar."
         ),
@@ -699,6 +718,8 @@ If no action is needed, confirm: "Vehicle {{vehicle_id}} is up to date – next 
         name="proactive_preconditioning_suggestion",
         title="Proactive Preconditioning Suggestion",
         description=(
+            "[NOT USABLE with Tibber: GPS position, climate status/control, and window heating "
+            "are all unsupported by the read-only Tibber backend] "
             "Suggest and optionally start cabin preconditioning based on weather forecast, "
             "user calendar events, and current vehicle state."
         ),
@@ -790,6 +811,8 @@ If no action is needed, confirm: "Vehicle {{vehicle_id}} is up to date – next 
         name="trip_optimizer",
         title="Trip Departure & Charging Stop Optimizer",
         description=(
+            "[PARTIALLY USABLE with Tibber: energy/range status works, but GPS position and the "
+            "actual start_charging step are unsupported by the read-only Tibber backend] "
             "Optimise departure timing, en-route charging stops, or fuel stops "
             "based on user calendar, vehicle range, and live traffic."
         ),
@@ -884,6 +907,8 @@ If no action is needed, confirm: "Vehicle {{vehicle_id}} is up to date – next 
         name="parking_time_monitor",
         title="Parking Time & Cost Monitor",
         description=(
+            "[NOT USABLE with Tibber: this prompt depends entirely on GPS position, "
+            "unsupported by the read-only Tibber backend] "
             "Monitor parking duration and costs based on vehicle position, "
             "local parking regulations, and remind the user before time expires."
         ),
@@ -978,6 +1003,8 @@ Provide initial parking status report:
         name="zone_entry_restriction_check",
         title="Zone Entry Restriction Check",
         description=(
+            "[PARTIALLY USABLE with Tibber: manufacturer/model and battery status work, but "
+            "model year (needed for Euro-standard lookup) is unsupported by the read-only Tibber backend] "
             "Check whether the vehicle is allowed to enter a destination area "
             "considering environmental zones, EV-only zones, and congestion zones."
         ),
@@ -1081,6 +1108,9 @@ Provide initial parking status report:
         name="battery_health_optimizer",
         title="Battery Health & Charging Optimiser",
         description=(
+            "[PARTIALLY USABLE with Tibber: charging/battery status and model info work "
+            "(this prompt is advisory-only, no commands needed), but GPS position (for the "
+            "temperature lookup) is unsupported by the read-only Tibber backend] "
             "Analyse current and ongoing charging behaviour and suggest optimisations "
             "to maximise battery longevity: target SOC, charge rate, and schedule."
         ),
