@@ -23,30 +23,37 @@ log. Modelled on evcc's implementation
    <https://data-api.tibber.com/clients/manage/>:
    - Redirect URI: `http://localhost:8515/callback` (localhost http is fine
      for local dev per Tibber's docs). Must match `TIBBER_REDIRECT_URI`.
-   - Scopes — request exactly the following seven (all are consumed by
-     `DEFAULT_SCOPES` in `tibber_client.py`; leaving one out breaks the flow
-     in a specific way, see below):
+   - Scopes — the registration UI splits these into two groups; here's
+     exactly what to do in each:
 
-     | Scope | Why it's needed |
+     **"Required scopes"** (`openid`, `profile`, `email`, `offline_access`,
+     `data-api-user-read`) — nothing to do, the UI auto-includes all five,
+     they aren't individually selectable. (`offline_access` is why a
+     `refresh_token` shows up in the token response at all — without it
+     you'd have to redo the browser login every ~1h.)
+
+     **Category scopes** (labelled "these scopes are always included" /
+     "select at least one additional scope" — confusing wording, but in
+     practice it's a checklist you pick from) — **select exactly these two:**
+
+     | Scope | Why |
      |---|---|
-     | `openid` | standard OIDC — required baseline for any login |
-     | `profile` | standard OIDC — required baseline |
-     | `email` | standard OIDC — required baseline |
-     | `offline_access` | without this, the token response has **no** `refresh_token` — you'd have to redo the browser login every ~1h |
-     | `data-api-user-read` | Data-API baseline; without it, `/v1/homes` and everything downstream 403s even with the other scopes present |
-     | `data-api-homes-read` | grants `GET /v1/homes` — the first call in the chain (homes → devices → device detail) |
-     | `data-api-vehicles-read` | the actual target: makes vehicle devices show up in `GET /v1/homes/{id}/devices`. **Without this scope specifically, the devices endpoint returns an empty list for the vehicle category — you'd get an authorized but data-less response, not an error**, which is the easy way to misdiagnose this as "no vehicle paired" when it's actually a scope problem. |
+     | `data-api-homes-read` | grants `GET /v1/homes` — the first call in the chain (homes → devices → device detail); our code calls this before it can find any vehicle |
+     | `data-api-vehicles-read` | the actual target: makes vehicle devices show up in `GET /v1/homes/{id}/devices`. **Without this scope specifically, the devices endpoint returns an empty list for the vehicle category — you'd get an authorized but data-less response, not an error** — the easy way to misdiagnose this as "no vehicle paired" when it's actually a scope problem. |
 
-     As one space-separated string for the client form / authorize URL:
+     Leave the other five category scopes (`data-api-chargers-read`,
+     `data-api-thermostats-read`, `data-api-energy-systems-read`,
+     `data-api-inverters-read`, `data-api-meters-read`) **unchecked** — they
+     cover device categories (EVSEs, heat pumps, batteries, legacy
+     inverters, live meters) this PoC doesn't touch; checking them just adds
+     unnecessary consent-screen items for the user.
+
+     End-to-end, the resulting scope string requested at authorize-time
+     (what `tibber_client.py`'s `DEFAULT_SCOPES` sends) is:
      ```
      openid profile email offline_access data-api-user-read data-api-homes-read data-api-vehicles-read
      ```
-     Do **not** request `data-api-chargers-read`, `data-api-thermostats-read`,
-     `data-api-energy-systems-read`, `data-api-inverters-read`, or
-     `data-api-meters-read` for this PoC — they exist (see `TIBBER_API.md`
-     §4) but cover other device categories (EVSEs, heat pumps, batteries,
-     meters) we don't touch here; requesting them just adds unnecessary
-     consent-screen items for the user.
+     — five auto-included + the two you actively checked.
    - Copy the **client secret** — it is shown only once.
 
 2. **Configure credentials** (never committed):

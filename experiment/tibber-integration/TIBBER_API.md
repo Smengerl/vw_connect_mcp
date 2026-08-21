@@ -85,24 +85,39 @@ React to `401 Unauthorized` by refreshing once and retrying.
 
 ## 4. Scopes
 
-Mandatory OpenID: `openid profile email offline_access` (the last one is
-required to get a refresh token at all).
+**Correction (2026-08-21, see §7):** the client-registration UI at
+`data-api.tibber.com/clients/manage/` groups scopes differently than earlier
+wording here implied. There are two distinct groups, not one flat list:
 
-Data API category scopes (a device only shows up if the token has the
-matching scope):
+**Required (baseline) — auto-included, not individually selectable in the UI:**
 
 | Scope | Grants |
 |---|---|
-| `data-api-user-read` | basic user context — required baseline |
-| `data-api-homes-read` | list homes |
-| `data-api-vehicles-read` | **electric vehicles — this is the one we need** |
-| `data-api-chargers-read` | EV chargers / EVSEs |
-| `data-api-thermostats-read` | thermostats/heat pumps/space heaters |
-| `data-api-energy-systems-read` | batteries/hybrid systems |
-| `data-api-inverters-read` | legacy inverter category |
-| `data-api-meters-read` | live real-time meter measurements (Pulse/Watty) |
+| `openid` | user identifier |
+| `profile` | user profile (first/last name etc.) |
+| `email` | email address |
+| `offline_access` | refresh tokens — without this you'd have to redo the browser login every ~1h |
+| `data-api-user-read` | basic user context |
 
-Minimal set for our use case: `openid profile email offline_access data-api-user-read data-api-homes-read data-api-vehicles-read`.
+**Category scopes — you must actively select at least one of these:**
+
+| Scope | Grants |
+|---|---|
+| `data-api-homes-read` | list homes (`GET /v1/homes`) — **select this**, our flow enumerates homes before devices |
+| `data-api-vehicles-read` | **electric vehicles — select this, it's the one we actually need** |
+| `data-api-chargers-read` | EV chargers / EVSEs — not needed for this PoC |
+| `data-api-thermostats-read` | thermostats/heat pumps/space heaters — not needed |
+| `data-api-energy-systems-read` | batteries/hybrid systems — not needed |
+| `data-api-inverters-read` | legacy inverter category — not needed |
+| `data-api-meters-read` | live real-time meter measurements (Pulse/Watty) — not needed |
+
+For our use case: select exactly `data-api-homes-read` and
+`data-api-vehicles-read` from the category list; the five baseline scopes
+come along automatically. The resulting scope string requested at
+authorize-time is unchanged from before:
+`openid profile email offline_access data-api-user-read data-api-homes-read data-api-vehicles-read`
+— what changed is only which of these you pick vs. get for free in the
+registration UI.
 
 Adding scopes later requires the user to re-run the consent flow — tokens
 already issued don't retroactively gain scopes.
@@ -231,6 +246,22 @@ Tibber.
   exits cleanly. **Not yet run end-to-end** — needs a real OAuth client
   registered at `data-api.tibber.com/clients/manage/` with redirect URI
   `http://localhost:8515/callback`. That's the next step.
+
+### 2026-08-21 — correction: scope grouping in the actual registration UI
+- While registering a real OAuth client, Simon observed the actual
+  `data-api.tibber.com/clients/manage/` UI groups scopes differently than
+  §4 previously implied: `openid`, `profile`, `email`, `offline_access`,
+  and **`data-api-user-read`** are a "Required scopes" group that's
+  auto-included (not individually picked), and the seven `data-api-*-read`
+  category scopes are a separate list from which the UI requires
+  **selecting at least one**.
+- This does **not** change the scope string requested at authorize-time
+  (§3.1) or anything in `tibber_client.py`'s `DEFAULT_SCOPES` — only the
+  earlier explanation of *which scopes you actively pick in the
+  registration UI* was wrong (it implied `data-api-user-read` was one of
+  three you'd select; it's actually auto-included, and only
+  `data-api-homes-read` + `data-api-vehicles-read` need active selection).
+  §4 corrected accordingly.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
