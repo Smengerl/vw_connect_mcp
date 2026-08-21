@@ -1,0 +1,15 @@
+# NEVER commit secrets or tokens from the Tibber experiment.
+# Belt-and-suspenders: the repo-root .gitignore already covers *.env and
+# tokenstore*, but keep an explicit local guard here too.
+
+.env
+*.env
+!.env.example
+
+# OAuth token cache written by tibber_client.TokenStore
+.tibber_tokens.json
+*tokens*.json
+tokenstore*
+
+__pycache__/
+*.pyc

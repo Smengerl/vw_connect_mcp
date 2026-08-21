@@ -1,7 +1,9 @@
 # Tibber Data API as an indirect path to VW vehicle data
 
-**Status:** Research only, no code written yet. API confirmed **read-only**
-(no control/command endpoints exist as of this writing) — see §5.
+**Status:** Login-flow Hello World implemented (Python, `hello_tibber.py` +
+`tibber_client.py`), not yet run against a live registered client. API
+confirmed **read-only** (no control/command endpoints exist as of this
+writing) — see §5.
 **Maintained by:** Simon Gerlach (simon.gerlach@gmail.com)
 **Started:** 2026-08-21
 **Affected/relevant systems:** `data-api.tibber.com` (Tibber Data API),
@@ -138,15 +140,24 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://data-api.tibber.com/v1/hom
 Filter the devices list for the vehicle device (category/type indicates
 "vehicle"), then match by VIN if multiple vehicles are present.
 
-### 5.2 Vehicle data fields (from a working third-party implementation, see §6)
+### 5.2 Vehicle data fields (exact capability ids, from evcc source, see §6)
 
-- State of charge (SoC)
-- Range (km)
-- Charging status (charging / not charging)
-- Plug status (connected / disconnected)
-- Target SoC (read-only — the charge limit configured elsewhere, not settable here)
-- VIN
-- Brand / model / name (static identity attributes)
+The device detail response has shape
+`{ id, externalId, info:{ name, brand, model }, capabilities: [ { id, description, value, unit } ] }`.
+`externalId` is `vendor:VIN` (e.g. `tesla:5YJSA1E26MF1234567`) — split on `:`
+to get the VIN. Relevant capability ids and their reported values:
+
+| Capability id | Meaning | Unit / values |
+|---|---|---|
+| `storage.stateOfCharge` | State of charge | % |
+| `storage.targetStateOfCharge` | Configured charge limit (read-only) | % |
+| `range.remaining` | Estimated range | distance, typically `m` (convert to km) |
+| `connector.status` | Plug status | `connected` / `disconnected` / `unknown` |
+| `charging.status` | Charging status | `charging` / `idle` / `unknown` |
+
+Static identity (`info.brand`, `info.model`, `info.name`) plus the VIN come
+from the device list entry; the numeric/enum values above come from the
+device *detail* call.
 
 ### 5.3 Mandatory request header
 
@@ -195,6 +206,31 @@ Tibber.
   `data-api.tibber.com` yet — next session should register a client at
   `data-api.tibber.com/clients/manage/` and run the flow end-to-end against
   our own paired vehicle.
+
+### 2026-08-21 — login-flow Hello World implemented
+- Read evcc's full Go implementation (`vehicle/tibber/{oauth,api,service}.go`,
+  `vehicle/tibber.go`) as the reference. Confirmed the exact OAuth2 config
+  (endpoints in §3, scope list in §4) and the precise capability ids now in
+  §5.2 (`storage.stateOfCharge`, `range.remaining`, `connector.status`,
+  `charging.status`, `storage.targetStateOfCharge`). evcc uses auth code +
+  PKCE with a confidential client (sends both client_secret and PKCE).
+- Built a dependency-light Python PoC in this directory:
+  - `tibber_client.py` — reusable core (OAuth2 auth-code+PKCE via a local
+    loopback redirect catcher, `TokenStore` with 0600 perms, `homes()` /
+    `devices()` / `device()` / `vehicles()`). Intended basis for the MCP
+    adapter later.
+  - `hello_tibber.py` — runs the login flow, then lists homes + vehicles.
+  - `.env.example`, `.gitignore`, `README.md`.
+- Uses only `httpx` + `python-dotenv` (both already in the project venv) +
+  stdlib — no new dependencies added to pyproject.
+- Secrets hygiene verified: `.env` and `.tibber_tokens.json` confirmed
+  gitignored (both here and via repo-root .gitignore); token cache written
+  0600; client never logs secrets/tokens.
+- Sanity-tested offline: syntax/import OK, PKCE S256 challenge matches,
+  TokenSet expiry/refresh-skew logic correct, missing-credentials path
+  exits cleanly. **Not yet run end-to-end** — needs a real OAuth client
+  registered at `data-api.tibber.com/clients/manage/` with redirect URI
+  `http://localhost:8515/callback`. That's the next step.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
