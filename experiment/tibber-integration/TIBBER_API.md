@@ -820,6 +820,37 @@ not a default either way.
   sync, but README.md wasn't in scope for this request. Worth doing in a
   follow-up.
 
+### 2026-08-21 — tibber made the default backend; README.md updated
+- Since `carconnectivity` is currently non-functional (VW block), Simon
+  asked to make `tibber` the default `--backend` and to document both
+  backends and the selection mechanism in the top-level `README.md` (the
+  README.md gap flagged in the entry above — done as part of this, not a
+  separate follow-up after all).
+- `cli/mcp_server_cli.py`: `--backend` default changed from
+  `carconnectivity` to `tibber`; module docstring and help text updated
+  to match. `config` positional argument was already optional
+  (`nargs='?'`) so no change needed there.
+- `README.md`: new "Choosing a Backend" section (comparison table + setup
+  steps for both), plus updates throughout (warning banner, Features,
+  Quick Start, Prerequisites, Configuration, CLI Parameters, Cloud
+  Deployment env var table) to stop assuming `carconnectivity` is the
+  only/default path. Links this doc and the sibling FINDING.md from
+  Additional Documentation.
+- **Real gaps found and documented (not fixed, flagged in README.md
+  itself)**: the Claude Desktop / VS Code Copilot config-generator
+  scripts don't inject `TIBBER_*` env vars into the generated config;
+  `start_server_bg.sh` doesn't forward extra args so `--backend` can't
+  reach it; the Dockerfile `CMD` doesn't pass `--backend` explicitly
+  (relies on the new default, which happens to be correct today, but
+  fragile); and neither `Dockerfile` nor `docker-compose.yml` has a way
+  to get the required Tibber token file (produced by a one-time
+  *interactive* login) into a headless container — that login step
+  fundamentally cannot run inside Docker/Railway itself.
+- Verified live: `python -m weconnect_mcp.cli.mcp_server_cli` with **zero
+  arguments** now starts the Tibber backend successfully end-to-end
+  (confirmed via the same cached credentials used throughout this
+  session).
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
