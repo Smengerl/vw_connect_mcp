@@ -417,7 +417,7 @@ The points below are open **decisions**, not redesign work:
    codebase that already builds adapters by composition (mixins) — one
    layer further in the same direction, not a new pattern.
 
-### 7.3 Verdict
+### 7.3 Verdict (for the direct-`AbstractAdapter` option)
 
 No architecture break is required. `AbstractAdapter`'s
 read-returns-Optional / write-returns-result-dict contract, plus the
@@ -428,6 +428,142 @@ adapter's non-interactive runtime refresh path — everything else is a
 straightforward new implementation of an interface this codebase already
 treats as swappable in three different ways (`CarConnectivityAdapter`,
 `StartingAdapter`, `_AdapterProxy`).
+
+### 7.4 Alternative considered: a new CarConnectivity connector instead
+
+Instead of a `TibberAdapter(AbstractAdapter)` living inside `weconnect_mcp`
+(§7.1–7.3), the alternative is to make Tibber a **data source for
+`carconnectivity` itself** — a new connector alongside the existing VW one
+— and leave `CarConnectivityAdapter` (and everything above it) completely
+untouched. Analyzed by reading `carconnectivity`'s connector-loading code
+(`carconnectivity/carconnectivity.py`) and the installed VW connector
+(`carconnectivity_connectors/volkswagen/*.py`) as the concrete reference.
+
+**Correction to the framing: this does not require forking CarConnectivity.**
+Connector discovery is a plain [PEP 420 implicit namespace
+package](https://peps.python.org/pep-0420/) scan — confirmed by inspecting
+the installed packages: there is no `__init__.py` at the
+`carconnectivity_connectors/` namespace root, and the core loader
+(`carconnectivity/carconnectivity.py`) does
+`importlib.import_module('.connector', name) for name in
+__iter_namespace(carconnectivity_connectors)` — a dynamic scan over every
+installed package that participates in that namespace, no static registry
+anywhere in core. This is exactly how the official VW connector already
+works: it isn't inside the `CarConnectivity` repo at all, it's a wholly
+separate PyPI package (`carconnectivity-connector-volkswagen`, confirmed
+from its installed `METADATA`/`top_level.txt`, source at
+`github.com/tillsteinbach/CarConnectivity-connector-volkswagen`) that
+plugs in purely by (a) existing on the Python path under
+`carconnectivity_connectors.volkswagen`, (b) exposing a `Connector` class
+in a `.connector` submodule, and (c) a `{"type": "volkswagen", ...}` entry
+in `config.json`. A `carconnectivity-connector-tibber` package would work
+identically — a **new sibling package**, not a fork, with no upstream code
+touched and no fork-and-rebase maintenance burden against upstream
+`carconnectivity` releases.
+
+**What building it would actually involve**, using the VW connector as a
+size/shape reference (`carconnectivity_connectors/volkswagen/`: `connector.py`
+2087 lines, `vehicle.py` 94, `capability.py` 144, `charging.py` 89,
+`climatization.py` 46, `command_impl.py` 78 — 2572 lines total):
+
+1. **`BaseConnector` subclass** (`__init__`, `startup`, `shutdown`,
+   `fetch_all`, `get_version`, `get_type`, `get_name`) — genuinely thin,
+   `BaseConnector` itself is only ~155 lines and handles logging/config
+   boilerplate for you. Comparable in size to `TibberAdapter`'s own
+   `__init__`/`_fetch_data` in §7.1's option.
+2. **A vehicle subtype conforming to CarConnectivity's typed object
+   graph.** `GenericVehicle.__init__` unconditionally constructs `doors`,
+   `windows`, `lights`, `climatization`, `window_heatings`, `position`,
+   `maintenance`, `software`, etc. as real sub-objects (confirmed in
+   `carconnectivity/vehicle.py`, read in the earlier data-point-comparison
+   session) — a `TibberVehicle(GenericVehicle)` /
+   `TibberElectricVehicle(ElectricVehicle, TibberVehicle)` pair (mirroring
+   `VolkswagenVehicle`/`VolkswagenElectricVehicle` in the VW connector's
+   `vehicle.py`) would need to exist and construct that whole graph, even
+   though only 5 of the ~40 leaf attributes it contains would ever be
+   populated for Tibber data. The fields we *do* have must be set as proper
+   typed `Attribute` instances (`LevelAttribute`, `RangeAttribute`,
+   `EnumAttribute`, ...) with CarConnectivity's tagging/observer semantics
+   — not plain Python values. This is meaningfully more ceremony than §7.1
+   option's direct dict → flat-Pydantic-field mapping, for identical data.
+3. **Command wiring: a non-issue either way.** Since Tibber has zero write
+   capability (§5), the connector would simply never register any
+   `Commands` on the vehicle/doors/charging sub-objects. CarConnectivity's
+   own consumers already handle that gracefully — confirmed in this
+   codebase: `CommandMixin.lock_vehicle` already checks `vehicle.doors is
+   None or vehicle.doors.commands is None` before attempting anything. No
+   extra work needed on either side of this comparison.
+4. **Auth bootstrap: the identical open question as §7.2 point 4, just
+   relocated.** The VW connector's own `__init__`/`startup`/
+   `_background_loop` (lines 84/173/179 of `connector.py`) show
+   CarConnectivity's connector lifecycle is built around blocking,
+   config-driven credential login with its own tokenstore — structurally
+   the same shape `CarConnectivityAdapter` uses today. A Tibber connector
+   still has to solve "one-time interactive browser consent vs.
+   non-interactive runtime refresh" — same problem, same solution shape
+   (§7.2 point 4), just implemented inside a `BaseConnector` subclass
+   instead of an `AbstractAdapter` subclass. Not easier, not harder here.
+5. **Zero `weconnect_mcp` code changes.** This is the option's real
+   structural payoff, and it holds unconditionally (not just for a
+   VW+Tibber hybrid setup): `CarConnectivityAdapter` never distinguishes
+   which connector populated a vehicle — `list_vehicles`/
+   `_get_vehicle_for_vin` walk `garage.list_vehicle_vins()` /
+   `garage.get_vehicle(vin)` generically (confirmed in
+   `carconnectivity_adapter.py`). Enabling Tibber would be: install the
+   new connector package, add one entry to `config.json`'s
+   `carConnectivity.connectors[]` with `"type": "tibber"`. No changes to
+   `CarConnectivityAdapter`, `StateExtractionMixin`, `mcp_server.py`,
+   `read_tools.py`, `command_tools.py`, or `cli/mcp_server_cli.py` at all.
+6. **Multi-source fleets come for free.** `Garage`/`Connectors` are
+   explicitly designed for multiple connectors contributing vehicles into
+   one shared garage (`self.connectors: Dict[str, BaseConnector]`,
+   `fetch_all()` iterates all of them). A fleet where some vehicles are
+   VW-direct and others are Tibber-only-paired would just work, with no
+   custom composition code — this is what §7.2 point 7's proposed
+   `HybridAdapter` would have to build by hand for the direct-adapter
+   option; here CarConnectivity already provides it.
+7. **New coupling/maintenance surface.** This project already pins exact
+   versions (`carconnectivity==0.9.2`,
+   `carconnectivity-connector-volkswagen==0.9.3` in `pyproject.toml`),
+   suggesting compatibility across `carconnectivity` releases is treated as
+   fragile enough to lock down tightly. A Tibber connector inherits that
+   same coupling — a breaking change in `carconnectivity`'s
+   `Attribute`/vehicle class hierarchy would require re-testing/re-releasing
+   it too. §7.1's `TibberAdapter` has no such coupling: its only
+   dependency is `httpx` + Tibber's own stable public API.
+8. **Upstream/community value.** If published as a real package (mirroring
+   how `carconnectivity-connector-volkswagen` itself is a separate
+   community-maintained repo), a Tibber connector could benefit the wider
+   CarConnectivity/evcc-adjacent ecosystem beyond this project — a
+   consideration `TibberAdapter` (internal to `weconnect_mcp`) doesn't
+   offer. Soft factor, not a technical requirement either way.
+
+### 7.5 Comparative verdict: direct adapter vs. new connector
+
+Both options resolve the same open question (OAuth bootstrap split,
+§7.2 point 4) identically — that's not a differentiator. Where they differ:
+
+- **`TibberAdapter(AbstractAdapter)`** (§7.1–7.3): less code overall, no
+  new external dependency/version coupling, works with Tibber's data in
+  its natural flat shape — but duplicates `CarConnectivityAdapter`'s role
+  as *a second, independent* `AbstractAdapter` implementation, and any
+  multi-source (VW + Tibber) fleet requires hand-building a
+  `HybridAdapter`.
+- **`carconnectivity-connector-tibber`** (§7.4): zero changes anywhere in
+  `weconnect_mcp` (confirmed connector-agnostic), multi-source fleets work
+  for free via `Garage`, and it's *not* actually a fork (a new,
+  independent sibling package suffices) — but it requires conforming a
+  5-field data source to a typed object graph built for a ~40-field one
+  (extra ceremony for no data gain), and ties this project to
+  `carconnectivity`'s own release/compatibility cadence the same way the
+  VW connector already does.
+
+Neither requires a fork of anything, and neither is architecturally wrong
+— this is a genuine tradeoff between "less code, more independence"
+(direct adapter) and "zero blast radius on existing code, more
+ceremony + coupling" (new connector), not a case where one option is
+obviously correct. Worth an explicit decision before writing any code,
+not a default either way.
 
 ## 8. Session log
 
@@ -577,6 +713,36 @@ treats as swappable in three different ways (`CarConnectivityAdapter`,
   would be a straight adapter swap (accepting the data-point loss
   documented in `README.md`) or a `HybridAdapter` combining Tibber with
   another source — see §7.2 point 7.
+
+### 2026-08-21 — compared direct AbstractAdapter vs. a new CarConnectivity connector
+- Simon asked for a comparison against forking CarConnectivity and adding a
+  Tibber connector there instead of implementing `AbstractAdapter` directly.
+  Added §7.4–7.5. Read `carconnectivity/carconnectivity.py`'s connector
+  loader and the full installed VW connector package
+  (`carconnectivity_connectors/volkswagen/`: `connector.py` 2087 lines,
+  `vehicle.py`, `capability.py`, `charging.py`, `climatization.py`,
+  `command_impl.py`) as the concrete reference for size/shape.
+- **Correction to the premise:** no fork is actually needed. Confirmed via
+  `top_level.txt`/`METADATA` that `carconnectivity-connector-volkswagen` is
+  already a separate PyPI package/repo, and confirmed via
+  `carconnectivity/carconnectivity.py` that connector discovery is a plain
+  namespace-package scan (`importlib.import_module('.connector', name)`
+  over `__iter_namespace(carconnectivity_connectors)`, no static registry,
+  no `__init__.py` at the namespace root). A `carconnectivity-connector-tibber`
+  package would plug in the same way, with zero upstream code touched.
+- Net comparison: a new connector means **zero changes anywhere in
+  `weconnect_mcp`** (confirmed `CarConnectivityAdapter` is fully
+  connector-agnostic) and multi-source fleets work for free via `Garage` —
+  but requires conforming Tibber's 5 data points to CarConnectivity's much
+  richer typed `Attribute`/vehicle object graph (built for a ~40-field
+  source), and couples this project to `carconnectivity`'s own release
+  cadence, same as the VW connector already does (this project pins exact
+  versions in `pyproject.toml`). The direct-`AbstractAdapter` option
+  (§7.1–7.3) is less code with no such coupling, but duplicates
+  `CarConnectivityAdapter`'s role and needs a hand-built `HybridAdapter`
+  for any multi-source setup.
+- **No decision made yet** — both are legitimate, and this is flagged in
+  §7.5 as worth an explicit choice before writing code, not a default.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
