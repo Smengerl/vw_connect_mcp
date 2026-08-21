@@ -612,15 +612,21 @@ In HTTP/cloud mode the server starts two things independently, for either backen
 
 Tools called before the backend is ready return a friendly `"Server is still starting"` error instead of crashing.
 
-> ⚠️ **Tibber backend + cloud deployment — token file caveat.** The Tibber OAuth login is a
+> ⚠️ **Tibber backend + cloud deployment — token bootstrap.** The Tibber OAuth login is a
 > one-time *interactive* step (browser + human click) that cannot run inside a headless
-> container. You must run `python -m weconnect_mcp.cli.tibber_login_cli` **locally** first, then
-> get the resulting token file into the container at the path `TIBBER_TOKEN_PATH` points to.
-> Neither the current `Dockerfile` nor `docker-compose.yml` sets up a volume/mount for this yet
-> (the existing `tokenstore` volume is for the `carconnectivity` backend's VW token only) — that's
-> a follow-up, not yet done. Until it is, cloud deployment of the `tibber` backend needs a manual
-> way to get the token file into the container (e.g. `docker cp`, a custom volume, or a secret
-> file mount on your host).
+> container, and Tibber has no `client_credentials` grant (confirmed live,
+> [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md) §3.4) —
+> `client_id`/`client_secret` alone can never mint a fresh access token, so a `refresh_token` must
+> persist across restarts one way or another. The bridge: run
+> `python -m weconnect_mcp.cli.tibber_login_cli` **locally** first, then paste that run's token
+> file contents into the `TIBBER_TOKEN_JSON` environment variable. On first boot only, the server
+> writes that into the file at `TIBBER_TOKEN_PATH` (Dockerfile default:
+> `/tmp/tibber-tokens/tibber_tokens.json`, on the `tibber-tokens` volume in `docker-compose.yml`).
+> Every token refresh after that rewrites the file directly (including Tibber's rotating
+> `refresh_token`) — as long as `TIBBER_TOKEN_PATH` is on a **persisted volume**, it survives
+> future restarts and `TIBBER_TOKEN_JSON` is never read again. Without a volume, each restart
+> re-seeds from the same (increasingly stale) env var, which works until that seed's
+> `refresh_token` is rotated away — set up a volume for anything beyond quick local testing.
 
 ### Option A: Railway (recommended)
 
@@ -644,26 +650,35 @@ railway up --detach      # builds the Docker image and deploys it
 **Step 3 – Set secret environment variables**  
 Never put credentials in the repository. Set them in the Railway dashboard instead.
 
-For the default **`tibber`** backend (see the token-file caveat above before deploying):
+For the default **`tibber`** backend (see the token bootstrap caveat above before deploying):
 
 ```bash
 railway variables set TIBBER_CLIENT_ID="your-client-id"
 railway variables set TIBBER_CLIENT_SECRET="your-client-secret"
 railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+
+# First deploy only -- paste in the contents of the token file produced by
+# running `python -m weconnect_mcp.cli.tibber_login_cli` locally:
+railway variables set TIBBER_TOKEN_JSON="$(cat tibber_tokens.json)"
 ```
+
+Then, in the Railway dashboard, add a **Volume** to the service mounted at
+`/tmp/tibber-tokens` (Service → Settings → Volumes) so the token the server writes there survives
+redeploys — without it, every redeploy re-seeds from the (increasingly stale) `TIBBER_TOKEN_JSON`
+above, which stops working once Tibber rotates that seed's `refresh_token` away.
 
 For the **`carconnectivity`** backend (currently blocked by VW):
 
 ```bash
+railway variables set MCP_BACKEND="carconnectivity"
 railway variables set VW_USERNAME="your@email.com"
 railway variables set VW_PASSWORD="yourpassword"
 railway variables set VW_SPIN="1234"
 railway variables set MCP_API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 ```
 
-The Dockerfile's `CMD` doesn't currently pass `--backend` explicitly, so the container uses the
-`tibber` default. If you need `carconnectivity` in the container, edit the `CMD` line in
-`Dockerfile` to add `--backend carconnectivity` (not done as part of this change).
+The Dockerfile's `CMD` reads the backend from the `MCP_BACKEND` env var (default: `tibber`) — no
+image rebuild needed to switch, just set the variable above.
 
 Or go to: **railway.com → your project → service → Variables**
 
@@ -690,10 +705,17 @@ Every `git push` followed by `railway up` redeploys the service.
 
 ```bash
 cp .env.example .env   # fill in your real credentials
+
+# Tibber backend only, first run: seed the token (see the caveat above)
+python -m weconnect_mcp.cli.tibber_login_cli
+echo "TIBBER_TOKEN_JSON=$(cat tibber_tokens.json)" >> .env
+
 docker compose up --build
 ```
 
-The server is then available at `http://localhost:8089`.
+The server is then available at `http://localhost:8089`. The `tibber-tokens` volume in
+`docker-compose.yml` persists the refreshed token across `docker compose restart`/rebuilds, so the
+`tibber_login_cli` step above is only needed once, the very first time.
 
 ---
 
@@ -703,10 +725,12 @@ Credentials and the API key are passed via environment variables — **never put
 
 | Variable | Required for | Description |
 |---|---|---|
+| `MCP_BACKEND` | both, optional | `tibber` (default, image default too) or `carconnectivity` — no rebuild needed to switch |
 | `TIBBER_CLIENT_ID` | `tibber` (default) | OAuth2 client id from data-api.tibber.com |
 | `TIBBER_CLIENT_SECRET` | `tibber` (default) | OAuth2 client secret |
 | `TIBBER_REDIRECT_URI` | `tibber`, optional | Default: `http://localhost:8515/callback` |
-| `TIBBER_TOKEN_PATH` | `tibber`, optional | Default: `./tibber_tokens.json` — must point at a token file produced locally by `tibber_login_cli` and present in the container, see the caveat above |
+| `TIBBER_TOKEN_PATH` | `tibber`, optional | Image default: `/tmp/tibber-tokens/tibber_tokens.json` (mount a volume here — see the caveat above) |
+| `TIBBER_TOKEN_JSON` | `tibber`, first boot only | Contents of a token file produced locally by `tibber_login_cli` — bootstraps `TIBBER_TOKEN_PATH` once, see the caveat above |
 | `VW_USERNAME` | `carconnectivity` | VW WeConnect account e-mail |
 | `VW_PASSWORD` | `carconnectivity` | VW WeConnect account password |
 | `VW_SPIN` | `carconnectivity` | 4-digit S-PIN |

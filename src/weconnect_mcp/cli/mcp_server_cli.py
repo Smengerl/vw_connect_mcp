@@ -12,6 +12,7 @@ Two backends are available (--backend flag):
         TIBBER_CLIENT_SECRET   Required (file or env).
         TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
         TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
+        TIBBER_TOKEN_JSON      Optional, headless bootstrap only (see below).
       A file is recommended for local/desktop use (Claude Desktop, VS Code
       Copilot launch the server with their own environment, not your
       shell's, so env-var-only config would otherwise require embedding
@@ -20,7 +21,14 @@ Two backends are available (--backend flag):
       Railway deployments.
       Run `python -m weconnect_mcp.cli.tibber_login_cli` once, interactively,
       before starting the server with this backend — see that module's
-      docstring.
+      docstring. Tibber has no client_credentials grant (confirmed live,
+      TIBBER_API.md §3.4), so the resulting refresh_token must persist
+      across restarts one way or another. For headless deployments,
+      TIBBER_TOKEN_JSON bootstraps the token file from that env var on
+      first boot only (see _seed_tibber_token_from_env docstring); point
+      TIBBER_TOKEN_PATH at a persisted volume so subsequent token refreshes
+      (which rewrite the file, including Tibber's rotating refresh_token)
+      survive future restarts instead of reverting to the stale env var.
       This is the default because VW currently blocks third-party direct
       access (see experiment/vw-device-flow-attestation-bypass/FINDING.md) —
       the carconnectivity backend below will fail to connect until that
@@ -107,6 +115,55 @@ def _maybe_patch_config_from_env(config_path: str) -> str:
     return tmp.name
 
 
+def _seed_tibber_token_from_env(token_path: str) -> None:
+    """Seed the Tibber token file from TIBBER_TOKEN_JSON on first boot.
+
+    Bootstrap mechanism for headless deployments (Docker/Railway), where the
+    interactive login (tibber_login_cli) cannot run: run it once locally,
+    then paste that run's token file contents verbatim into the
+    TIBBER_TOKEN_JSON environment variable (same JSON shape TokenStore.save()
+    writes -- access_token, refresh_token, expires_at, token_type, scope).
+
+    This only ever fires once: if a file already exists at token_path, it is
+    left untouched, since every subsequent refresh already rewrites it
+    in-place (including Tibber's rotating refresh_token, see
+    experiment/tibber-integration/TIBBER_API.md §3.4) and is therefore always
+    at least as current as the env var. For that rewrite to survive a
+    restart, token_path should point at a persisted volume (see
+    docker-compose.yml's tibber-tokens volume) -- without one, this seeds
+    a fresh copy from the same (increasingly stale) env var on every
+    restart, which works until the seeded refresh_token itself is rotated
+    away by a run that *did* persist, or simply ages past ~30 days.
+
+    No-op if the file already exists or the env var isn't set, so this is
+    always safe to call unconditionally before constructing the adapter.
+    """
+    if os.path.exists(token_path):
+        return
+    seed = os.environ.get("TIBBER_TOKEN_JSON")
+    if not seed:
+        return
+
+    try:
+        json.loads(seed)  # validate before writing -- fail loudly, not silently
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"TIBBER_TOKEN_JSON is not valid JSON: {exc}") from exc
+
+    parent = os.path.dirname(token_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(token_path, "w", encoding="utf-8") as f:
+        f.write(seed)
+    try:
+        os.chmod(token_path, 0o600)
+    except OSError:
+        pass  # best effort (e.g. filesystems without POSIX perms)
+
+    logging_config.get_logger(__name__).info(
+        "Seeded Tibber token file from TIBBER_TOKEN_JSON at %s", token_path
+    )
+
+
 def _build_tibber_adapter(config_path: Optional[str] = None):
     """Build a TibberAdapter from a credentials file and/or environment variables.
 
@@ -173,6 +230,8 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
             "--backend tibber. Register an OAuth2 client at "
             "https://data-api.tibber.com/clients/manage/ first."
         )
+
+    _seed_tibber_token_from_env(token_path)
 
     return TibberAdapter(
         client_id=client_id,

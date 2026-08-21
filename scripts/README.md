@@ -93,6 +93,19 @@ itself):
 python -m weconnect_mcp.cli.tibber_login_cli
 ```
 
+**For Docker/Railway specifically**, that login can't run inside the
+container either, and Tibber has no way to mint a token from
+`client_id`/`client_secret` alone (no `client_credentials` grant — confirmed
+live, `experiment/tibber-integration/TIBBER_API.md` §3.4), so a
+`refresh_token` must persist across restarts one way or another. The bridge:
+run `tibber_login_cli` locally as above, then paste that run's token file
+contents into the `TIBBER_TOKEN_JSON` env var (a Railway variable or
+`docker-compose.yml`'s `.env`). It seeds `TIBBER_TOKEN_PATH` once, on first
+boot only — point that path at a persisted volume (see `docker-compose.yml`'s
+`tibber-tokens` volume) so every later token refresh, which rewrites the
+file in place, survives future restarts without the now-stale env var ever
+being read again.
+
 ## Available Scripts
 
 ### test.sh

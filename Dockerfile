@@ -31,9 +31,13 @@ COPY --from=builder /install /usr/local
 # Copy application source
 COPY src/ ./src/
 
-# Writable directory for token store (carconnectivity caches OAuth tokens here).
-# The CLI passes /tmp/tokenstore as a FILE PREFIX, not a directory.
-RUN mkdir -p /tmp && chown mcpuser /tmp
+# Writable directories for token persistence, owned by mcpuser before any
+# volume gets mounted over them (Docker/Railway copy this ownership onto a
+# freshly-mounted empty volume, so this must happen before USER below).
+# /tmp/ts: carconnectivity's tokenstore (the CLI passes /tmp/ts/token as a
+#   FILE PREFIX, not a directory).
+# /tmp/tibber-tokens: the tibber backend's TIBBER_TOKEN_PATH default.
+RUN mkdir -p /tmp/ts /tmp/tibber-tokens && chown -R mcpuser /tmp
 
 USER mcpuser
 
@@ -47,18 +51,29 @@ ENV MCP_BACKEND=tibber
 # carconnectivity backend: VW_USERNAME/VW_PASSWORD/VW_SPIN (or bake a real
 #   config.json into your own image build instead).
 # tibber backend (default): TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET, plus a
-#   TIBBER_TOKEN_PATH pointing at a pre-existing token file. That file must
-#   be produced by a one-time LOCAL interactive login (`python -m
-#   weconnect_mcp.cli.tibber_login_cli`, see experiment/tibber-integration/
-#   README.md) -- the login itself cannot run inside a headless container.
-#   Verified working: `docker run ... -e TIBBER_TOKEN_PATH=/tmp/tokens/x.json
-#   -v /path/to/local/tokens:/tmp/tokens ...` (manual bind mount). No named
-#   volume + documented workflow for this exists in docker-compose.yml yet
-#   (unlike carconnectivity's `tokenstore` volume) -- tracked as a follow-up.
+#   token file at TIBBER_TOKEN_PATH (defaulted below to the tibber-tokens
+#   volume mounted in docker-compose.yml). Tibber has no client_credentials
+#   grant (confirmed live, experiment/tibber-integration/TIBBER_API.md
+#   §3.4) -- a refresh_token must persist across restarts one way or
+#   another, and the interactive login that produces one cannot run inside
+#   a headless container. Bootstrap it with TIBBER_TOKEN_JSON: run
+#   `python -m weconnect_mcp.cli.tibber_login_cli` once LOCALLY, then paste
+#   that run's token file contents into TIBBER_TOKEN_JSON (as a Railway
+#   variable, docker-compose environment entry, or `docker run -e`).
+#   _seed_tibber_token_from_env() in mcp_server_cli.py writes it to
+#   TIBBER_TOKEN_PATH once, on first boot only, if no file exists there yet
+#   -- every refresh after that rewrites the file (including Tibber's
+#   rotating refresh_token) and, as long as TIBBER_TOKEN_PATH is on a
+#   persisted volume, survives future restarts without the stale env var
+#   ever being read again.
 ENV MCP_API_KEY=""
 ENV VW_USERNAME=""
 ENV VW_PASSWORD=""
 ENV VW_SPIN=""
+ENV TIBBER_CLIENT_ID=""
+ENV TIBBER_CLIENT_SECRET=""
+ENV TIBBER_TOKEN_JSON=""
+ENV TIBBER_TOKEN_PATH=/tmp/tibber-tokens/tibber_tokens.json
 # Default port for Railway (Railway injects its own PORT env var at runtime).
 # For local Docker, the host-side mapping in docker-compose.yml maps the
 # external port 8089 to this internal container port 8080.

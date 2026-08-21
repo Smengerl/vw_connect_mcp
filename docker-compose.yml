@@ -4,6 +4,16 @@
 #   cp .env.example .env        # fill in your real credentials
 #   docker compose up --build
 #
+# Tibber backend (default, see README.md#choosing-a-backend): set
+# TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET in .env, and on first run also
+# TIBBER_TOKEN_JSON -- paste in the contents of a token file produced by
+# running `python -m weconnect_mcp.cli.tibber_login_cli` locally first (the
+# interactive login itself cannot run inside this container). That seeds
+# the tibber-tokens volume below once; every token refresh after that
+# rewrites the volume directly, so TIBBER_TOKEN_JSON only matters for that
+# first run -- safe to leave it in .env afterward, it's simply never read
+# again once the volume has a file.
+#
 # Port strategy:
 #   - Container runs internally on port 8080 (set via ENV PORT in Dockerfile)
 #   - Host port 8089 is mapped to container port 8080 to avoid conflicts when
@@ -22,8 +32,11 @@ services:
     environment:
       PORT: "8080"    # internal container port
     volumes:
-      # Persist the OAuth token store between restarts to avoid repeated logins
+      # Persist the carconnectivity OAuth token store between restarts
       - tokenstore:/tmp/ts
+      # Persist the tibber backend's refresh token between restarts -- see
+      # the usage note above for how it gets seeded on first run
+      - tibber-tokens:/tmp/tibber-tokens
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -35,3 +48,4 @@ services:
 
 volumes:
   tokenstore:
+  tibber-tokens:
