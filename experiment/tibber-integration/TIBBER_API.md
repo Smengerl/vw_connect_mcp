@@ -112,6 +112,36 @@ grant_type=refresh_token&refresh_token=OLD_REFRESH&client_id=...&client_secret=.
 ```
 React to `401 Unauthorized` by refreshing once and retrying.
 
+### 3.4 No client_credentials grant — a refresh_token (or full re-login) must be persisted
+
+**Confirmed live (2026-08-21, see §8):** `client_id`+`client_secret` alone can
+**not** mint a fresh access token — there is no service-account/
+machine-to-machine mode for this API. Tested directly against
+`https://thewall.tibber.com/connect/token`:
+
+| Request | Response |
+|---|---|
+| `grant_type=client_credentials` + client_id/secret only | `{"error":"unauthorized_client"}` |
+| `grant_type=totally_bogus_grant` (control, to distinguish error meaning) | `{"error":"unsupported_grant_type"}` |
+| `grant_type=refresh_token` + a real refresh_token | full token set, **including a new, different `refresh_token`** |
+
+The differing error codes matter: `unauthorized_client` means the server
+recognizes `client_credentials` as a real grant type but this client isn't
+permitted to use it — not "unimplemented." This matches the framing
+throughout Tibber's own docs ("tokens represent the end user (resource
+owner)"): the data returned belongs to a specific Tibber customer's
+account, and `client_secret` only proves "this request comes from the
+registered app" — it says nothing about *which* user's data to serve. The
+`refresh_token` is the artifact that encodes the one-time user consent (the
+interactive login); nothing else can substitute for it.
+
+**Practical implication:** there is no way to avoid persisting *something*
+across a restart — either the `refresh_token` itself (in a file or env var,
+see §7 architecture discussion on the Docker/Railway token-bootstrap gap)
+or a full repeat of the interactive login. The refresh above also
+empirically confirms the rotation behavior in §3 (Item table) is real, not
+just documented: the returned `refresh_token` differed from the one sent.
+
 ## 4. Scopes
 
 **Correction (2026-08-21, see §8):** the client-registration UI at
@@ -969,6 +999,28 @@ not a default either way.
   `tokenstore` volume. That gap (the real one — token bootstrap, not
   credential delivery) is confirmed still fully open and was not
   addressed here, only demonstrated to be solvable.
+
+### 2026-08-21 — settled: no client_credentials shortcut exists, tested live
+- Before deciding between the token-persistence options (§7 architecture
+  discussion), Simon asked the natural question: why persist any token at
+  all — why not just mint a fresh access token from `client_id`+
+  `client_secret` on every restart, keeping nothing but the client secret
+  itself durable? Tested directly rather than answered from docs alone
+  (see new §3.4): `grant_type=client_credentials` against
+  `thewall.tibber.com/connect/token` returns `unauthorized_client`
+  (recognized-but-disallowed, confirmed distinct from
+  `unsupported_grant_type` via a bogus-grant-type control test) — Tibber's
+  Data API has no service-account/machine-to-machine mode. The
+  `refresh_token` (or a full repeat of the interactive login) is
+  unavoidable to persist.
+- Side benefit: the same test empirically confirmed the refresh-token
+  rotation behavior (§3's "possibly one-time-use" note) is real, not just
+  documented — a `refresh_token` grant request returned a *different*
+  `refresh_token` than the one sent.
+- This forecloses a class of simpler designs for the Docker/Railway
+  token-bootstrap gap (§7's still-open item) — the choice remains between
+  the env-var/volume/hybrid options already discussed, not "persist
+  nothing." No decision made yet on which of those to implement.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
