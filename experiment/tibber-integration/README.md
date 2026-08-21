@@ -61,6 +61,13 @@ log. Modelled on evcc's implementation
    cp .env.example .env
    # edit .env, fill in TIBBER_CLIENT_ID / TIBBER_CLIENT_SECRET
    ```
+   The file with your real secrets must be named exactly **`.env`** (not
+   `.env.example`) and live in this same directory
+   (`experiment/tibber-integration/.env`) — `hello_tibber.py` loads it via
+   `load_dotenv(Path(__file__).with_name(".env"))`, so a different name or
+   location is silently ignored (the script falls through to "Missing
+   TIBBER_CLIENT_ID" instead of erroring on a wrong path). It's covered by
+   `.gitignore` under that exact name, so it's never accidentally committed.
 
 3. **Run** (uses the project venv, which already has `httpx` + `python-dotenv`):
    ```bash
