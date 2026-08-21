@@ -1,6 +1,6 @@
 # Tibber Data API as an indirect path to VW vehicle data
 
-**Status:** **Confirmed working end-to-end (2026-08-21, live test, see §7).**
+**Status:** **Confirmed working end-to-end (2026-08-21, live test, see §8).**
 OAuth client registered, browser login/pairing completed, and the VW vehicle
 was correctly returned from `GET /v1/homes` → `GET /v1/homes/{id}/devices`.
 API confirmed **read-only** (no control/command endpoints exist as of this
@@ -29,7 +29,7 @@ not expose vehicles at all.
 Tibber does not appear to talk to VW/CARIAD directly for this integration.
 The device `id` returned for our paired vehicle is unpadded-base64url text
 that decodes to `"volkswagen enode vehicle:<uuid>"` (confirmed live,
-2026-08-21, see §7) — i.e. Tibber's VW support is itself built on
+2026-08-21, see §8) — i.e. Tibber's VW support is itself built on
 **[Enode](https://enode.com)**, a third-party middleware/aggregator API.
 
 What Enode is: an API platform that gives one unified integration surface
@@ -53,7 +53,7 @@ public API is not, today.
 This doc is the durable record of what that API is, what it offers, and
 how to connect to it, so this doesn't need to be re-researched in a future
 session. **Keep this updated** as we build against it — append dated
-entries to §7 rather than rewriting history.
+entries to §8 rather than rewriting history.
 
 ## 2. Prerequisites (already satisfied on our side)
 
@@ -112,7 +112,7 @@ React to `401 Unauthorized` by refreshing once and retrying.
 
 ## 4. Scopes
 
-**Correction (2026-08-21, see §7):** the client-registration UI at
+**Correction (2026-08-21, see §8):** the client-registration UI at
 `data-api.tibber.com/clients/manage/` groups scopes differently than earlier
 wording here implied. There are two distinct groups, not one flat list:
 
@@ -182,7 +182,7 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://data-api.tibber.com/v1/hom
 Filter the devices list for the vehicle device (category/type indicates
 "vehicle"), then match by VIN if multiple vehicles are present.
 
-### 5.2 Vehicle data fields (confirmed live, 2026-08-21, see §7)
+### 5.2 Vehicle data fields (confirmed live, 2026-08-21, see §8)
 
 Full device detail response shape, confirmed against our own paired VW
 (`GET /v1/homes/{homeId}/devices/{deviceId}`), values redacted/genericized
@@ -286,7 +286,150 @@ read-only in production use — evcc's own docs state charging control still
 has to go through a separately-configured wallbox/charger, not through
 Tibber.
 
-## 7. Session log
+## 7. Architecture analysis: fitting a TibberAdapter into the MCP server
+
+**Analysis only — nothing here has been implemented.** Written after reading
+the actual current source of `src/weconnect_mcp/adapter/` and
+`src/weconnect_mcp/server/` (2026-08-21).
+
+### 7.1 Current architecture (already a clean ports-and-adapters split)
+
+- **`AbstractAdapter`** (`adapter/abstract_adapter.py`) is the port: an ABC
+  with ~20 abstract methods. Read side (`get_vehicle`, `get_physical_status`,
+  `get_energy_status`, `get_climate_status`, `get_maintenance_info`,
+  `get_position`, `list_vehicles`) returns `Optional[<TypedModel>]` per
+  category, and every field on every model is itself `Optional[...] = None`.
+  Write side (`lock_vehicle`, `unlock_vehicle`, `start/stop_climatization`,
+  `start/stop_charging`, `flash_lights`, `honk_and_flash`,
+  `start/stop_window_heating`) returns a plain `Dict[str, Any]` result
+  (`{"success": bool, ...}`).
+- **`CarConnectivityAdapter`** is the concrete adapter, built by mixin
+  composition: `CacheMixin` + `VehicleResolutionMixin` + `CommandMixin` +
+  `StateExtractionMixin` + `AbstractAdapter` — one mixin per concern
+  (caching, id resolution, write commands, read-state extraction from
+  `carconnectivity`'s object graph).
+- **`StartingAdapter`** is a *second* concrete `AbstractAdapter`
+  implementation: a no-op stub returning `None`/`{"success": False, ...}`
+  for everything, used while the real adapter is still connecting.
+- **`_AdapterProxy`** (defined inline in `cli/mcp_server_cli.py`, HTTP
+  transport only) is a *third* concrete `AbstractAdapter` implementation: a
+  mutable delegate wrapper. The server is built once against the proxy;
+  a background thread swaps the proxy's delegate from `StartingAdapter` to
+  a real, connected `CarConnectivityAdapter` once VW login completes — the
+  MCP tool layer never notices the swap.
+- **The MCP tool layer never touches `carconnectivity` at all.** Confirmed
+  by grep: `server/mixins/read_tools.py` and `server/mixins/command_tools.py`
+  import only `weconnect_mcp.adapter.abstract_adapter`; `get_server()` in
+  `server/mcp_server.py` does `isinstance(adapter, AbstractAdapter)`, not a
+  concrete-type check. This separation is not aspirational — it already
+  holds throughout the codebase as it stands today.
+- **`cli/mcp_server_cli.py` is the sole composition root** — the only file
+  that imports and instantiates `CarConnectivityAdapter` by name (twice:
+  once for the HTTP background-thread path, once for the stdio path).
+
+### 7.2 What this means for Tibber
+
+Because the tool layer depends only on the `AbstractAdapter` interface, a
+`TibberAdapter(AbstractAdapter)` is a structurally clean drop-in: zero
+changes needed to `mcp_server.py`, `read_tools.py`, `command_tools.py`,
+`prompts.py`, or `AbstractAdapter` itself. This isn't optimistic framing —
+it follows directly from the isinstance-check + import-grep evidence above.
+The points below are open **decisions**, not redesign work:
+
+1. **Read-side coverage gap is already tolerated by the interface, not a
+   schema problem.** Per the data-point comparison in `README.md`, Tibber
+   fills 11 of 51 tracked fields (identity + the charging/range cluster).
+   Every read method already returns `Optional[Model]`, and every model
+   field is already `Optional[...] = None` — `CarConnectivityAdapter`
+   itself already returns `None` for whole categories when data is
+   missing (e.g. `get_vehicle`'s `BASIC` vs `FULL` split). A `TibberAdapter`
+   would have `get_physical_status` / `get_climate_status` /
+   `get_maintenance_info` / `get_position` simply always return `None`
+   (categories Tibber has zero data for), and `get_vehicle` /
+   `get_energy_status` return partially-populated models. No interface
+   change required.
+
+2. **Write-side coverage is zero, and there's already a precedent for
+   that.** Tibber's API is confirmed read-only (§5) — none of the 10
+   abstract command methods can be fulfilled. Python's ABC mechanism still
+   requires `TibberAdapter` to implement all 10, but `StartingAdapter`
+   already establishes the exact idiom needed: implement the method,
+   return a `{"success": False, "error": "..."}` sentinel (its
+   `_NOT_READY` constant is structurally identical to what a Tibber
+   "not supported by this backend" response would look like). Reusing an
+   existing idiom, not inventing a new one.
+
+3. **Vehicle identity resolution maps cleanly.** `AbstractAdapter.
+   resolve_vehicle_id` and `CarConnectivityAdapter._get_vehicle_for_vin`
+   are VIN-centric. §5.2 confirmed live that Tibber's `externalId` is the
+   bare VIN for our VW/Enode-backed device — so VIN-based lookup works
+   directly; only the license-plate fallback (already an optional,
+   lowest-priority match in `resolve_vehicle_id`) would never match for a
+   Tibber-backed vehicle, which is harmless.
+
+4. **Auth/session bootstrap is the one genuine friction point — but it's
+   containable inside the adapter's own `__init__`, same as today.**
+   `CarConnectivityAdapter.__init__` does a *non-interactive*, blocking
+   login from static config (username/password/SPIN) — no human needed at
+   boot, which is exactly why it can run synchronously in stdio mode and
+   in a background thread in HTTP mode. Tibber's OAuth2 Authorization Code
+   + PKCE flow (as built in `hello_tibber.py` this session) is inherently
+   a one-time *interactive* step — opens a browser, needs a human click —
+   which cannot run unattended inside a server process, especially not a
+   headless cloud deployment (this project already deploys to Railway).
+   What *can* run unattended afterwards is plain refresh-token exchange (a
+   POST, no browser) — structurally equivalent to what
+   `CarConnectivityAdapter` already does via `tokenstore_file` on every
+   re-login. The fix is an adapter-local bootstrap split, not an
+   architecture change: (a) a one-time, out-of-band interactive step
+   (`hello_tibber.py` already *is* this) produces a persisted refresh
+   token; (b) `TibberAdapter.__init__` only ever does non-interactive
+   refresh-token exchange, mirroring the existing `tokenstore_file`
+   pattern with a Tibber-specific token file instead. This arguably fits
+   the existing `StartingAdapter`/`_AdapterProxy` background-swap
+   mechanism *better* than VW login does, since refresh-token exchange is
+   fast and has no OAuth-consent-screen step.
+
+5. **Constructor shape is a non-issue.** `AbstractAdapter` defines no
+   `__init__` contract — `CarConnectivityAdapter` (`config_path`,
+   `tokenstore_file`) and `StartingAdapter` (no args) already have
+   unrelated constructors. `TibberAdapter(client_id, client_secret,
+   redirect_uri, tokenstore_file=...)` is consistent with, not a deviation
+   from, the existing pattern.
+
+6. **Composition root needs a small, localized change.**
+   `cli/mcp_server_cli.py` hardcodes `CarConnectivityAdapter` in two
+   places. Adding Tibber means either a backend-selection flag/env var
+   with a small factory function, or a second CLI entry point. Either is
+   additive; `_AdapterProxy` needs **zero** changes since it already
+   delegates purely through `AbstractAdapter` methods — it has no idea
+   what concrete class sits behind it today, and wouldn't need to.
+
+7. **Pure replacement vs. hybrid is a product decision the architecture
+   leaves open, not one it forces.** Given the data/command gap above, a
+   straight swap to `TibberAdapter` would be a real feature regression
+   versus `CarConnectivityAdapter` (loses doors/windows/tyres/lights/
+   climatization/position/maintenance entirely, plus every command). But
+   nothing requires an all-or-nothing choice: a `HybridAdapter
+   (AbstractAdapter)` composing a `TibberAdapter` instance and (whenever
+   direct VW access is viable again) a `CarConnectivityAdapter` instance,
+   choosing/merging per method, would be a natural extension of a
+   codebase that already builds adapters by composition (mixins) — one
+   layer further in the same direction, not a new pattern.
+
+### 7.3 Verdict
+
+No architecture break is required. `AbstractAdapter`'s
+read-returns-Optional / write-returns-result-dict contract, plus the
+existing `StartingAdapter` no-op precedent, already anticipate adapters
+that can't fully answer every method. The only real design decision is how
+Tibber's one-time interactive OAuth consent gets separated from the
+adapter's non-interactive runtime refresh path — everything else is a
+straightforward new implementation of an interface this codebase already
+treats as swappable in three different ways (`CarConnectivityAdapter`,
+`StartingAdapter`, `_AdapterProxy`).
+
+## 8. Session log
 
 ### 2026-08-21 — initial research, no code yet
 - Established the Tibber Data API (`data-api.tibber.com`) is the correct,
@@ -412,6 +555,28 @@ Tibber.
   the fix is registering a new OAuth2 client. Flagging this here in case a
   future session needs the context for why credentials had to be
   re-entered.
+
+### 2026-08-21 — architecture analysis: how a TibberAdapter would fit
+- Read the actual current source of `src/weconnect_mcp/adapter/` (
+  `abstract_adapter.py`, `carconnectivity_adapter.py`, `starting_adapter.py`,
+  all four mixins) and `src/weconnect_mcp/server/` (`mcp_server.py`,
+  `mixins/read_tools.py`, `mixins/command_tools.py`) plus
+  `cli/mcp_server_cli.py`, and confirmed by grep that the MCP tool layer has
+  zero references to `carconnectivity` — it depends only on
+  `AbstractAdapter`. Wrote the full analysis into new §7. Analysis only, no
+  code written.
+- Headline conclusion: no architecture break needed for a `TibberAdapter`.
+  The interface's read-returns-`Optional`/write-returns-result-dict
+  contract, plus the existing `StartingAdapter` no-op precedent, already
+  anticipate an adapter that can't fully answer every method. The one real
+  open decision, not yet resolved, is how Tibber's one-time interactive
+  OAuth consent (browser + human click, can't run headless on a cloud
+  deployment) gets separated from the adapter's non-interactive runtime
+  refresh-token path — see §7.2 point 4 for the proposed split.
+- Also flagged as a decision (not yet made) whether a Tibber integration
+  would be a straight adapter swap (accepting the data-point loss
+  documented in `README.md`) or a `HybridAdapter` combining Tibber with
+  another source — see §7.2 point 7.
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
