@@ -1,8 +1,10 @@
 # Tibber Data API as an indirect path to VW vehicle data
 
-**Status:** **Confirmed working end-to-end (2026-08-21, live test, see §8).**
-OAuth client registered, browser login/pairing completed, and the VW vehicle
-was correctly returned from `GET /v1/homes` → `GET /v1/homes/{id}/devices`.
+**Status:** **`TibberAdapter` implemented and verified live end-to-end
+(2026-08-21, see §8).** Direct-`AbstractAdapter` option (§7.1–7.3) chosen
+over the CarConnectivity-connector alternative (§7.4–7.5). Lives at
+`src/weconnect_mcp/adapter/tibber_adapter.py` — start the MCP server with
+`--backend tibber` after running `weconnect_mcp.cli.tibber_login_cli` once.
 API confirmed **read-only** (no control/command endpoints exist as of this
 writing) — see §5.
 **Maintained by:** Simon Gerlach (simon.gerlach@gmail.com)
@@ -743,6 +745,53 @@ not a default either way.
   for any multi-source setup.
 - **No decision made yet** — both are legitimate, and this is flagged in
   §7.5 as worth an explicit choice before writing code, not a default.
+
+### 2026-08-21 — decision made and implemented: direct `TibberAdapter`
+- Simon chose the direct-`AbstractAdapter` option (§7.1–7.3) over the new
+  CarConnectivity-connector alternative (§7.4–7.5). Implemented in
+  `src/weconnect_mcp/adapter/`:
+  - `tibber_client.py`: OAuth2 client ported from the experiment PoC, with
+    one structural change — `allow_interactive_login` defaults to `False`,
+    so this code can never open a browser or block on user input when it
+    runs inside the MCP server process. Raises `TibberAuthError` with a
+    remediation message if no usable cached token exists. This is the
+    OAuth-bootstrap split proposed in §7.2 point 4.
+  - `mixins/tibber_state_extraction_mixin.py`: maps the 5 confirmed
+    capabilities (§5.2) into the existing `ChargingModel`/`RangeModel`/
+    `DriveModel` — reusing the target models exactly as anticipated in
+    §7.2 point 1, no schema changes needed.
+  - `tibber_adapter.py`: `TibberAdapter(CacheMixin, VehicleResolutionMixin,
+    TibberStateExtractionMixin, AbstractAdapter)`. Physical/climate/
+    position/maintenance reads return `None`; all 10 command methods
+    return a fixed not-supported result dict — exactly the
+    `StartingAdapter`-style idiom anticipated in §7.2 point 2.
+  - `cli/tibber_login_cli.py`: the one-time interactive setup tool
+    (`allow_interactive_login=True`) that produces the token file
+    `TibberAdapter` consumes non-interactively.
+  - `cli/mcp_server_cli.py`: added `--backend {carconnectivity,tibber}`
+    (default unchanged) and wired both the HTTP background-thread path
+    and the stdio path. `_AdapterProxy` needed **zero changes** — directly
+    confirms the §7.2 point 6 prediction.
+  - `pyproject.toml`: added `httpx` as an explicit dependency (previously
+    only present transitively) and a `weconnect-tibber-login` script entry.
+- **Verified live end-to-end**, using the real registered OAuth client and
+  paired VW vehicle: adapter construction succeeds (confirms all abstract
+  methods are implemented), `list_vehicles()` / `get_vehicle()` /
+  `get_energy_status()` return real data (SoC 74%, target 80%, range
+  346 km, `charging_state="idle"`, `is_plugged_in=False` at test time),
+  `get_physical_status()` / `get_climate_status()` / `get_position()` /
+  `get_maintenance_info()` all correctly return `None`, and
+  `lock_vehicle()` / `start_charging()` both return the expected
+  not-supported dict. Also verified the headless-safety guarantee
+  directly: pointing at a nonexistent token path raises `TibberAuthError`
+  immediately, with no browser opened — the core safety property this
+  whole design hinged on (§7.2 point 4) actually holds in practice, not
+  just on paper.
+- Not yet done: no automated test suite coverage added (this was a manual
+  live-verification pass only); no attempt yet to actually run the full
+  MCP server end-to-end via `--backend tibber` and exercise it through the
+  MCP protocol itself (only `get_server()` construction was verified, not
+  a live tool call through a connected MCP client).
 
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
