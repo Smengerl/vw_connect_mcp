@@ -933,6 +933,43 @@ not a default either way.
   via the expected downstream error; all three generator scripts
   produce valid JSON with the correct backend/path).
 
+### 2026-08-21 — re-assessed the two remaining Docker gaps; fixed one
+- Simon asked which of the two remaining flagged Docker gaps (CMD not
+  passing `--backend`; no Tibber token volume) are still actually valid
+  now that secrets use a config file rather than `.env` for desktop
+  clients. Clarified: that switch only affects local desktop-client
+  secret delivery (Claude Desktop/VS Code/Copilot Desktop) — Docker/
+  Railway correctly still use env vars (`docker-compose.yml`'s
+  `env_file: .env`), unchanged and unaffected.
+- **Dockerfile `--backend` gap: downgraded from "broken" to "implicit
+  but functional"** thanks to the crash fix from the prior entry — the
+  container already ran `tibber` successfully via the CLI default, just
+  without saying so. Fixed anyway for clarity/flexibility: added
+  `ENV MCP_BACKEND=tibber`, interpolated into `CMD` via shell form
+  (same pattern as `$PORT`). Switching to `carconnectivity` is now
+  `-e MCP_BACKEND=carconnectivity` at `docker run`/Railway/compose time
+  — no rebuild.
+- **Verified with a real `docker build` + `docker run`** (Docker was
+  available in this environment, so this wasn't just reasoned about):
+  - Default (`tibber`): built the image, ran it with
+    `TIBBER_CLIENT_ID`/`SECRET` env vars and the real token file
+    bind-mounted at `TIBBER_TOKEN_PATH` → `/health` returned
+    `{"ready": true}`, log showed a real vehicle fetched from Tibber.
+  - Override (`carconnectivity`), same image, no rebuild, just
+    `-e MCP_BACKEND=carconnectivity` → correctly attempted VW login,
+    failed with the expected, already-known "WeConnect failure" (VW's
+    block), server stayed up, `/health` correctly reported
+    `"ready": false` instead of crashing.
+- **Side effect worth noting**: the tibber test above incidentally
+  proved a plain Docker bind mount (`-v localdir:/tmp/tokens` +
+  `TIBBER_TOKEN_PATH=/tmp/tokens/....json`) is a working, if manual,
+  answer to the *other* remaining gap (Tibber token into a headless
+  container) — it's just not wired into `docker-compose.yml` as a named
+  volume + documented workflow yet, unlike carconnectivity's existing
+  `tokenstore` volume. That gap (the real one — token bootstrap, not
+  credential delivery) is confirmed still fully open and was not
+  addressed here, only demonstrated to be solvable.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
