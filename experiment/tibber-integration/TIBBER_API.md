@@ -883,6 +883,56 @@ not a default either way.
   explicitly; and the Tibber-token-file-into-a-headless-container gap for
   Docker/Railway is untouched — next items to go through one at a time.
 
+### 2026-08-21 — full audit: is this documented everywhere it's already described?
+- Simon asked directly whether the previous fix (file-based Tibber
+  secrets) had been documented at every existing place describing script
+  usage and secret handling — not just README.md and the two scripts
+  touched. Honest answer at the time: no, only a targeted subset had been
+  checked. Ran `grep -rl "config\.json\|create_claude_config\|
+  create_github_copilot_config\|claude_desktop_config"` across the repo
+  to find the rest.
+- Found and fixed 4 real gaps beyond docs, in order of severity:
+  1. **Actual crash bug**: `_build_tibber_adapter()` raised an uncaught
+     `FileNotFoundError` if the positional config path didn't exist —
+     which is the *common* case, since `start_server_fg.sh`/`bg.sh`
+     default to `src/config.json` regardless of backend, and a fresh
+     clone has no `config.json` until VW setup is done. Reproduced live,
+     then fixed: missing file → fall back to env vars silently (debug
+     log only); malformed JSON → clear `RuntimeError` instead of a raw
+     traceback.
+  2. **Third generator script with the identical secret-injection gap**:
+     `create_copilot_desktop_config.sh` (Microsoft Copilot Desktop) had
+     never been touched — same hardcoded `src/config.json`, same fix
+     applied as the other two.
+  3. **`start_server_http.sh` would have hard-failed** for the new
+     tibber default — it unconditionally required
+     `VW_USERNAME`/`PASSWORD`/`SPIN` and never passed `--backend`. Made
+     backend-aware (env var or 2nd positional arg).
+  4. **`start_server_fg.sh` had a latent duplicate-positional bug**:
+     passed `$1` both explicitly and again via un-`shift`ed `"$@"` —
+     reproduced directly against argparse (`unrecognized arguments`),
+     then fixed with `shift`, matching what `start_server_bg.sh` also
+     needed (that one for the previously-flagged missing-arg-forwarding
+     reason, confirmed fixed too — `--backend carconnectivity` now
+     reaches it, verified via the expected "config required" error
+     appearing instead of a silent tibber fallback).
+- Docs brought in sync: `scripts/README.md` gained a "Configuring
+  Secrets" section (file vs. env var precedence table) referenced from
+  every affected script's own section, plus a `start_server_http.sh`
+  entry it never had at all. `CONTRIBUTING.md`'s security checklist and
+  dev-setup instructions updated (mock tests need zero credentials;
+  VW config is only for the currently-untestable real-API tests; Tibber
+  file setup documented as the working manual-testing path).
+- Explicitly left alone (checked, judged correctly scoped as-is):
+  `examples/README.md` (demonstrates `CarConnectivityAdapter`'s Python
+  API specifically) and `tests/README.md` (VW real-API test requirements
+  specifically) — both remain accurate for what they document; no
+  Tibber-equivalent example or test suite exists yet to document instead.
+- All fixes verified live (crash repro → fix confirmed; argparse
+  duplicate-positional repro → fix confirmed; arg-forwarding confirmed
+  via the expected downstream error; all three generator scripts
+  produce valid JSON with the correct backend/path).
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
