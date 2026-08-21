@@ -1022,6 +1022,49 @@ not a default either way.
   the env-var/volume/hybrid options already discussed, not "persist
   nothing." No decision made yet on which of those to implement.
 
+### 2026-08-21 — implemented the hybrid token bootstrap; last open gap closed
+- Simon picked the hybrid (env var for one-time seeding + volume for
+  ongoing persistence) — implemented and verified live. This closes the
+  last item from the original three-item gap list (secret injection into
+  desktop MCP clients; Dockerfile `--backend`; this one).
+- New `_seed_tibber_token_from_env()` in `mcp_server_cli.py`: no-op if
+  the token file already exists or `TIBBER_TOKEN_JSON` isn't set;
+  validates JSON before writing (clear `RuntimeError` on garbage, never
+  silent corruption of a good file); writes `0600`. Called from
+  `_build_tibber_adapter()` right before constructing the adapter.
+- `Dockerfile`: `TIBBER_TOKEN_PATH` now defaults to
+  `/tmp/tibber-tokens/tibber_tokens.json`; that directory is created and
+  chowned to `mcpuser` *before* `USER mcpuser` so a freshly-mounted empty
+  volume inherits correct ownership (Docker/Railway copy the image's
+  existing ownership onto a new volume mount). `docker-compose.yml` gained
+  a `tibber-tokens` named volume mounted there, alongside
+  carconnectivity's pre-existing `tokenstore` volume.
+- **Verified live with a real Docker build and a real named volume**
+  (not just a bind mount) across three sequential container runs sharing
+  one volume:
+  1. Fresh volume + valid `TIBBER_TOKEN_JSON` → log shows "Seeded Tibber
+     token file...", `/health` → `ready:true`.
+  2. Same volume, new container, **no** `TIBBER_TOKEN_JSON` → still
+     `ready:true`, **no** "Seeded" log line — used the file persisted by
+     run 1 directly. This is the actual proof the design works: restart
+     survival without the env var.
+  3. Same volume, new container, **garbage** `TIBBER_TOKEN_JSON` → still
+     `ready:true` — confirms the seed path is skipped entirely (invalid
+     JSON never even parsed) once a real file already exists, so a stale/
+     broken env var left lying around in Railway/`.env` can't break a
+     working deployment.
+- Also unit-tested `_seed_tibber_token_from_env()` directly (not just via
+  the full container) for the "existing file, stale content untouched"
+  and "invalid JSON, no file yet → clear error not a crash" cases.
+- Docs updated to match: `README.md` (Cloud Deployment caveat rewritten
+  from an open problem into documented steps, Railway variables example,
+  env var table), `scripts/README.md` (Configuring Secrets section),
+  `.env.example` (`TIBBER_CLIENT_ID`/`SECRET`/`TOKEN_JSON`,
+  `MCP_BACKEND`).
+- **All three originally-flagged Docker/secret-handling gaps from this
+  branch are now closed.** Nothing outstanding from that list as of this
+  entry.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
