@@ -63,6 +63,36 @@ wsl ./scripts/setup.sh
 wsl ./scripts/test.sh --skip-slow
 ```
 
+## Configuring Secrets
+
+The server has two backends (`--backend tibber` (default) / `carconnectivity`,
+see the main [README.md](../README.md#choosing-a-backend)), and each has its
+own credential source, resolved in this order — **environment variables
+override a credentials file** when both are present:
+
+| Backend | File (gitignored) | Env vars |
+|---|---|---|
+| `tibber` (default) | `src/tibber_config.json` (template: `src/tibber_config.example.json`) | `TIBBER_CLIENT_ID`, `TIBBER_CLIENT_SECRET`, `TIBBER_REDIRECT_URI`, `TIBBER_TOKEN_PATH` |
+| `carconnectivity` | `src/config.json` (template: `src/config.example.json`) | `VW_USERNAME`, `VW_PASSWORD`, `VW_SPIN` |
+
+**Use the file for local/desktop clients** (Claude Desktop, VS Code Copilot,
+Microsoft Copilot Desktop) — those launch the server with their own
+environment, not your shell's, so anything set via `export` never reaches
+it. The `create_*_config.sh` scripts already generate configs pointing at
+the credentials file for exactly this reason; no secrets end up in the
+generated `claude_desktop_config.json` / `mcp.json`.
+
+**Use environment variables for Docker/Railway** — see the main README's
+[Cloud Deployment](../README.md#cloud-deployment) section.
+
+The `tibber` backend additionally needs a one-time interactive login before
+first use (a browser step that can't run inside the MCP server process
+itself):
+
+```bash
+python -m weconnect_mcp.cli.tibber_login_cli
+```
+
 ## Available Scripts
 
 ### test.sh
@@ -94,20 +124,51 @@ Run the test suite with optional filtering.
 ---
 
 ### start_server_fg.sh
-Start the MCP server in foreground (with console output).
+Start the MCP server in foreground (with console output). Defaults to the
+**tibber** backend (no config file needed); pass extra `mcp_server_cli` flags
+after the config argument to change that.
 
 ```bash
 ./scripts/start_server_fg.sh
+
+# VW-direct backend instead (currently blocked by VW, see README.md warning)
+./scripts/start_server_fg.sh src/config.json --backend carconnectivity
 ```
 
 ---
 
 ### start_server_bg.sh
-Start the MCP server in background (with log file output).
+Start the MCP server in background (with log file output). Same defaults and
+flag-forwarding as `start_server_fg.sh` above.
 
 ```bash
 ./scripts/start_server_bg.sh
+
+# VW-direct backend instead
+./scripts/start_server_bg.sh src/config.json --backend carconnectivity
 ```
+
+---
+
+### start_server_http.sh
+Start the MCP server in HTTP mode with API-key authentication (foreground).
+Reads `.env` from the project root if present. Defaults to the **tibber**
+backend.
+
+```bash
+# tibber backend (default), reads TIBBER_CLIENT_ID/SECRET from env or
+# src/tibber_config.json
+MCP_API_KEY=secret ./scripts/start_server_http.sh 8089
+
+# VW-direct backend instead (currently blocked by VW, see README.md warning)
+MCP_API_KEY=secret VW_USERNAME=... VW_PASSWORD=... VW_SPIN=... \
+  ./scripts/start_server_http.sh 8089 carconnectivity
+```
+
+**Required:** `MCP_API_KEY` always. For the tibber backend: either
+`TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET` env vars, or `src/tibber_config.json`
+(see [Configuring Secrets](#configuring-secrets) below). For the
+carconnectivity backend: `VW_USERNAME`/`VW_PASSWORD`/`VW_SPIN`.
 
 ---
 
@@ -139,7 +200,11 @@ source ./scripts/activate_venv.sh
 ---
 
 ### create_claude_config.sh
-Generate MCP configuration for Claude Desktop.
+Generate MCP configuration for Claude Desktop. Points the generated config at
+`src/tibber_config.json` with `--backend tibber` explicit — see
+[Configuring Secrets](#configuring-secrets) below for why a file is used
+here instead of environment variables. Prints setup instructions if that
+file doesn't exist yet.
 
 ```bash
 ./scripts/create_claude_config.sh
@@ -151,10 +216,16 @@ Generate MCP configuration for Claude Desktop.
 - On **Windows**: Copy to `%APPDATA%\Claude\claude_desktop_config.json`
 - On **Linux**: Varies by distribution
 
+To use the VW-direct backend instead, edit the generated config: replace the
+`tibber_config.json` path with `src/config.json` and `"tibber"` with
+`"carconnectivity"`.
+
 ---
 
 ### create_github_copilot_config.sh
-Generate MCP configuration for GitHub Copilot (VS Code).
+Generate MCP configuration for GitHub Copilot (VS Code). Same
+`src/tibber_config.json` + `--backend tibber` default and setup-instructions
+behavior as `create_claude_config.sh` above.
 
 ```bash
 ./scripts/create_github_copilot_config.sh
@@ -182,7 +253,9 @@ The script offers 4 options:
 ---
 
 ### create_copilot_desktop_config.sh
-Generate MCP configuration for Microsoft Copilot Desktop.
+Generate MCP configuration for Microsoft Copilot Desktop. Same
+`src/tibber_config.json` + `--backend tibber` default and setup-instructions
+behavior as `create_claude_config.sh` above.
 
 ```bash
 ./scripts/create_copilot_desktop_config.sh

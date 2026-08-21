@@ -26,13 +26,27 @@ cd weconnect_mvp
 # Run setup script
 ./scripts/setup.sh
 
-# Configure with your VW credentials (for real API tests)
-cp src/config.example.json src/config.json
-nano src/config.json  # Add your credentials
-
-# Run tests
+# Run tests -- no credentials of any kind needed for this
 ./scripts/test.sh --skip-slow  # Fast mock tests only
 ```
+
+The steps above are all that's needed for most contributions. Credentials are
+only needed if you're testing against a live backend:
+
+- **VW real API tests** (18 slow tests, currently untestable — VW blocks
+  third-party access, see the warning in [README.md](README.md)):
+  ```bash
+  cp src/config.example.json src/config.json
+  nano src/config.json  # Add your VW credentials
+  ```
+- **Manually running the server against Tibber** (see
+  [README.md's Choosing a Backend](README.md#choosing-a-backend) — this is
+  the currently-working backend, but has no dedicated test suite yet):
+  ```bash
+  cp src/tibber_config.example.json src/tibber_config.json
+  nano src/tibber_config.json  # Add your Tibber OAuth2 client credentials
+  python -m weconnect_mcp.cli.tibber_login_cli  # one-time interactive login
+  ```
 
 ## Testing Requirements
 
@@ -117,7 +131,8 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for:
 
 ⚠️ **Never commit sensitive data:**
 - `src/config.json` with VW credentials
-- `/tmp/tokenstore` or similar token files
+- `src/tibber_config.json` with Tibber OAuth2 client credentials
+- `/tmp/tokenstore`, `tibber_tokens.json`, or similar token files
 - Log files with personal/vehicle data
 
 ## Questions?

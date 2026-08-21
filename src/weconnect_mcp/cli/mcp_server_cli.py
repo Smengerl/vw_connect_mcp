@@ -128,14 +128,29 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
         config_path: Optional path to a Tibber credentials JSON file
             (keys: client_id, client_secret, redirect_uri, token_path).
             Unlike the carconnectivity backend, this file is optional even
-            when given a path — env vars alone are sufficient.
+            when given a path — env vars alone are sufficient, and a
+            missing/nonexistent path is not an error (several launcher
+            scripts pass a default config path unconditionally regardless
+            of backend, e.g. start_server_fg.sh's src/config.json default).
     """
     from weconnect_mcp.adapter.tibber_adapter import TibberAdapter
 
     file_config: dict = {}
-    if config_path:
-        with open(config_path, encoding="utf-8") as f:
-            file_config = json.load(f)
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                file_config = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Could not parse {config_path} as JSON for --backend tibber: {exc}. "
+                "If this is meant to be the carconnectivity config.json, pass "
+                "--backend carconnectivity instead; otherwise fix or remove the file."
+            ) from exc
+    elif config_path:
+        logging_config.get_logger(__name__).debug(
+            "Tibber credentials file %s not found — using environment variables only",
+            config_path,
+        )
 
     client_id = os.environ.get("TIBBER_CLIENT_ID") or file_config.get("client_id")
     client_secret = os.environ.get("TIBBER_CLIENT_SECRET") or file_config.get("client_secret")
@@ -194,8 +209,11 @@ def run_server_from_cli(config_path: Optional[str] = None, tokenstore_file: Opti
 
         logger.debug("Starting adapter with config: %s", effective_config_path)
     elif backend == "tibber":
-        effective_config_path = None
-        logger.debug("Starting Tibber adapter (config file not used for this backend)")
+        effective_config_path = None  # unused for tibber; _build_tibber_adapter reads config_path directly
+        if config_path:
+            logger.debug("Starting Tibber adapter (credentials file: %s, env vars override)", config_path)
+        else:
+            logger.debug("Starting Tibber adapter (credentials from environment variables only)")
     else:
         raise RuntimeError(f"Unknown backend: {backend!r} (expected 'carconnectivity' or 'tibber')")
 
