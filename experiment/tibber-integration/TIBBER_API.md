@@ -1228,6 +1228,102 @@ consumer of this API, not just that one integration:
   correct in `AI_INSTRUCTIONS.md`/`read_tools.py`/`command_tools.py`/
   `resources.py`.
 
+### 2026-08-23 — `cleanup/remove-carconnectivity` branch: full removal completed
+- Executed the full cleanup Simon scoped for this branch after making
+  Tibber the default on `main`: remove `CarConnectivityAdapter` +
+  `CommandMixin` + `StateExtractionMixin` entirely, drop the `--backend`
+  CLI flag (Tibber becomes the only path, not just the default), slim
+  `AbstractAdapter` to exactly the 4 methods Tibber can back
+  (`list_vehicles`, `get_vehicle`, `get_energy_status`, `shutdown`), drop
+  the carconnectivity/carconnectivity-connector-volkswagen dependencies,
+  and update every doc/script/example/test that referenced any of it.
+  Plus four items Simon added to the scope explicitly: audit the MCP
+  server's self-description of its own capabilities (tools/resources/
+  prompts), review all examples, update the three config-generator
+  scripts, and (done separately, directly on `main`, before this branch
+  started) a deprecation note for `main`'s transitional dual-backend
+  state.
+- Worked in five logical groups, each its own commit(s) on
+  `cleanup/remove-carconnectivity`:
+  - **Adapter layer**: rewrote `abstract_adapter.py` (355→~170 lines),
+    deleted `carconnectivity_adapter.py`/`command_mixin.py`/
+    `state_extraction_mixin.py`, trimmed `starting_adapter.py` and
+    `tibber_adapter.py` to the slimmed interface. Verified live
+    (`StartingAdapter()` instantiates, imports clean).
+  - **CLI layer**: `mcp_server_cli.py` lost `--backend`/`--tokenstorefile`
+    and all backend branching; `_AdapterProxy` trimmed to 4 delegating
+    methods. `logging_config.py` lost the carconnectivity-specific
+    `_THIRD_PARTY_LOGGERS` entries and the api-debug level special-casing
+    that existed only to tame that library. Verified live: parsed args,
+    checked `run_server_from_cli`'s signature no longer has the removed
+    params.
+  - **MCP capability layer** (the self-description audit Simon asked
+    for): deleted `command_tools.py` (all 10 tools called adapter methods
+    that no longer exist at all), trimmed `read_tools.py` 8→5 tools and
+    `prompts.py` 20→11 prompts (rewriting every remaining prompt's steps
+    that referenced a removed tool — GPS-position steps now ask the user
+    for location, command steps like start/stop charging are now
+    advisory-only, telling the user to act via their vehicle's own app).
+    A live discussion with Simon about the also-pre-existing disabled
+    `register_resources()` call (found during this audit — resources.py
+    was fully implemented and tested but never actually registered)
+    concluded that Resources add no realized value here (1:1 duplicate of
+    the tools, no client this project targets does resource-browsing/
+    subscriptions in a way tools don't already cover, no push mechanism
+    exists) — deleted `resources.py` and its registration entirely rather
+    than either silently enabling or leaving it half-dead. Verified live:
+    built the server against a stub adapter and inspected its registered
+    tools (5) / resources (0) / prompts (11).
+  - **Tests**: deleted `tests/resources/`, `tests/real_api/` (4 files,
+    all drove a `real_adapter`/`CarConnectivityAdapter` fixture that no
+    longer exists), `tests/commands/` (5 files, tested the deleted
+    command tools), and 4 dead files under `tests/tools/`. Rewrote
+    `conftest.py` (dropped the entire "Real API Fixtures" section),
+    `test_adapter.py`'s `TestAdapter` (only implements what
+    `AbstractAdapter` still declares), `test_caching.py` (dropped 8
+    `@pytest.mark.carconnectivity` tests), `test_mcp_server.py` (dropped
+    7 resource-registration tests). Removed the `carconnectivity` and
+    `mcp_resources` pytest markers. Full suite: 36 tests, all passing.
+  - **Examples/scripts/docs/config** (the "go through all examples" and
+    "update the three config-generator scripts" items): deleted 3
+    examples that exclusively demoed removed functionality
+    (`consolidated_api_demo.py`, `position_demo.py`,
+    `vehicle_type_demo.py` — the last one called an adapter method,
+    `get_vehicle_type`, that turns out to never have existed even before
+    this cleanup); fixed 3 more (`caching_demo.py`,
+    `license_plate_demo.py`, `vehicle_identifier_demo.py` — the last of
+    which was calling several other adapter methods,
+    `get_battery_status`/`get_position`/`get_charging_state`/
+    `get_range_info`, that were actually MCP tool names, not adapter
+    methods, and had apparently never worked). All three
+    `create_*_config.sh` scripts lost `--backend`/`tibber` args and the
+    "switch to carconnectivity" guidance blocks. Found and fixed a
+    genuine, pre-existing bug while at it: `start_server_fg.sh`,
+    `start_server_bg.sh`, and the Dockerfile's `CMD` were all still
+    passing `--tokenstorefile`, a flag the CLI no longer accepts at all —
+    these were actually broken, not just stale. `README.md` and
+    `CONTRIBUTING.md` got a full rewrite dropping all dual-backend
+    framing (the "Choosing a Backend" section, dual-backend tool/resource
+    comparison tables, VW credential setup instructions). `AI_INSTRUCTIONS.md`
+    (the canonical AI-facing tool description Simon specifically asked to
+    have reviewed) was rewritten top to bottom for the 5-tool,
+    no-resources, no-commands surface — it previously described 18 tools,
+    14 resources, and three "registered but always fail" tools that no
+    longer exist as tools at all.
+- Flagged rather than silently fixed: `.github/copilot-instructions.md`
+  is badly stale on two independent axes (carconnectivity framing, *and*
+  file paths/class names that appear to have never matched the actual
+  codebase even before this migration) — spawned as a separate follow-up
+  task rather than folded into this cleanup, since its inaccuracies
+  clearly predate and exceed the scope of the carconnectivity removal
+  itself. `src/config.json` (real, gitignored VW credentials, never
+  committed) was left untouched on Simon's explicit instruction — deleting
+  it would have been irreversible.
+- Net effect across all 9 commits: several thousand lines removed, the
+  entire MCP-facing surface (tools/prompts/docs) now makes zero claims
+  that don't hold for every single registered tool — no more "registered
+  for interface compatibility, always returns an error" anywhere.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
