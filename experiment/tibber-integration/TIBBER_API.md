@@ -1204,6 +1204,30 @@ consumer of this API, not just that one integration:
   doc edits, that his Claude Desktop `weconnect` server connection is
   genuinely live and working now, not just theoretically fixed.
 
+### 2026-08-23 — README's AI Integration tool table brought in sync
+- Last remaining item from the "flagged, not fixed" note several
+  sessions back (when `AI_INSTRUCTIONS.md` and the tool description
+  strings were rewritten for Tibber, but `README.md`'s own separate tool
+  table was explicitly left alone as out of scope at the time). Simon
+  asked for it now.
+- Rewrote the read tools / command tools / resources tables to show
+  Tibber vs. `carconnectivity` side by side, matching exactly what the
+  code's own description strings already say. Fixed the most
+  user-visible wrong claim: "What AI Assistants Can Do" previously
+  listed "Execute remote commands" unconditionally — flatly false for
+  the default backend (read-only, confirmed via OpenAPI schema, §5).
+  Split into two lists (Tibber vs. carconnectivity) instead.
+- Added caveats to the Claude Desktop / GitHub Copilot example
+  screenshots (`examples/*.png`) — those were captured against
+  `carconnectivity` before VW's block, so the position and
+  charging-control examples specifically don't reflect what Tibber can
+  do; noted per-screenshot rather than leaving the whole gallery
+  ambiguously "maybe accurate, maybe not."
+- No code changes, no live testing needed for this one — pure
+  documentation reconciliation against tables already established
+  correct in `AI_INSTRUCTIONS.md`/`read_tools.py`/`command_tools.py`/
+  `resources.py`.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
