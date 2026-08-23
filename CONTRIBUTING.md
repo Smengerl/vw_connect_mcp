@@ -60,6 +60,23 @@ python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json  # one-time 
 
 See [tests/README.md](tests/README.md) for detailed testing guidelines.
 
+### Publication Readiness Check
+
+The project includes a custom GitHub Copilot agent that verifies publication
+readiness: code documentation quality (docstrings, type hints), README.md
+completeness, license file presence, unit test coverage, and CLI scripts
+documentation.
+
+```bash
+# Via GitHub Copilot
+@workspace /agent publication-readiness Run publication check
+
+# Or follow the manual checklist
+cat .github/agents/publication-readiness.md
+```
+
+See [.github/agents/README.md](.github/agents/README.md) for more information.
+
 ## Code Style
 
 This project follows strict Python coding standards:

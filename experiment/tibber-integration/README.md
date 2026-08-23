@@ -157,26 +157,21 @@ just refreshes this token non-interactively, for as long as the resulting
 
 The config file argument is optional — omit it to fall back to
 `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET`/etc. environment variables
-instead, with identical precedence to the server itself
-(`--backend tibber`).
+instead, with identical precedence to the server itself.
 
 ### 3. Start the MCP server
 
-`tibber` is the default backend, so no flags are strictly required if you
-used `src/tibber_config.json` above:
+No flags are strictly required if you used `src/tibber_config.json` above:
 
 ```bash
 python -m weconnect_mcp.cli.mcp_server_cli src/tibber_config.json
 ```
 
-(Explicit `--backend tibber` also works and is harmless, since it's already
-the default — see the top-level [README.md](../../README.md#cli-parameters).)
-
 ### 4. Wire it into an AI assistant
 
 Use the project's generator scripts rather than hand-editing an MCP
-client's config — they already point at `src/tibber_config.json` with
-`--backend tibber` and warn you if that file doesn't exist yet:
+client's config — they already point at `src/tibber_config.json` and warn
+you if that file doesn't exist yet:
 
 ```bash
 ./scripts/create_claude_config.sh            # Claude Desktop
@@ -186,11 +181,10 @@ client's config — they already point at `src/tibber_config.json` with
 
 If you're hand-editing an existing MCP client config instead (e.g. merging
 `weconnect` alongside other MCP servers you already have configured), make
-sure the entry has all of: the config file path, `--backend`, `tibber`, and
-a `"cwd"` pointing at this repo — a missing `"cwd"` lets a relative
-`token_path` resolve against the *client's* working directory instead of
-this project's, which is a real, previously-hit failure mode, not a
-theoretical one.
+sure the entry has both the config file path and a `"cwd"` pointing at this
+repo — a missing `"cwd"` lets a relative `token_path` resolve against the
+*client's* working directory instead of this project's, which is a real,
+previously-hit failure mode, not a theoretical one.
 
 ### Troubleshooting: "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set"
 
@@ -199,7 +193,7 @@ credentials — check `src/tibber_config.json` exists and has the right keys,
 or that the env vars are actually reaching the process (an MCP client like
 Claude Desktop does **not** inherit your shell's `export`s — see
 [Security](#security) below and the top-level README's
-[Choosing a Backend](../../README.md#choosing-a-backend)).
+[Setting Up Tibber Credentials](../../README.md#setting-up-tibber-credentials)).
 
 ### Troubleshooting: "No cached Tibber tokens found" / `TibberAuthError`
 
