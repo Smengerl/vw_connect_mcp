@@ -164,6 +164,37 @@ def _seed_tibber_token_from_env(token_path: str) -> None:
     )
 
 
+def _load_tibber_file_config(config_path: Optional[str]) -> dict:
+    """Load a Tibber credentials JSON file if given and present, else {}.
+
+    Shared by _build_tibber_adapter() (server startup) and tibber_login_cli
+    (the one-time interactive setup tool), so both read the exact same
+    src/tibber_config.json a user sets up once.
+
+    A missing/nonexistent path is not an error (several launcher scripts
+    pass a default config path unconditionally regardless of backend, e.g.
+    start_server_fg.sh's src/config.json default) -- only malformed JSON at
+    a path that does exist raises, with a clear message.
+    """
+    if not config_path:
+        return {}
+    if not os.path.exists(config_path):
+        logging_config.get_logger(__name__).debug(
+            "Tibber credentials file %s not found — using environment variables only",
+            config_path,
+        )
+        return {}
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"Could not parse {config_path} as JSON for the tibber backend: {exc}. "
+            "If this is meant to be the carconnectivity config.json, pass "
+            "--backend carconnectivity instead; otherwise fix or remove the file."
+        ) from exc
+
+
 def _build_tibber_adapter(config_path: Optional[str] = None):
     """Build a TibberAdapter from a credentials file and/or environment variables.
 
@@ -192,22 +223,7 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
     """
     from weconnect_mcp.adapter.tibber_adapter import TibberAdapter
 
-    file_config: dict = {}
-    if config_path and os.path.exists(config_path):
-        try:
-            with open(config_path, encoding="utf-8") as f:
-                file_config = json.load(f)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"Could not parse {config_path} as JSON for --backend tibber: {exc}. "
-                "If this is meant to be the carconnectivity config.json, pass "
-                "--backend carconnectivity instead; otherwise fix or remove the file."
-            ) from exc
-    elif config_path:
-        logging_config.get_logger(__name__).debug(
-            "Tibber credentials file %s not found — using environment variables only",
-            config_path,
-        )
+    file_config = _load_tibber_file_config(config_path)
 
     client_id = os.environ.get("TIBBER_CLIENT_ID") or file_config.get("client_id")
     client_secret = os.environ.get("TIBBER_CLIENT_SECRET") or file_config.get("client_secret")

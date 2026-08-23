@@ -1065,6 +1065,95 @@ not a default either way.
   branch are now closed.** Nothing outstanding from that list as of this
   entry.
 
+### 2026-08-22 — confirmed: no push/SSE path for vehicles, no documented refresh cadence
+
+Investigated for the sibling `ha-tibber-vehicle` HA integration project
+(which polls this API every 5 minutes via a `DataUpdateCoordinator`, but
+the user observed the *effective* update cadence looking closer to ~10
+minutes) — two questions worth settling here since they apply to any
+consumer of this API, not just that one integration:
+
+- **Is there a non-polling alternative for vehicle data?** No. Downloaded
+  the full OpenAPI spec directly (`https://data-api.tibber.com/openapi/v1.json`
+  — a real spec file, not just the interactive playground page, which is a
+  JS SPA that doesn't expose its schema to a plain fetch). `GET
+  /v1/homes/{homeId}/live-events` is a real SSE stream, but `GET
+  /v1/homes/{homeId}/live-events/devices` (which lists what's actually
+  streamable) explicitly scopes it to metering hardware only: *"Pulse CT
+  clamps are only listed when configured to measure the home itself.
+  Bridge-attached Pulses (IR and CT) are only listed when an active Tibber
+  Bridge is present in the home."* Vehicles are never mentioned — polling
+  `GET /devices/{deviceId}` is the only way to read vehicle data from this
+  API, full stop, not a limitation of any particular client implementation.
+- **Does the API document Tibber's own refresh cadence against
+  Enode/VW, or a recommended/required client polling interval?** No.
+  Searched the entire OpenAPI spec text for `interval`, `frequency`,
+  `poll`, `rate limit`, `cadence`, `refresh`, `minute`, `cache` —
+  **zero occurrences of any of them**. The only staleness signal the API
+  exposes at all is the per-device `status.lastSeen` timestamp (§5.2) —
+  informative for a human, but it says nothing about how often Tibber's
+  own backend actually re-polls Enode/VW. Practical implication: a
+  client-side poll interval faster than a few minutes buys nothing
+  verifiable — there's no documented upper bound on Tibber-side staleness
+  to poll against, so tightening `DataUpdateCoordinator`'s interval below
+  ~5 minutes would be tuning against an unknown, not a measured cadence.
+
+### 2026-08-23 — Claude Desktop config drift: fixed, and tibber_login_cli gained file support
+- Simon hit `TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set` in
+  Claude Desktop. Root cause: he'd wired `weconnect` into
+  `claude_desktop_config.json` **manually** (not via
+  `create_claude_config.sh`), pointing at the old `src/config.json` (VW)
+  with no `--backend` flag and no `"cwd"` — since `tibber` is now default
+  and no Tibber credentials were reachable, `_build_tibber_adapter()`
+  correctly refused to start.
+- Fixed the `weconnect` entry in-place (only that entry — `homeassistant`
+  and `esphome` entries and all preferences left untouched): now points
+  at `src/tibber_config.json` with `--backend tibber` explicit, and added
+  the missing `"cwd"` (its absence meant `TIBBER_TOKEN_PATH`'s relative
+  default would have resolved against Claude Desktop's own process cwd,
+  not the project directory — a second latent bug beyond the immediate
+  error).
+- **Found while reusing his existing credentials**: the `client_id`/
+  `client_secret` from `experiment/tibber-integration/.env` are still
+  valid (confirmed live — the request reached Tibber's API before
+  failing), but the cached `refresh_token` in
+  `experiment/tibber-integration/.tibber_tokens.json` is now
+  `invalid_grant` — almost certainly rotated away by the many
+  `refresh_token` grant test calls made directly against Tibber's token
+  endpoint earlier this session (§3.4's live test, the Docker hybrid
+  tests, etc. — each one rotates the refresh_token, invalidating
+  whichever copy wasn't the one actually persisted). Practical note for
+  future sessions: **do not reuse this project's test token file as a
+  "known good" fixture** — repeated manual refresh-grant testing burns
+  through it. The client_id/secret are safe to reuse; the token is not.
+- Created `src/tibber_config.json` for Simon (gitignored, reused the
+  still-valid client_id/secret from `experiment/tibber-integration/.env`,
+  new empty `token_path` since the old token is dead) — he still needs
+  to run the interactive login himself, since it requires his own browser
+  click; that can't be done by Claude.
+- **Gap fixed along the way**: `tibber_login_cli.py` only ever read
+  `TIBBER_*` env vars, with no way to point it at the same
+  `src/tibber_config.json` file `mcp_server_cli.py`'s `--backend tibber`
+  already supports — an inconsistency that would have forced Simon to
+  re-type the same client_id/secret as env vars just to run the login
+  tool. Extracted the shared file-loading logic into
+  `_load_tibber_file_config()` in `mcp_server_cli.py` (used by both
+  `_build_tibber_adapter()` and the login tool now), and gave
+  `tibber_login_cli.py` an optional positional config-path argument with
+  identical file+env precedence. `python -m
+  weconnect_mcp.cli.tibber_login_cli src/tibber_config.json` now works.
+- Verified live: the exact command Claude Desktop's fixed config will run
+  (`mcp_server_cli src/tibber_config.json --backend tibber --transport
+  stdio`, `env -i` clean environment) gets past credential loading
+  (proving the reused client_id/secret work) and fails with the expected,
+  clear `TibberAuthError: No cached Tibber tokens found... Run the
+  one-time setup tool first` — not a crash, exactly the documented
+  failure mode for a backend with credentials but no token yet.
+- **Not yet done**: Simon still needs to run
+  `python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json`
+  himself (interactive, needs his browser) before Claude Desktop's
+  `weconnect` server will actually connect.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status

@@ -8,11 +8,14 @@ caches the resulting tokens to disk. TibberAdapter itself never does this
 must be able to start inside a headless server process.
 
 Usage:
-    python -m weconnect_mcp.cli.tibber_login_cli
+    python -m weconnect_mcp.cli.tibber_login_cli [config.json]
 
-Environment variables (same names TibberAdapter reads at server startup):
-    TIBBER_CLIENT_ID       Required. OAuth2 client id.
-    TIBBER_CLIENT_SECRET   Required. OAuth2 client secret.
+Credentials come from the same optional JSON file the server itself reads
+(src/tibber_config.json, see src/tibber_config.example.json) and/or these
+environment variables, which override the file when both are present --
+identical precedence and shape to mcp_server_cli.py's --backend tibber:
+    TIBBER_CLIENT_ID       Required (file or env).
+    TIBBER_CLIENT_SECRET   Required (file or env).
     TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
                            Must match the redirect URI registered on the client.
     TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
@@ -33,16 +36,35 @@ DEFAULT_TOKEN_PATH = "./tibber_tokens.json"
 
 
 def main() -> int:
-    client_id = os.environ.get("TIBBER_CLIENT_ID")
-    client_secret = os.environ.get("TIBBER_CLIENT_SECRET")
-    redirect_uri = os.environ.get("TIBBER_REDIRECT_URI", DEFAULT_REDIRECT)
-    token_path = os.environ.get("TIBBER_TOKEN_PATH", DEFAULT_TOKEN_PATH)
+    config_path = sys.argv[1] if len(sys.argv) > 1 else None
+
+    from weconnect_mcp.cli.mcp_server_cli import _load_tibber_file_config
+
+    try:
+        file_config = _load_tibber_file_config(config_path)
+    except RuntimeError as exc:
+        print(f"✗ {exc}", file=sys.stderr)
+        return 2
+
+    client_id = os.environ.get("TIBBER_CLIENT_ID") or file_config.get("client_id")
+    client_secret = os.environ.get("TIBBER_CLIENT_SECRET") or file_config.get("client_secret")
+    redirect_uri = (
+        os.environ.get("TIBBER_REDIRECT_URI")
+        or file_config.get("redirect_uri")
+        or DEFAULT_REDIRECT
+    )
+    token_path = (
+        os.environ.get("TIBBER_TOKEN_PATH")
+        or file_config.get("token_path")
+        or DEFAULT_TOKEN_PATH
+    )
 
     if not client_id:
         print(
             "Missing TIBBER_CLIENT_ID. Register an OAuth2 client at "
-            "https://data-api.tibber.com/clients/manage/ and set "
-            "TIBBER_CLIENT_ID / TIBBER_CLIENT_SECRET first.",
+            "https://data-api.tibber.com/clients/manage/ and set it via "
+            "TIBBER_CLIENT_ID (env) or a credentials file passed as the "
+            "first argument -- see src/tibber_config.example.json.",
             file=sys.stderr,
         )
         return 2
