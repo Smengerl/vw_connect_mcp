@@ -45,7 +45,7 @@ TIBBER_CONFIG="$PROJECT_DIR/src/tibber_config.json"
 if [ ! -f "$TIBBER_CONFIG" ]; then
   echo "⚠️  $TIBBER_CONFIG not found."
   echo "   Register an OAuth2 client at https://data-api.tibber.com/clients/manage/"
-  echo "   (see experiment/tibber-integration/README.md for the exact scopes/redirect URI),"
+  echo "   (see ARCHITECTURE.md for the exact scopes/redirect URI),"
   echo "   then create the file:"
   echo "     cp src/tibber_config.example.json src/tibber_config.json"
   echo "     # edit src/tibber_config.json with your client_id/client_secret"

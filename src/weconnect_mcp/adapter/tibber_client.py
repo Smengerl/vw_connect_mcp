@@ -2,12 +2,12 @@
 
 Read-only vehicle data access via the Tibber Data API, used as an
 alternative to the VW-direct carconnectivity adapter now that VW has
-blocked third-party BFF access (see
-../../../experiment/tibber-integration/TIBBER_API.md for the full research
-and architecture analysis this adapter is based on).
+blocked third-party BFF access (see ../../../ARCHITECTURE.md for the full
+research and current architecture this adapter is based on).
 
-Ported from experiment/tibber-integration/tibber_client.py with one
-structural change: the interactive browser login flow is opt-in
+Ported from this project's original tibber-integration PoC script (see
+ARCHITECTURE.md's project history, §8) with one structural change: the
+interactive browser login flow is opt-in
 (``allow_interactive_login``) and OFF by default here, because this module
 runs inside the MCP server process, which must never block startup on
 opening a browser (headless/cloud deployments have none). The one-time
@@ -40,7 +40,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# ── Constants (see experiment/tibber-integration/TIBBER_API.md §3-5) ─────────
+# ── Constants (see ../../../ARCHITECTURE.md §2-3) ────────────────────────────
 AUTH_URI = "https://thewall.tibber.com/connect/authorize"
 TOKEN_URI = "https://thewall.tibber.com/connect/token"
 API_BASE = "https://data-api.tibber.com/v1"
@@ -366,7 +366,7 @@ class TibberDataAPI:
 def vin_from_external_id(external_id: str) -> str:
     """Extract the VIN from a device's externalId.
 
-    TIBBER_API.md §5.2: evcc's own source assumes ``vendor:VIN`` (e.g.
+    ARCHITECTURE.md §3.1: evcc's own source assumes ``vendor:VIN`` (e.g.
     ``tesla:5YJSA1E26MF1234567``), but our VW/Enode-backed vehicle reported
     the bare VIN with no prefix at all. Try splitting on ':' and fall back
     to the whole string if there's no match, same as evcc's own Device.VIN().

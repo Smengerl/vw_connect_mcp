@@ -4,7 +4,7 @@ Provides pre-built prompt templates for common agentic vehicle operations.
 Each prompt guides the AI through a complete workflow with safety checks.
 
 The Tibber Data API is read-only and limited to identity + SoC/range/
-charging-state (see experiment/tibber-integration/TIBBER_API.md §5.2) — it
+charging-state (see ARCHITECTURE.md §3.1) — it
 has no command endpoints and no door/window/tyre/light/climate/position/
 maintenance data at all. Prompts that depended entirely on those (vehicle
 control, GPS position, door/climate status) have been removed; the

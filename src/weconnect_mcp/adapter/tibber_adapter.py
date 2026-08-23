@@ -1,15 +1,15 @@
-"""Tibber Data API adapter for VW vehicles (read-only, charging/range only).
+"""Tibber Data API adapter for vehicles (read-only, charging/range only).
 
-Reads vehicle data via the Tibber Data API — see
-experiment/tibber-integration/TIBBER_API.md for the full API research and
-the architecture analysis (§7) this adapter implements. This is now the
-project's only backend; the previous VW-direct carconnectivity backend was
-removed after VW blocked third-party access (see the permanent
-`carconnectivity` branch for that code and
-experiment/vw-device-flow-attestation-bypass/FINDING.md for why).
+Reads vehicle data via the Tibber Data API — see ARCHITECTURE.md for the
+full API research and the current architecture (§4) this adapter
+implements. Not VW-specific despite the project's origins (ARCHITECTURE.md
+§1.1) — Tibber's vehicle integration covers 30+ EV brands via Enode. This
+is now the project's only backend; the previous VW-direct carconnectivity
+backend was removed after VW blocked third-party access (see the permanent
+`carconnectivity` branch for that code).
 
 Two hard limitations, by design, not oversight — both confirmed live and
-documented in TIBBER_API.md:
+documented in ARCHITECTURE.md:
 - Read coverage: Tibber exposes only 11 of the ~51 data points the old
   carconnectivity/VW-direct backend provided (identity fields + SoC/range/
   charging/plug status). Doors, windows, tyres, lights, climatization,
@@ -179,7 +179,7 @@ class TibberAdapter(
             manufacturer=info.get("brand"),
             connection_state=connection_state,
             # license_plate, odometer, state, type, software_version,
-            # model_year: no Tibber equivalent (TIBBER_API.md README table)
+            # model_year: no Tibber equivalent (ARCHITECTURE.md §5 table)
         )
 
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:

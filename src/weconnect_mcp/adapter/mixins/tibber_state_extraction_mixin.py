@@ -3,7 +3,7 @@
 Converts a Tibber Data API device-detail response (a flat list of
 capability dicts) into the same target Pydantic models CarConnectivityAdapter
 uses. Much smaller than StateExtractionMixin: Tibber's confirmed capability
-set is 5 fields (TIBBER_API.md §5.2), all charging/range related — no
+set is 5 fields (ARCHITECTURE.md §3.1), all charging/range related — no
 doors/windows/tyres/lights/climatization/position/maintenance equivalent
 exists, so those categories are simply not implemented here at all (the
 adapter returns None for them directly, see tibber_adapter.py).
@@ -17,7 +17,7 @@ from weconnect_mcp.adapter.abstract_adapter import (
     ChargingModel, RangeModel, DriveModel,
 )
 
-# Tibber Data API capability ids (confirmed live, TIBBER_API.md §5.2).
+# Tibber Data API capability ids (confirmed live, ARCHITECTURE.md §3.1).
 _ID_SOC = "storage.stateOfCharge"          # %
 _ID_TARGET_SOC = "storage.targetStateOfCharge"  # %
 _ID_RANGE = "range.remaining"              # m

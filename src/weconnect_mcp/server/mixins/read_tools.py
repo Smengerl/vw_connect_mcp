@@ -6,8 +6,8 @@ All tools are idempotent and read-only (no vehicle state changes).
 The Tibber Data API's confirmed 5 capabilities cover: state of charge,
 target state of charge, remaining range, plug status, and charging status —
 plus basic identity (VIN, brand, model, name, online state). See
-experiment/tibber-integration/TIBBER_API.md §5.2 and the README's
-data-point comparison table for the full picture. Doors, windows, tyres,
+ARCHITECTURE.md §3.1 and its data-point comparison table (§5) for the full
+picture. Doors, windows, tyres,
 lights, climatization, window heating, GPS position, maintenance schedule,
 odometer, license plate, model year, software version, and vehicle
 type/propulsion have no Tibber equivalent at all, so there are no tools

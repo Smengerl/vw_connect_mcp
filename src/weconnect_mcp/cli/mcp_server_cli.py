@@ -1,6 +1,6 @@
 """CLI shim to start the MCP server against the Tibber Data API.
 
-See experiment/tibber-integration/TIBBER_API.md for background. Credentials
+See ARCHITECTURE.md for background. Credentials
 can come from a JSON file (pass it as the 'config' positional argument --
 see src/tibber_config.example.json) and/or these environment variables,
 which override the file when both are present:
@@ -18,7 +18,7 @@ vars remain the natural choice for Docker/Railway deployments.
 
 Run `python -m weconnect_mcp.cli.tibber_login_cli` once, interactively,
 before starting the server -- see that module's docstring. Tibber has no
-client_credentials grant (confirmed live, TIBBER_API.md §3.4), so the
+client_credentials grant (confirmed live, ARCHITECTURE.md §2.3), so the
 resulting refresh_token must persist across restarts one way or another.
 For headless deployments, TIBBER_TOKEN_JSON bootstraps the token file from
 that env var on first boot only (see _seed_tibber_token_from_env
@@ -68,7 +68,7 @@ def _seed_tibber_token_from_env(token_path: str) -> None:
     This only ever fires once: if a file already exists at token_path, it is
     left untouched, since every subsequent refresh already rewrites it
     in-place (including Tibber's rotating refresh_token, see
-    experiment/tibber-integration/TIBBER_API.md §3.4) and is therefore always
+    ARCHITECTURE.md §2.3) and is therefore always
     at least as current as the env var. For that rewrite to survive a
     restart, token_path should point at a persisted volume (see
     docker-compose.yml's tibber-tokens volume) -- without one, this seeds

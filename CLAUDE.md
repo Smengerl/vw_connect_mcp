@@ -112,10 +112,10 @@ Register an OAuth2 client at <https://data-api.tibber.com/clients/manage/>.
 - `README.md` — user-facing setup, deployment, AI Integration tool list
 - `src/weconnect_mcp/server/AI_INSTRUCTIONS.md` — canonical AI-facing tool
   description (what a client-side AI assistant is told about this server)
-- `experiment/tibber-integration/TIBBER_API.md` — full Tibber API research,
-  architecture rationale, and an append-only session log of prior work on
-  this project (read the tail before starting new work; append, don't
-  rewrite, when you finish something notable)
+- `ARCHITECTURE.md` — full Tibber API research, architecture rationale, the
+  51-point data comparison against the old VW-direct integration, and a
+  project history section (add a dated entry there for a notable milestone,
+  don't rewrite prior ones)
 - `CONTRIBUTING.md` — contribution guidelines, code style detail
 
 ## Working with the user

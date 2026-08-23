@@ -1,6 +1,6 @@
 # AI Instructions for WeConnect MCP Server (Tibber backend)
 
-**Purpose**: Access vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — this project was originally built for Volkswagen (used because direct VW WeConnect API access is currently blocked to third parties, see `experiment/vw-device-flow-attestation-bypass/FINDING.md`), but the Tibber backend itself is **not VW-specific**: Tibber's vehicle integration is backed by Enode (see `experiment/tibber-integration/TIBBER_API.md` §1.1), which covers 30+ EV brands. Any vehicle paired to the connected Tibber account works — the `brand` field reflects whatever that vehicle actually is (e.g. `"Volkswagen"` for the vehicle this project was verified against), not a fixed value.
+**Purpose**: Access vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — this project was originally built for Volkswagen (used because direct VW WeConnect API access is currently blocked to third parties), but the Tibber backend itself is **not VW-specific**: Tibber's vehicle integration is backed by Enode (see `ARCHITECTURE.md` §1.1), which covers 30+ EV brands. Any vehicle paired to the connected Tibber account works — the `brand` field reflects whatever that vehicle actually is (e.g. `"Volkswagen"` for the vehicle this project was verified against), not a fixed value.
 
 **Key Features**:
 - Read a small, confirmed set of vehicle data: identity (VIN, brand, model, name, online state) and charging/range status (state of charge, target SOC, range, plug status, charging state)
@@ -8,7 +8,7 @@
 - Electric vehicles only — Tibber's vehicle integration only ever reports EVs (true across every brand it supports, not a VW-specific restriction)
 
 **Critical Limitation** ⚠️ — **this server is read-only, full stop**:
-The Tibber Data API has no write/command endpoints at all (confirmed by reading its full OpenAPI schema — see `experiment/tibber-integration/TIBBER_API.md` §5). There is **no lock/unlock, climate control, charging start/stop, lights, or window heating tool at all** — not a tool that exists and fails, simply no such tool. If a user asks to lock the car, start charging, or precondition the cabin, tell them directly that this server currently cannot do that (see "What This Server Cannot Do" below).
+The Tibber Data API has no write/command endpoints at all (confirmed by reading its full OpenAPI schema — see `ARCHITECTURE.md` §3). There is **no lock/unlock, climate control, charging start/stop, lights, or window heating tool at all** — not a tool that exists and fails, simply no such tool. If a user asks to lock the car, start charging, or precondition the cabin, tell them directly that this server currently cannot do that (see "What This Server Cannot Do" below).
 
 **Second limitation** — narrow read surface: doors, windows, tyres, lights, climatization status, window heating status, GPS position, maintenance schedule, odometer, license plate, model year, and software version are **not available**. Only identity + charging/range data exists. See "What This Server Can Do" below for the complete list — there is nothing beyond it.
 
@@ -177,7 +177,7 @@ There is no command tool of any kind. If the user wants control, say so directly
 
 ### Vehicle Identification
 - **Name**: `"ID.7"` etc. — matched case-insensitively
-- **VIN**: exact match. For our confirmed VW/Enode-backed vehicle, Tibber's `externalId` is the bare VIN (no vendor prefix, unlike some other brands Tibber supports) — see `experiment/tibber-integration/TIBBER_API.md` §5.2.
+- **VIN**: exact match. For our confirmed VW/Enode-backed vehicle, Tibber's `externalId` is the bare VIN (no vendor prefix, unlike some other brands Tibber supports) — see `ARCHITECTURE.md` §3.1.
 - **License Plate**: NOT SUPPORTED (Tibber doesn't provide it)
 
 ### Architecture (Internal)
@@ -193,10 +193,10 @@ The server uses a modular mixin-based architecture:
 ## Known Limitations
 
 ### 1. Read-Only — No Control At All
-The Tibber Data API has no write endpoints (confirmed via its OpenAPI schema). This is permanent and structural, not a temporary rate limit or bug — see `experiment/tibber-integration/TIBBER_API.md` §5.
+The Tibber Data API has no write endpoints (confirmed via its OpenAPI schema). This is permanent and structural, not a temporary rate limit or bug — see `ARCHITECTURE.md` §3.
 
 ### 2. Narrow Data Surface
-Only identity + 5 charging/range capabilities exist. Doors, windows, tyres, lights, climatization, window heating, position, maintenance, odometer, license plate, model year, software version: none of these have a Tibber equivalent. See the full 51-point comparison against the old VW-direct `carconnectivity` library (now removed, still available on its own permanent branch) in `experiment/tibber-integration/README.md`.
+Only identity + 5 charging/range capabilities exist. Doors, windows, tyres, lights, climatization, window heating, position, maintenance, odometer, license plate, model year, software version: none of these have a Tibber equivalent. See the full 51-point comparison against the old VW-direct `carconnectivity` library (now removed, still available on its own permanent branch) in `ARCHITECTURE.md` §5.
 
 ### 3. Electric Vehicles Only
 Tibber's vehicle integration only ever reports EVs, regardless of brand — combustion/PHEV fields in the data models are always empty for this backend.

@@ -1,27 +1,26 @@
 """One-time interactive Tibber Data API login.
 
-Run this once, locally, before starting the MCP server with the Tibber
-backend (`--backend tibber`). It runs the OAuth2 Authorization Code + PKCE
-flow interactively (opens a browser, needs a human to consent), then
-caches the resulting tokens to disk. TibberAdapter itself never does this
-— it only ever refreshes an existing token non-interactively, since it
-must be able to start inside a headless server process.
+Run this once, locally, before starting the MCP server. It runs the OAuth2
+Authorization Code + PKCE flow interactively (opens a browser, needs a
+human to consent), then caches the resulting tokens to disk. TibberAdapter
+itself never does this — it only ever refreshes an existing token
+non-interactively, since it must be able to start inside a headless server
+process.
 
 Usage:
     python -m weconnect_mcp.cli.tibber_login_cli [config.json]
 
 Credentials come from the same optional JSON file the server itself reads
 (src/tibber_config.json, see src/tibber_config.example.json) and/or these
-environment variables, which override the file when both are present --
-identical precedence and shape to mcp_server_cli.py's --backend tibber:
+environment variables, which override the file when both are present:
     TIBBER_CLIENT_ID       Required (file or env).
     TIBBER_CLIENT_SECRET   Required (file or env).
     TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
                            Must match the redirect URI registered on the client.
     TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
 
-See experiment/tibber-integration/README.md for how to register an OAuth2
-client and which scopes to select.
+See ARCHITECTURE.md §2.1 for how to register an OAuth2 client and which
+scopes to select.
 """
 
 from __future__ import annotations

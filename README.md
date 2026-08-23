@@ -24,8 +24,8 @@ A developer-focused server that exposes vehicle data via a Model Context Protoco
 
 > [!NOTE]
 > **Why Tibber, not VW directly?** In May 2026, VW shut down third-party access to its WeConnect
-> API (new device-attestation requirements open-source projects can't obtain — see
-> [`experiment/vw-device-flow-attestation-bypass/FINDING.md`](experiment/vw-device-flow-attestation-bypass/FINDING.md)).
+> API (new device-attestation requirements open-source projects can't obtain — see the
+> `experiment/vw-attestation-finding` branch for the technical details of that block).
 > This project's original direct integration (the `carconnectivity` library) stopped working
 > because of that, so the whole server was redesigned around the read-only
 > [Tibber Data API](https://data-api.tibber.com/docs/) instead. The old VW-direct code still
@@ -46,10 +46,8 @@ charging control, lights) at all — Tibber's API has no write endpoints whatsoe
 regardless of make — the `brand` field just reflects whatever your paired vehicle actually is
 (e.g. `"Volkswagen"` for the vehicle this project was built and verified against).
 
-See the full 51-point comparison against the old VW-direct data in
-[`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) and the
-research behind it in
-[`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md).
+See the full 51-point comparison against the old VW-direct data, the OAuth2/API research behind
+this backend, and the current architecture in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### Known Limitations
 
@@ -184,8 +182,8 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
 ### Setting Up Tibber Credentials
 
 1. **Register an OAuth2 client** at <https://data-api.tibber.com/clients/manage/> — see
-   [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) for the
-   exact scopes to select and redirect URI to use.
+   [`ARCHITECTURE.md`](ARCHITECTURE.md#21-registering-an-oauth2-client) for the exact scopes to
+   select and redirect URI to use.
 2. **Provide credentials** — two options, and you can mix them (environment variables override
    the file when both are present):
 
@@ -226,10 +224,8 @@ already generate configs pointing at `src/tibber_config.json` with a correct `"c
 editing of the generated MCP client config needed. If you hand-edit an MCP client config instead,
 make sure it has a `"cwd"` pointing at this repo: without one, a relative `token_path` resolves
 against the *client's* working directory (e.g. Claude Desktop's own), not this project's — a real
-failure mode, not a theoretical one. See
-[`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md#production-usage-mcp-server)
-for the full walkthrough plus troubleshooting for specific error messages (missing credentials, no
-cached token, `invalid_grant`).
+failure mode, not a theoretical one. See [`ARCHITECTURE.md`](ARCHITECTURE.md#6-troubleshooting)
+for troubleshooting specific error messages (missing credentials, no cached token, `invalid_grant`).
 
 ### Running the Server
 
@@ -519,7 +515,7 @@ Tools called before the adapter is ready return a friendly `"Server is still sta
 > ⚠️ **Cloud deployment — token bootstrap.** The Tibber OAuth login is a
 > one-time *interactive* step (browser + human click) that cannot run inside a headless
 > container, and Tibber has no `client_credentials` grant (confirmed live,
-> [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md) §3.4) —
+> [`ARCHITECTURE.md`](ARCHITECTURE.md#23-no-client_credentials-grant--a-refresh-token-must-persist-across-restarts)) —
 > `client_id`/`client_secret` alone can never mint a fresh access token, so a `refresh_token` must
 > persist across restarts one way or another. The bridge: run
 > `python -m weconnect_mcp.cli.tibber_login_cli` **locally** first, then paste that run's token
@@ -708,9 +704,8 @@ Contributions are welcome! Please see `CONTRIBUTING.md` and follow the code of c
 
 ## Additional Documentation
 
-- **[experiment/tibber-integration/TIBBER_API.md](experiment/tibber-integration/TIBBER_API.md)** - Full Tibber Data API research, architecture analysis, and session log behind this backend
-- **[experiment/tibber-integration/README.md](experiment/tibber-integration/README.md)** - Tibber OAuth setup PoC and the full 51-point data comparison against the old VW-direct (`carconnectivity`) backend
-- **[experiment/vw-device-flow-attestation-bypass/FINDING.md](experiment/vw-device-flow-attestation-bypass/FINDING.md)** - Why VW-direct access (the old `carconnectivity` backend, now removed — see the permanent [`carconnectivity` branch](https://github.com/Smengerl/vw_connect_mcp/tree/carconnectivity)) is blocked
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Full Tibber Data API research, the 51-point data comparison against the old VW-direct (`carconnectivity`) backend, current adapter architecture, and project history
+- The technical details of VW's third-party API block (device-attestation requirements, tested live) live on the standalone [`experiment/vw-attestation-finding`](https://github.com/Smengerl/vw_connect_mcp/tree/experiment/vw-attestation-finding) branch, never merged into `main`
 - **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
 - **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
 - **[tests/README.md](tests/README.md)** - Test suite overview
