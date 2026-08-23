@@ -153,8 +153,8 @@ def demo_before_and_after():
     print("  1. src/weconnect_mcp/adapter/abstract_adapter.py")
     print("     → Added license_plate field to VehicleModel")
     print()
-    print("  2. src/weconnect_mcp/adapter/carconnectivity_adapter.py")
-    print("     → get_vehicle() now reads and returns license_plate")
+    print("  2. src/weconnect_mcp/adapter/tibber_adapter.py")
+    print("     → get_vehicle() now reads and returns license_plate (always None — Tibber doesn't provide it)")
     print()
     print("  3. tests/test_adapter.py")
     print("     → TestAdapter updated to include license_plate in test data")
@@ -187,10 +187,10 @@ def demo_use_cases():
     print("   • Generate reports using plate numbers")
     print()
     
-    print("4. Parking & Location Services")
+    print("4. Charging & Battery Checks")
     print("-" * 70)
-    print('   "Where is my car with plate M-AB 1234?"')
-    print("   → Get position by license plate")
+    print('   "What\'s the battery level of M-XY 5678?"')
+    print("   → Get charging/battery status by license plate")
     print("   → More natural than using VIN")
 
 
