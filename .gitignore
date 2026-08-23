@@ -5,6 +5,10 @@ claude_desktop_config.json
 
 # Tibber OAuth token cache (produced by tibber_login_cli)
 tibber_tokens.json
+*tibber_tokens.json
+
+# Local-only artifacts (backups, scratch files, rescued secrets) -- never checked in
+local/
 
 # Environment files with credentials
 .env
