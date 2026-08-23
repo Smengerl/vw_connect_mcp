@@ -1170,6 +1170,40 @@ consumer of this API, not just that one integration:
   production `src/tibber_config.json`/`token_path` — they're separate
   files with separate purposes and that wasn't previously clear.
 
+### 2026-08-23 — audited the root-level docs against tibber_login_cli's new file support
+- Simon asked for the top-level `README.md` and other root docs to
+  document the same Tibber login flow. Auditing every `tibber_login_cli`
+  invocation across `README.md`, `scripts/README.md`, and
+  `CONTRIBUTING.md` found two real, distinct breakages, not just staleness:
+  1. Every documented invocation was the bare
+     `python -m weconnect_mcp.cli.tibber_login_cli` — but every one of
+     them had just told the user to create/edit `src/tibber_config.json`
+     (a **file**), and the login tool only reads env vars unless given the
+     file path explicitly (the capability added last session). Following
+     these instructions literally would fail with "Missing
+     TIBBER_CLIENT_ID".
+  2. The Docker Compose section's flow (fill in `.env`, then run
+     `tibber_login_cli` bare) was broken for a *different* reason:
+     `tibber_login_cli.py` never loads `.env` itself (confirmed — no
+     `dotenv` import in that file), so filling in `.env` doesn't make
+     those values reachable to a plain local Python process either. Fixed
+     with `set -a && source .env && set +a` before the login step.
+- Fixed all instances (`README.md` Quick Start + Setting Up the Tibber
+  Backend + Docker Compose section, `scripts/README.md`'s Configuring
+  Secrets, `CONTRIBUTING.md`'s Development Setup). Also added the
+  previously-missing `create_copilot_desktop_config.sh` to README's
+  generator-script list (only two of three were mentioned), and a note
+  about the `"cwd"` requirement in hand-edited MCP client configs — the
+  exact real bug hit and fixed in the entry above, now documented so it
+  doesn't recur for someone else hand-editing a config.
+- **Verified live**: ran the exact now-documented command
+  (`tibber_login_cli src/tibber_config.json`) — it succeeded
+  non-interactively (no browser needed) against the token Simon had
+  already generated following the previous entry's instructions, and
+  listed his real VW ID.7. This confirms, independent of any of today's
+  doc edits, that his Claude Desktop `weconnect` server connection is
+  genuinely live and working now, not just theoretically fixed.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
