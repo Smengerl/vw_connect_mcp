@@ -1,10 +1,10 @@
 """WeConnect MCP - MCP Server for Volkswagen vehicles.
 
 This package provides a Model Context Protocol (MCP) server that interfaces
-with Volkswagen vehicles using the carconnectivity library.
+with Volkswagen vehicles via the Tibber Data API.
 
 Key Components:
-    - adapter: Vehicle data adapter using carconnectivity
+    - adapter: Vehicle data adapter using the Tibber Data API
     - server: MCP server implementation
     - cli: Command-line interface for running the server
 """
