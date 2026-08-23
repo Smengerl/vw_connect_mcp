@@ -6,10 +6,16 @@ started as a standalone OAuth2-login-flow experiment — it has since grown
 into the actual production backend of this project: `tibber_client.py`
 was promoted into `src/weconnect_mcp/adapter/tibber_client.py`, and
 `TibberAdapter` (`src/weconnect_mcp/adapter/tibber_adapter.py`) is now the
-**default** MCP server backend (see the top-level
-[`README.md`](../../README.md#choosing-a-backend)). This folder still holds
-the original PoC scripts (useful for quick experimentation and for
+**only** MCP server backend (see the top-level
+[`README.md`](../../README.md#what-this-server-can-do)). This folder still
+holds the original PoC scripts (useful for quick experimentation and for
 inspecting raw API responses) plus the research behind all of it.
+
+Note: the research below was done against a specific paired VW vehicle
+(that's what motivated this project), but nothing about `tibber_client.py`
+or `TibberAdapter` is VW-specific — Tibber's vehicle integration runs
+through Enode, which covers 30+ EV brands, so any vehicle paired to the
+connected Tibber account works the same way.
 
 See [`TIBBER_API.md`](TIBBER_API.md) for the full API reference, architecture
 analysis, and research log. Modelled on evcc's implementation

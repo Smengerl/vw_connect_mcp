@@ -1,11 +1,11 @@
 # AI Instructions for WeConnect MCP Server (Tibber backend)
 
-**Purpose**: Access Volkswagen vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — used because direct VW WeConnect API access is currently blocked to third parties (see `experiment/vw-device-flow-attestation-bypass/FINDING.md`). Tibber's VW integration is backed by Enode (see `experiment/tibber-integration/TIBBER_API.md` §1.1).
+**Purpose**: Access vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — this project was originally built for Volkswagen (used because direct VW WeConnect API access is currently blocked to third parties, see `experiment/vw-device-flow-attestation-bypass/FINDING.md`), but the Tibber backend itself is **not VW-specific**: Tibber's vehicle integration is backed by Enode (see `experiment/tibber-integration/TIBBER_API.md` §1.1), which covers 30+ EV brands. Any vehicle paired to the connected Tibber account works — the `brand` field reflects whatever that vehicle actually is (e.g. `"Volkswagen"` for the vehicle this project was verified against), not a fixed value.
 
 **Key Features**:
 - Read a small, confirmed set of vehicle data: identity (VIN, brand, model, name, online state) and charging/range status (state of charge, target SOC, range, plug status, charging state)
 - Automatic caching (5 minutes) to be a polite API citizen
-- Electric vehicles only — Tibber's VW integration only ever reports EVs
+- Electric vehicles only — Tibber's vehicle integration only ever reports EVs (true across every brand it supports, not a VW-specific restriction)
 
 **Critical Limitation** ⚠️ — **this server is read-only, full stop**:
 The Tibber Data API has no write/command endpoints at all (confirmed by reading its full OpenAPI schema — see `experiment/tibber-integration/TIBBER_API.md` §5). There is **no lock/unlock, climate control, charging start/stop, lights, or window heating tool at all** — not a tool that exists and fails, simply no such tool. If a user asks to lock the car, start charging, or precondition the cabin, tell them directly that this server currently cannot do that (see "What This Server Cannot Do" below).
@@ -199,13 +199,13 @@ The Tibber Data API has no write endpoints (confirmed via its OpenAPI schema). T
 Only identity + 5 charging/range capabilities exist. Doors, windows, tyres, lights, climatization, window heating, position, maintenance, odometer, license plate, model year, software version: none of these have a Tibber equivalent. See the full 51-point comparison against the old VW-direct `carconnectivity` library (now removed, still available on its own permanent branch) in `experiment/tibber-integration/README.md`.
 
 ### 3. Electric Vehicles Only
-Tibber's VW integration only ever reports EVs — combustion/PHEV fields in the data models are always empty for this backend.
+Tibber's vehicle integration only ever reports EVs, regardless of brand — combustion/PHEV fields in the data models are always empty for this backend.
 
 ### 4. Token Expiration / Auth
 Access tokens last ~1 hour and refresh automatically using a stored refresh token (~30 days). If the refresh token itself expires or is revoked, the server will fail to start with a clear `TibberAuthError` — re-run `weconnect_mcp.cli.tibber_login_cli` to re-authorize (a one-time interactive step; the running server can't do this itself, by design — see "Architecture" above).
 
 ### 5. Cache Freshness
-Data is cached for 5 minutes; a very recent state change made through the Tibber/VW app itself may take up to 5 minutes to show up here.
+Data is cached for 5 minutes; a very recent state change made through the vehicle's own app (or Tibber's app) may take up to 5 minutes to show up here.
 
 ---
 

@@ -1,12 +1,19 @@
 # Tibber Data API as an indirect path to VW vehicle data
 
 **Status:** **`TibberAdapter` implemented and verified live end-to-end
-(2026-08-21, see §8).** Direct-`AbstractAdapter` option (§7.1–7.3) chosen
-over the CarConnectivity-connector alternative (§7.4–7.5). Lives at
+(2026-08-21, see §8), and is now the project's only backend** (the
+carconnectivity/VW-direct alternative was removed on `cleanup/remove-
+carconnectivity`, see §8's 2026-08-23 entry — the `--backend` flag no
+longer exists). Direct-`AbstractAdapter` option (§7.1–7.3) chosen over the
+CarConnectivity-connector alternative (§7.4–7.5). Lives at
 `src/weconnect_mcp/adapter/tibber_adapter.py` — start the MCP server with
-`--backend tibber` after running `weconnect_mcp.cli.tibber_login_cli` once.
-API confirmed **read-only** (no control/command endpoints exist as of this
-writing) — see §5.
+`python -m weconnect_mcp.cli.mcp_server_cli` after running
+`weconnect_mcp.cli.tibber_login_cli` once. API confirmed **read-only** (no
+control/command endpoints exist as of this writing) — see §5. **Not
+VW-specific**: Tibber's vehicle integration runs through Enode (30+ EV
+brands, see §1.1) — everything below was researched/verified against a
+specific paired VW vehicle, but the adapter itself makes no VW-specific
+assumption and works with any vehicle Tibber/Enode supports.
 **Maintained by:** Simon Gerlach (simon.gerlach@gmail.com)
 **Started:** 2026-08-21
 **Affected/relevant systems:** `data-api.tibber.com` (Tibber Data API),

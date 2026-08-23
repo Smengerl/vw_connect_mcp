@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for WeConnect MCP
 
-**Type**: MCP Server (Python) for Volkswagen vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/)
+**Type**: MCP Server (Python) for vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) — originally built for Volkswagen, but **not VW-specific**: Tibber's integration runs through Enode (30+ EV brands), so any vehicle paired to the connected Tibber account works identically
 **Architecture**: Modular adapter with mixins (`CacheMixin`, `VehicleResolutionMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`
 **Key Library**: `fastmcp` (MCP server framework). No third-party VW API library is used — the old `carconnectivity` (VW-direct) backend was removed after VW blocked third-party access; its code lives on, unmaintained, on the permanent `carconnectivity` git branch.
 **Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)
@@ -83,10 +83,10 @@ class TibberAdapter(
 - **License Plate**: ⚠️ **NOT SUPPORTED** — Tibber's API doesn't provide it; `license_plate` is always `null`
 
 ### Vehicle Types
-Tibber's VW integration **only ever reports electric vehicles**. `EnergyStatusModel.combustion` is
-always `None` for this backend; the `combustion` fields/models still exist in
-`abstract_adapter.py` only because `tests/test_adapter.py`'s mock covers both vehicle types for
-test purposes.
+Tibber's vehicle integration **only ever reports electric vehicles**, regardless of brand.
+`EnergyStatusModel.combustion` is always `None` for this backend; the `combustion` fields/models
+still exist in `abstract_adapter.py` only because `tests/test_adapter.py`'s mock covers both
+vehicle types for test purposes.
 
 ### Caching Strategy
 - **Duration**: 5 minutes (300 seconds) via `CacheMixin`

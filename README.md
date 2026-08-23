@@ -33,8 +33,8 @@
 > [`carconnectivity` branch](https://github.com/Smengerl/vw_connect_mcp/tree/carconnectivity) for
 > anyone who wants it if VW access is ever restored.
 
-**MCP Server for Volkswagen Vehicles**  
-A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
+**MCP Server for Vehicles via the Tibber Data API**  
+A developer-focused server that exposes vehicle data via a Model Context Protocol (MCP) interface. Originally built for Volkswagen vehicles — but since moving to the Tibber Data API backend, **it isn't limited to VW**: Tibber's vehicle integration is built on [Enode](https://enode.com), which covers 30+ EV brands (VW Group included), so any vehicle paired to your Tibber account works identically, regardless of make. This project is designed for integration, automation, and experimentation with connected car data.
 
 ---
 
@@ -45,7 +45,7 @@ A developer-focused server that exposes information from VW vehicles via a Model
   <img src="examples/github_copilot_prepare_trip.png" alt="GitHub Copilot preparing for trip" width="45%">
 </p>
 
-*Control your VW vehicle through AI assistants like Claude Desktop and GitHub Copilot*
+*Access your vehicle's status through AI assistants like Claude Desktop and GitHub Copilot*
 
 ---
 
@@ -106,6 +106,8 @@ For detailed instructions, see sections below.
 - **MCP Server**: Provides a standard MCP interface for accessing vehicle data
 - **Tibber Data API backend** — read-only, via [Tibber](https://data-api.tibber.com/docs/) (an
   official VW integration partner); works despite VW's third-party API block (see warning above)
+- **Not limited to VW**: Tibber's vehicle integration (via [Enode](https://enode.com)) covers
+  30+ EV brands, not only VW Group — any vehicle paired to your Tibber account works the same way
 - **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, ChatGPT, Claude.ai and other MCP-compatible tools
 - **Cloud Deployable**: Ships with `Dockerfile`, `docker-compose.yml` and Railway config for one-command cloud deployment
 - **API-Key Authentication**: Bearer token auth for secure public HTTP endpoints
@@ -118,8 +120,16 @@ The Tibber Data API is **read-only** and covers only what Tibber's 5 confirmed v
 capabilities expose: identity (VIN, brand, model, name, online state) plus charging/range (state
 of charge, target SoC, remaining range, plug status, charging state) for electric vehicles. There
 is no door/window/tyre/light/climate/GPS/maintenance data, and no remote commands (lock, climate,
-charging control, lights) at all — Tibber's API has no write endpoints whatsoever. See the full
-51-point comparison against the old VW-direct data in
+charging control, lights) at all — Tibber's API has no write endpoints whatsoever.
+
+**Vehicle compatibility**: this is a Tibber-generic capability set, not a VW-specific one. Tibber's
+integration is built on Enode, which supports 30+ EV brands — VW Group vehicles were what this
+project was built and verified against (the `brand` field, e.g. `"Volkswagen"`, comes straight
+through from Tibber), but any vehicle you've paired to your Tibber account works identically, no
+code changes needed. `vehicle_id` resolution (VIN/name/license-plate lookup) and the response
+shape are the same regardless of make.
+
+See the full 51-point comparison against the old VW-direct data in
 [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) and the
 research behind it in
 [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md).
@@ -179,7 +189,8 @@ cached token, `invalid_grant`).
 ### Prerequisites
 
 - Python 3.8+
-- A Tibber account with a VW vehicle paired to it, and an OAuth2 client registered at
+- A Tibber account with a vehicle paired to it (any brand Tibber/Enode supports — not just VW,
+  see [What This Server Can Do](#what-this-server-can-do)), and an OAuth2 client registered at
   data-api.tibber.com (see [Setting Up Tibber Credentials](#setting-up-tibber-credentials))
 - (Recommended) Virtual environment
 
