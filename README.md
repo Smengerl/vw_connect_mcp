@@ -1,11 +1,10 @@
-# weconnect_mvp
+# weconnect_mvp — MCP Server for Connected Vehicles via Tibber
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
-**MCP Server for Vehicles via the Tibber Data API**  
 A developer-focused server that exposes vehicle data via a Model Context Protocol (MCP) interface. Originally built for Volkswagen vehicles — but since moving to the Tibber Data API backend, **it isn't limited to VW**: Tibber's vehicle integration is built on [Enode](https://enode.com), which covers 30+ EV brands (VW Group included), so any vehicle paired to your Tibber account works identically, regardless of make. This project is designed for integration, automation, and experimentation with connected car data.
 
 ---
