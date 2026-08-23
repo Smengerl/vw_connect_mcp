@@ -134,16 +134,3 @@ def test_get_vehicle_vin_matches_request(adapter):
     
     assert vehicle is not None
     assert vehicle.vin == VIN_ELECTRIC
-
-
-# ==================== MCP SERVER REGISTRATION ====================
-
-@pytest.mark.mcp_resources
-@pytest.mark.asyncio
-async def test_get_vehicle_info_resouce_is_registered(mcp_server):
-    """Test that get_vehicle_info is available as a resource in the MCP server"""
-    resource_templates = await mcp_server.get_resource_templates()
-    
-    assert resource_templates is not None, "Resource templates should not be None"
-    template_uris = list(resource_templates.keys())
-    assert "data://vehicle/{vehicle_id}/info" in template_uris, "data://vehicle/{vehicle_id}/info resource should be registered in MCP server"

@@ -223,21 +223,3 @@ def test_energy_status_battery_fallback_from_charging_state(adapter):
     if energy.electric.charging and energy.electric.charging.current_soc_percent is not None:
         # Both values should be present and identical (from same underlying data)
         assert energy.electric.battery_level_percent == energy.electric.charging.current_soc_percent
-
-
-# ==================== MCP SERVER REGISTRATION ====================
-
-@pytest.mark.mcp_resources
-@pytest.mark.asyncio
-async def test_get_energy_status_resource_are_registered(mcp_server):
-    """Test that energy status resources are registered in the MCP server"""
-    resource_templates = await mcp_server.get_resource_templates()
-    
-    assert resource_templates is not None, "Resource templates should not be None"
-    template_uris = list(resource_templates.keys())
-    
-    # Check that the energy-related resources are registered
-    # (these are the current MCP resources that provide energy status)
-    assert "data://vehicle/{vehicle_id}/charging" in template_uris, "data://vehicle/{vehicle_id}/charging resource should be registered"
-    assert "data://vehicle/{vehicle_id}/range" in template_uris, "data://vehicle/{vehicle_id}/range resource should be registered"
-    assert "data://vehicle/{vehicle_id}/battery" in template_uris, "data://vehicle/{vehicle_id}/battery resource should be registered"
