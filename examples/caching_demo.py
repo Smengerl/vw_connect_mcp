@@ -17,7 +17,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from weconnect_mcp.adapter.tibber_adapter import CACHE_DURATION_SECONDS
+from weconnect_mcp.adapter.mixins.cache_mixin import CACHE_DURATION_SECONDS
 
 
 def print_section(title: str):
@@ -109,13 +109,13 @@ def demo_cache_customization():
 
     print("Current Setting:")
     print("-" * 70)
-    print("  File: src/weconnect_mcp/adapter/tibber_adapter.py")
+    print("  File: src/weconnect_mcp/adapter/mixins/cache_mixin.py")
     print(f"  Constant: CACHE_DURATION_SECONDS = {CACHE_DURATION_SECONDS}")
     print()
 
     print("To Change Cache Duration:")
     print("-" * 70)
-    print("  1. Edit tibber_adapter.py")
+    print("  1. Edit cache_mixin.py")
     print("  2. Modify CACHE_DURATION_SECONDS constant:")
     print()
     print("     # Fast refresh (1 minute)")

@@ -1,14 +1,16 @@
 """Cache management mixin for adapter.
 
-Provides data caching functionality to avoid VW API rate limits.
-Tracks last fetch time and ensures data freshness.
+Provides data caching functionality so the adapter isn't hammering the
+Tibber Data API on every tool call. Tracks last fetch time and ensures data
+freshness.
 """
 
 import logging
 from typing import Optional
 from datetime import datetime, timedelta
 
-# Cache duration to avoid VW API rate limits
+# Cache duration — Tibber's own API docs ask clients to be polite about
+# polling frequency.
 CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 logger = logging.getLogger(__name__)
@@ -16,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 class CacheMixin:
     """Mixin providing caching functionality for adapter.
-    
-    Manages data freshness by tracking last fetch time and providing
-    methods to check if cache is expired and invalidate it.
-    
+
+    Manages data freshness by tracking last fetch time and providing a
+    method to check if the cache is expired.
+
     Attributes:
         _last_fetch_time: Timestamp of last data fetch from server
         _cache_duration: How long data stays fresh before refresh
@@ -64,15 +66,6 @@ class CacheMixin:
         """
         self._last_fetch_time = datetime.now()
         logger.debug("Cache timestamp updated")
-    
-    def invalidate_cache(self) -> None:
-        """Invalidate cache to force fresh data fetch on next access.
-        
-        Should be called after state-changing operations (commands) to ensure
-        subsequent reads get updated data reflecting the new state.
-        """
-        logger.info("Cache invalidated - next data access will fetch fresh data from server")
-        self._last_fetch_time = None
     
     def _fetch_data(self) -> None:
         """Fetch data from server and update cache timestamp.

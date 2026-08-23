@@ -30,40 +30,31 @@ remediation message.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from weconnect_mcp.adapter.abstract_adapter import (
     AbstractAdapter, VehicleModel, VehicleListItem, VehicleDetailLevel,
     EnergyStatusModel, RangeInfo, ElectricDriveInfo,
 )
-from weconnect_mcp.adapter.mixins import (
-    CacheMixin, VehicleResolutionMixin, TibberStateExtractionMixin,
-)
+from weconnect_mcp.adapter.mixins import CacheMixin, TibberStateExtractionMixin
 from weconnect_mcp.adapter.tibber_client import (
     TibberDataAPI, TokenStore, vin_from_external_id,
 )
 
-# Cache duration — Tibber's own API docs ask clients to be polite about
-# polling frequency.
-CACHE_DURATION_SECONDS = 300  # 5 minutes
-
 logger = logging.getLogger(__name__)
 
 
-class TibberAdapter(
-    CacheMixin,
-    VehicleResolutionMixin,
-    TibberStateExtractionMixin,
-    AbstractAdapter,
-):
-    """Adapter for VW vehicles using the Tibber Data API.
+class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
+    """Adapter for vehicles using the Tibber Data API.
 
     Composed of mixins for its concerns:
     - CacheMixin: data caching to avoid hammering Tibber's API
-    - VehicleResolutionMixin: resolve vehicle identifiers to VIN
     - TibberStateExtractionMixin: extract charging/range state from a
       Tibber device-detail response
+
+    Vehicle identifier resolution (VIN/name/license plate) comes from
+    AbstractAdapter's own concrete `resolve_vehicle_id` — no separate
+    mixin needed for that.
     """
 
     def __init__(
@@ -84,8 +75,7 @@ class TibberAdapter(
             token_path: Path to the token file produced by
                 weconnect_mcp.cli.tibber_login_cli.
         """
-        self._last_fetch_time = None
-        self._cache_duration = timedelta(seconds=CACHE_DURATION_SECONDS)
+        super().__init__()
 
         self.client = TibberDataAPI(
             client_id=client_id,
@@ -189,8 +179,8 @@ class TibberAdapter(
             return None
 
         charging = self._get_tibber_charging_state(detail)
-        range_info = self._get_tibber_range_info(detail)
-        if charging is None and range_info is None:
+        range_km = self._get_tibber_range_km(detail)
+        if charging is None and range_km is None:
             return None
 
         electric_info = ElectricDriveInfo(
@@ -199,8 +189,8 @@ class TibberAdapter(
             charging=charging,
         )
         range_model = RangeInfo(
-            total_km=range_info.total_range_km if range_info else None,
-            electric_km=range_info.electric_drive.range_km if range_info and range_info.electric_drive else None,
+            total_km=range_km,
+            electric_km=range_km,
             combustion_km=None,  # Tibber only ever reports EVs
         )
 

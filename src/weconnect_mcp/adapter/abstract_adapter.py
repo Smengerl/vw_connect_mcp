@@ -28,21 +28,6 @@ class ChargingModel(BaseModel):
     current_soc_percent: Optional[float] = None
     charge_mode: Optional[str] = None
 
-class DriveModel(BaseModel):
-    """Individual drive system (electric or combustion)"""
-    range_km: Optional[float] = None
-    battery_level_percent: Optional[float] = None  # electric only
-    tank_level_percent: Optional[float] = None  # combustion only
-    battery_temperature_kelvin: Optional[float] = None  # electric only
-    adblue_range_km: Optional[float] = None  # diesel only
-    adblue_level_percent: Optional[float] = None  # diesel only
-
-class RangeModel(BaseModel):
-    """Range and energy info"""
-    total_range_km: Optional[float] = None
-    electric_drive: Optional[DriveModel] = None  # BEV/PHEV
-    combustion_drive: Optional[DriveModel] = None  # PHEV/Combustion
-
 class VehicleModel(BaseModel):
     vin: Optional[str] # only mandatory field
     model: Optional[str] = None
@@ -67,7 +52,6 @@ class VehicleDetailLevel(str, Enum):
     """Detail level for vehicle information."""
     BASIC = "basic"      # VIN, name, model, type, manufacturer
     FULL = "full"        # BASIC + state, connection_state, odometer, year, software
-    ALL = "all"          # Everything
 
 class RangeInfo(BaseModel):
     """Consolidated range info"""
@@ -150,13 +134,3 @@ class AbstractAdapter(ABC):
                 return vehicle.vin
 
         return None
-
-    def invalidate_cache(self) -> None:
-        """Invalidate cached data to force fresh fetch on next access.
-
-        Should be called after state-changing operations (commands) to ensure
-        subsequent reads get updated data reflecting the new state.
-
-        Default implementation does nothing (for adapters without caching).
-        """
-        pass

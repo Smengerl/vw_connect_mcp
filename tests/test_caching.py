@@ -1,14 +1,25 @@
-"""Tests for adapter caching mechanism.
+"""Tests for the CacheMixin caching mechanism.
 
 Tests verify that data fetching is properly cached to avoid hammering the
-Tibber Data API, and that the cache invalidation hook works via TestAdapter.
+Tibber Data API, using a minimal concrete subclass of CacheMixin directly
+(TestAdapter itself doesn't use CacheMixin -- it has no caching at all).
 """
 
-import sys
-from weconnect_mcp.adapter.tibber_adapter import CACHE_DURATION_SECONDS
+from datetime import datetime, timedelta
 
-sys.path.insert(0, 'tests')
-from test_adapter import TestAdapter
+from weconnect_mcp.adapter.mixins.cache_mixin import CacheMixin, CACHE_DURATION_SECONDS
+
+
+class _CachingProbe(CacheMixin):
+    """Minimal concrete CacheMixin user for testing the mixin in isolation."""
+
+    def __init__(self):
+        super().__init__()
+        self.fetch_count = 0
+
+    def _fetch_data(self) -> None:
+        self.fetch_count += 1
+        self._mark_data_fetched()
 
 
 # ==================== CACHE DURATION TESTS ====================
@@ -18,39 +29,37 @@ def test_cache_duration_constant():
     assert CACHE_DURATION_SECONDS == 300, "Cache duration should be 300 seconds (5 minutes)"
 
 
-# ==================== CACHE INVALIDATION TESTS ====================
+# ==================== CACHE BEHAVIOR TESTS ====================
 
-def test_cache_invalidation_method_exists_on_abstract():
-    """Test that invalidate_cache method exists on abstract adapter."""
-    from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
-
-    # Verify method exists on abstract class
-    assert hasattr(AbstractAdapter, 'invalidate_cache'), "AbstractAdapter should have invalidate_cache method"
+def test_cache_expired_before_first_fetch():
+    """A freshly constructed mixin has no data yet, so cache is expired."""
+    probe = _CachingProbe()
+    assert probe._is_cache_expired() is True
 
 
-def test_cache_invalidation_on_test_adapter():
-    """Test that TestAdapter has invalidate_cache method."""
-    adapter = TestAdapter()
-
-    # Verify method exists
-    assert hasattr(adapter, 'invalidate_cache'), "Adapter should have invalidate_cache method"
-    assert callable(adapter.invalidate_cache), "invalidate_cache should be callable"
-
-    # Call should not raise exception
-    adapter.invalidate_cache()
+def test_ensure_fresh_data_fetches_once_when_expired():
+    """_ensure_fresh_data() triggers exactly one fetch when cache is expired."""
+    probe = _CachingProbe()
+    probe._ensure_fresh_data()
+    assert probe.fetch_count == 1
+    assert probe._is_cache_expired() is False
 
 
-def test_cache_invalidation_workflow():
-    """Test the complete cache invalidation workflow with TestAdapter."""
-    adapter = TestAdapter()
+def test_ensure_fresh_data_does_not_refetch_within_cache_window():
+    """A second call within the cache window must not trigger another fetch."""
+    probe = _CachingProbe()
+    probe._ensure_fresh_data()
+    probe._ensure_fresh_data()
+    assert probe.fetch_count == 1
 
-    # 1. Read data (should work normally)
-    vehicles = adapter.list_vehicles()
-    assert len(vehicles) == 2, "Should have 2 test vehicles"
 
-    # 2. Invalidate cache explicitly
-    adapter.invalidate_cache()
+def test_ensure_fresh_data_refetches_after_expiry():
+    """Once the cache window has passed, the next access fetches again."""
+    probe = _CachingProbe()
+    probe._ensure_fresh_data()
+    assert probe.fetch_count == 1
 
-    # 3. Read data again (should fetch fresh data)
-    vehicles_after = adapter.list_vehicles()
-    assert len(vehicles_after) == 2, "Should still have 2 test vehicles after cache invalidation"
+    # Simulate time passing beyond the cache window.
+    probe._last_fetch_time = datetime.now() - timedelta(seconds=CACHE_DURATION_SECONDS + 1)
+    probe._ensure_fresh_data()
+    assert probe.fetch_count == 2
