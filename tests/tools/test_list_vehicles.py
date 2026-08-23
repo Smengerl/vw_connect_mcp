@@ -14,12 +14,9 @@ Test data:
 - Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
 - Expected values from tests.test_data module
 """
-import pytest
 from test_data import (
     VIN_ELECTRIC,
     VIN_COMBUSTION,
-    NAME_ELECTRIC,
-    NAME_COMBUSTION,
     EXPECTED_ELECTRIC_VEHICLE,
     EXPECTED_COMBUSTION_VEHICLE,
 )

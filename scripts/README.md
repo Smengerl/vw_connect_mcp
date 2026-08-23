@@ -126,14 +126,16 @@ Run the test suite with optional filtering.
 ```
 
 **Options:**
-- `--skip-slow` - Skip tests marked as 'slow' or 'real_api'
+- `--skip-slow` - No-op today (kept for forward compatibility); would skip
+  'slow'/'real_api'-marked tests if any existed
 - `-v, --verbose` - Run pytest in verbose mode
 - `-h, --help` - Show help message
 
 **Test Statistics:**
-- 36 fast mock tests (~0.1s, no Tibber account needed)
+- 46 fast mock/offline tests (~0.1s, no Tibber account needed)
 - No slow/real-API tests exist today — the Tibber Data API is read-only, so
-  there's nothing beyond what the mock adapter already covers
+  there's nothing beyond what the mock adapter and the extraction-logic
+  fixtures already cover
 
 ---
 

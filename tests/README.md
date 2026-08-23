@@ -7,15 +7,15 @@ Test suite for the WeConnect MCP server (Tibber Data API backend).
 | Category | Tests | Files | Scope | Description |
 |----------|-------|-------|-------|-------------|
 | **Tools** | 31 | 3 | Unit | Data retrieval operations (adapter methods) |
-| **Caching** | 4 | 1 | Unit | Cache behavior and invalidation |
+| **Tibber extraction** | 9 | 1 | Unit | TibberStateExtractionMixin + vin_from_external_id, against real fixture data |
+| **Caching** | 5 | 1 | Unit | CacheMixin behavior (expiry, fetch-once, refetch) |
 | **MCP Server** | 1 | 1 | Integration | MCP protocol layer (client connection) |
-| **Total** | **36** | **5** | All | Complete coverage |
+| **Total** | **46** | **6** | All | Complete coverage |
 
-All 36 tests are fast mock tests (~1s) — there is no separate slow/real-API
-suite: the Tibber Data API is read-only, so nothing exists to test beyond
-what the mock adapter already covers via unit tests. A `real_api` pytest
-marker is defined for future use if that ever changes, but no test uses it
-today.
+All 46 tests are fast mock/offline tests (~0.1s) — there is no separate
+slow/real-API suite: the Tibber Data API is read-only, so nothing exists to
+test beyond what the mock adapter and the pure extraction-logic fixtures
+already cover.
 
 ## Test Structure
 
@@ -29,7 +29,8 @@ tests/
 │   └── test_get_energy_status.py  # 16 tests - Battery, charging, range
 │
 ├── test_mcp_server.py             # Integration: MCP client connection (1 test)
-├── test_caching.py                # Unit: Cache behavior (4 tests)
+├── test_caching.py                # Unit: CacheMixin behavior (5 tests)
+├── test_tibber_extraction.py      # Unit: Tibber capability parsing + VIN extraction (9 tests)
 ├── test_adapter.py                # Mock adapter implementation (TestAdapter)
 └── test_data.py                   # Central test data configuration
 ```
@@ -75,16 +76,28 @@ pytest tests/ --cov=src/weconnect_mcp --cov-report=html
 - Get vehicle details (BASIC/FULL)
 - Energy status (battery, charging, range)
 
-### 2. Unit Tests: Caching (4 tests)
-**What**: Cache behavior and invalidation
-**Fixtures**: `adapter`
+### 2. Unit Tests: Caching (5 tests)
+**What**: CacheMixin behavior, exercised directly via a minimal concrete
+subclass (TestAdapter itself has no caching)
 **Run**: `pytest tests/test_caching.py -v`
 
 **Coverage**:
 - Cache duration constant
-- `invalidate_cache()` presence and callability
+- Expired before first fetch, fetch-once, no-refetch-within-window,
+  refetch-after-expiry
 
-### 3. Integration Tests: MCP Server (1 test)
+### 3. Unit Tests: Tibber Extraction (9 tests)
+**What**: TibberStateExtractionMixin's capability parsing and
+`vin_from_external_id()`, against the confirmed-live device-detail fixture
+from `ARCHITECTURE.md` §3.1 — no mock adapter, no network
+**Run**: `pytest tests/test_tibber_extraction.py -v`
+
+**Coverage**:
+- Charging state (SoC, target SoC, plug/charging status)
+- Range conversion (meters → km)
+- Bare-VIN vs. `vendor:VIN` externalId formats
+
+### 4. Integration Tests: MCP Server (1 test)
 **What**: MCP protocol layer (Client ↔ Server)
 **Fixtures**: `adapter`, `mcp_server`, `mcp_client`
 **Run**: `pytest tests/test_mcp_server.py -v`
@@ -102,16 +115,6 @@ pytest tests/ --cov=src/weconnect_mcp --cov-report=html
 - Vehicle identifiers (VINs, names, license plates)
 - Expected values for all scenarios
 - Helper functions for parametrized tests
-
-## Pytest Markers
-
-```python
-@pytest.mark.real_api    # Reserved for a real Tibber API test, requires tibber_config.json (unused today)
-@pytest.mark.slow        # Slow test (network I/O)
-```
-
-Both are excluded by default (see `pytest.ini`'s `addopts`), but no current
-test carries either marker.
 
 ## Best Practices
 

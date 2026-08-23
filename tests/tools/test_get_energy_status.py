@@ -24,7 +24,6 @@ Test data:
 - Electric vehicle: ID.7 Tourer with 80% battery, 312km range
 - Combustion vehicle: Transporter 7 with 68% tank, 650km range
 """
-import pytest
 from test_data import (
     VIN_ELECTRIC,
     VIN_COMBUSTION,
