@@ -12,7 +12,7 @@ Thanks for your interest in contributing to the WeConnect MCP Server! Contributi
    - `docs:` for documentation changes
    - `test:` for test additions/modifications
    - `refactor:` for code refactoring
-4. **Add tests** for your changes - all 36 tests must pass
+4. **Add tests** for your changes - all 46 tests must pass
 5. **Update documentation** if you change APIs or add features
 6. **Open a Pull Request** with a clear description of what you changed and why
 
@@ -48,7 +48,7 @@ python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json  # one-time 
 **All tests must pass before submitting a PR:**
 
 ```bash
-# Run the test suite (36 tests, ~0.1 seconds)
+# Run the test suite (46 tests, ~0.1 seconds)
 ./scripts/test.sh
 ```
 

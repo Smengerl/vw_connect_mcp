@@ -185,15 +185,16 @@ hints)]` — missing/malformed risks throttling. Use exponential backoff with fu
 ```
 src/weconnect_mcp/
 ├── adapter/
-│   ├── abstract_adapter.py       # AbstractAdapter (ABC) + Pydantic models — the port
-│   ├── tibber_adapter.py         # TibberAdapter(CacheMixin, VehicleResolutionMixin,
-│   │                             #   TibberStateExtractionMixin, AbstractAdapter)
+│   ├── abstract_adapter.py       # AbstractAdapter (ABC) + Pydantic models — the port.
+│   │                             #   Also owns resolve_vehicle_id (VIN/name/license-plate
+│   │                             #   → VIN), a concrete default every adapter inherits.
+│   ├── tibber_adapter.py         # TibberAdapter(CacheMixin, TibberStateExtractionMixin,
+│   │                             #   AbstractAdapter)
 │   ├── starting_adapter.py       # No-op stub used during async startup (HTTP mode)
 │   ├── tibber_client.py          # TibberDataAPI: OAuth2 (Auth Code + PKCE) client, TokenStore
 │   └── mixins/
 │       ├── cache_mixin.py                   # 5-min data cache
-│       ├── vehicle_resolution_mixin.py      # VIN/name/license-plate → VIN resolution
-│       └── tibber_state_extraction_mixin.py # Maps the 5 capabilities into ChargingModel/RangeModel
+│       └── tibber_state_extraction_mixin.py # Maps the 5 capabilities into ChargingModel + range_km
 └── server/
     └── mixins/
         ├── read_tools.py         # The 5 MCP tools

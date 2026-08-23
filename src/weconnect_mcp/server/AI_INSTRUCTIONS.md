@@ -182,9 +182,9 @@ There is no command tool of any kind. If the user wants control, say so directly
 
 ### Architecture (Internal)
 The server uses a modular mixin-based architecture:
-- **CacheMixin**: Handles data caching and invalidation
-- **VehicleResolutionMixin**: Resolves names/VINs to vehicle identifiers
+- **CacheMixin**: Handles data caching (freshness tracking, expiry checks)
 - **TibberStateExtractionMixin**: Extracts charging/range state from Tibber's 5-capability device-detail response
+- **AbstractAdapter.resolve_vehicle_id**: Resolves names/VINs/license plates to vehicle identifiers (a concrete default on the base class, not a separate mixin — every adapter inherits the same one implementation)
 - **TibberAdapter** (`src/weconnect_mcp/adapter/tibber_adapter.py`): Orchestrates the above. `AbstractAdapter` only declares the methods Tibber can actually back (`list_vehicles`, `get_vehicle`, `get_energy_status`, `shutdown`) — there are no command methods or physical/climate/position/maintenance read methods to be no-ops in the first place.
 - **TibberDataAPI** (`src/weconnect_mcp/adapter/tibber_client.py`): OAuth2 (Authorization Code + PKCE) client. Requires a token file produced once, interactively, by `weconnect_mcp.cli.tibber_login_cli` — the adapter itself never opens a browser.
 

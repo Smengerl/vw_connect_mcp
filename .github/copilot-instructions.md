@@ -1,10 +1,10 @@
 # GitHub Copilot Instructions for WeConnect MCP
 
 **Type**: MCP Server (Python) for vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) — originally built for Volkswagen, but **not VW-specific**: Tibber's integration runs through Enode (30+ EV brands), so any vehicle paired to the connected Tibber account works identically
-**Architecture**: Modular adapter with mixins (`CacheMixin`, `VehicleResolutionMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`
+**Architecture**: Modular adapter with mixins (`CacheMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`; vehicle identifier resolution is a concrete default method on `AbstractAdapter` itself, not a separate mixin
 **Key Library**: `fastmcp` (MCP server framework). No third-party VW API library is used — the old `carconnectivity` (VW-direct) backend was removed after VW blocked third-party access; its code lives on, unmaintained, on the permanent `carconnectivity` git branch.
 **Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)
-**Test Suite**: 36 tests (all mock, no real API calls) — **ALL 36 MUST PASS** before committing
+**Test Suite**: 46 tests (all mock/offline, no real API calls) — **ALL 46 MUST PASS** before committing
 
 > For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**. For the AI-facing description of the tool surface (kept in sync with the actual tools) see **src/weconnect_mcp/server/AI_INSTRUCTIONS.md**.
 
@@ -50,17 +50,15 @@ compose functionality:
 ```python
 class TibberAdapter(
     CacheMixin,                  # Caching with 5-min TTL
-    VehicleResolutionMixin,      # Resolve VIN/name/license plate to vehicle
     TibberStateExtractionMixin,  # Extract charging/range state from Tibber's device-detail response
-    AbstractAdapter               # Base class (abstract interface)
-):
+    AbstractAdapter               # Base class (abstract interface) -- also provides
+):                                #   resolve_vehicle_id (VIN/name/license plate) as a concrete default
     ...
 ```
 
 | Mixin | File |
 |---|---|
 | `CacheMixin` | `src/weconnect_mcp/adapter/mixins/cache_mixin.py` |
-| `VehicleResolutionMixin` | `src/weconnect_mcp/adapter/mixins/vehicle_resolution_mixin.py` |
 | `TibberStateExtractionMixin` | `src/weconnect_mcp/adapter/mixins/tibber_state_extraction_mixin.py` |
 | `TibberAdapter` (composes the above) | `src/weconnect_mcp/adapter/tibber_adapter.py` |
 | `AbstractAdapter` + Pydantic models | `src/weconnect_mcp/adapter/abstract_adapter.py` |
@@ -91,8 +89,10 @@ vehicle types for test purposes.
 ### Caching Strategy
 - **Duration**: 5 minutes (300 seconds) via `CacheMixin`
 - **Purpose**: Be a polite Tibber API citizen (Tibber's docs ask clients to avoid excessive polling)
-- **No auto-invalidation on write** — there are no commands to invalidate after. `invalidate_cache()`
-  exists on `AbstractAdapter`/`CacheMixin` but nothing in this codebase calls it.
+- **No cache invalidation exists** — there are no commands that would ever need to force a
+  refresh, so `invalidate_cache()` was removed entirely (it used to exist on both
+  `AbstractAdapter` and `CacheMixin` but nothing called it). Don't reintroduce it without a real
+  caller.
 
 ### What Tibber Actually Reports (5 capabilities)
 Extracted in `TibberStateExtractionMixin` from a Tibber device-detail response's flat
@@ -110,7 +110,7 @@ Extracted in `TibberStateExtractionMixin` from a Tibber device-detail response's
 
 ## Testing Guidelines (CRITICAL)
 
-**Golden Rule**: All 36 tests MUST pass before committing. No exceptions.
+**Golden Rule**: All 46 tests MUST pass before committing. No exceptions.
 **Always use `./scripts/test.sh`** (not `pytest` directly) — see `tests/README.md` for full test
 structure and commands. `--skip-slow` is accepted but currently a no-op: there are no slow/real-API
 tests (the Tibber API is read-only, so the mock adapter already covers everything it can return).
@@ -121,7 +121,8 @@ tests/
   conftest.py            # shared fixtures: adapter, mcp_server, mcp_client
   test_adapter.py         # TestAdapter — mock AbstractAdapter implementation (NOT in the adapter package)
   test_data.py            # shared VIN constants + expected-value dicts
-  test_caching.py
+  test_caching.py         # CacheMixin behavior (via a minimal concrete subclass)
+  test_tibber_extraction.py  # TibberStateExtractionMixin + vin_from_external_id, real fixture data
   test_mcp_server.py      # MCP protocol / tool-registration tests
   tools/
     test_get_vehicle.py
@@ -161,7 +162,7 @@ Prefer the `adapter` fixture from `conftest.py` (module-scoped `TestAdapter()`) 
 3. **Implement feature** — minimum code to pass
 4. **Run test** — should pass (green)
 5. **Run ALL tests**: `./scripts/test.sh`
-6. **Commit only if all 36 tests pass**
+6. **Commit only if all 46 tests pass**
 
 ### Using TestAdapter (Mock)
 
@@ -325,7 +326,7 @@ These four are the source of truth for the exposed interface and must stay consi
 4. Register the tool in `src/weconnect_mcp/server/mixins/read_tools.py`
 5. Add tests in `tests/tools/test_*.py`
 6. Update `README.md` and `src/weconnect_mcp/server/AI_INSTRUCTIONS.md` (see "Keeping Docs in Sync" above)
-7. Run tests: `./scripts/test.sh` (all 36+ must pass)
+7. Run tests: `./scripts/test.sh` (all 46+ must pass)
 
 ### There is no "Add New Command" section
 No command surface exists on this backend — see "Critical Context" above.

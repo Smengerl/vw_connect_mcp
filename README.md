@@ -1,7 +1,7 @@
 # weconnect_mvp — MCP Server for Connected Vehicles via Tibber
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
@@ -682,9 +682,9 @@ Run the test suite with:
 
 **Test Structure:**
 
-- **36 tests** - Run in ~0.1 seconds, no Tibber account needed (uses a mock adapter)
+- **46 tests** - Run in ~0.1 seconds, no Tibber account needed (mock adapter + real fixture data)
 - No slow/real-API tests exist today — the Tibber Data API is read-only, so there's nothing beyond
-  what the mock adapter already covers
+  what the mock adapter and the extraction-logic fixtures already cover
 
 For detailed test documentation, see [tests/README.md](tests/README.md)
 

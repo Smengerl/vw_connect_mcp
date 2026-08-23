@@ -29,7 +29,6 @@ src/weconnect_mcp/
 │   ├── tibber_client.py          # TibberDataAPI: OAuth2 (Auth Code + PKCE) client
 │   └── mixins/
 │       ├── cache_mixin.py                  # 5-min data cache
-│       ├── vehicle_resolution_mixin.py     # VIN/name/license-plate → VIN resolution
 │       └── tibber_state_extraction_mixin.py # Extract charging/range from Tibber's response
 ├── server/
 │   ├── mcp_server.py             # get_server() — builds the FastMCP instance
@@ -44,11 +43,13 @@ src/weconnect_mcp/
 ```
 
 `AbstractAdapter` only declares what Tibber can actually back: `list_vehicles`,
-`get_vehicle`, `get_energy_status`, `shutdown`, plus concrete defaults
-`resolve_vehicle_id`/`invalidate_cache`. There is **no** MCP Resources layer
-(deliberately removed — a 1:1 duplicate of the tools with no benefit for the
-clients this targets) and **no** command/write tools (Tibber's API has no
-write endpoints at all).
+`get_vehicle`, `get_energy_status`, `shutdown`, plus a concrete default
+`resolve_vehicle_id` (VIN/name/license-plate resolution — the single
+implementation every adapter inherits; there is no separate resolution
+mixin, and no `invalidate_cache` either, since nothing ever calls it). There
+is **no** MCP Resources layer (deliberately removed — a 1:1 duplicate of
+the tools with no benefit for the clients this targets) and **no**
+command/write tools (Tibber's API has no write endpoints at all).
 
 ### MCP surface (keep README.md and AI_INSTRUCTIONS.md in sync with this)
 
@@ -84,13 +85,16 @@ registration file itself.
 ./scripts/test.sh -v       # verbose
 ```
 
-36 tests total, all against `tests/test_adapter.py`'s `TestAdapter` mock (2
+46 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
 fake vehicles: electric ID.7 Tourer, combustion Transporter 7 — see that
-file's docstring for exact values). No slow/real-API test suite exists: the
-Tibber Data API is read-only, so the mock adapter already covers everything
-the real API could return. See `tests/README.md` for full structure.
+file's docstring for exact values), plus `test_tibber_extraction.py`, which
+exercises `TibberStateExtractionMixin`/`vin_from_external_id` directly
+against real fixture data from `ARCHITECTURE.md` §3.1 (no mock adapter
+involved). No slow/real-API test suite exists beyond that: the Tibber Data
+API is read-only, so mock + fixture coverage is everything there is to
+test. See `tests/README.md` for full structure.
 
-**All 36 tests must pass before committing.** When adding a tool, add tests
+**All 46 tests must pass before committing.** When adding a tool, add tests
 under `tests/tools/test_<name>.py` following the existing pattern (success
 case, vehicle-not-found case, edge cases).
 
