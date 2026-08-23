@@ -1,21 +1,33 @@
 # Tibber Data API — login-flow Hello World
 
 Proof-of-concept for reaching VW vehicle data via the **Tibber Data API**
-(the sanctioned route now that direct VW BFF access is blocked). This first
-step focuses on the **OAuth2 login flow**; reading detailed vehicle state
-(SoC, range, charging) is a thin follow-up once auth works.
+(the sanctioned route now that direct VW BFF access is blocked). This
+started as a standalone OAuth2-login-flow experiment — it has since grown
+into the actual production backend of this project: `tibber_client.py`
+was promoted into `src/weconnect_mcp/adapter/tibber_client.py`, and
+`TibberAdapter` (`src/weconnect_mcp/adapter/tibber_adapter.py`) is now the
+**default** MCP server backend (see the top-level
+[`README.md`](../../README.md#choosing-a-backend)). This folder still holds
+the original PoC scripts (useful for quick experimentation and for
+inspecting raw API responses) plus the research behind all of it.
 
-See [`TIBBER_API.md`](TIBBER_API.md) for the full API reference and research
-log. Modelled on evcc's implementation
+See [`TIBBER_API.md`](TIBBER_API.md) for the full API reference, architecture
+analysis, and research log. Modelled on evcc's implementation
 ([PR #30487](https://github.com/evcc-io/evcc/pull/30487)).
+
+**Looking for how to actually *use* this (register a client, generate a
+token, run the MCP server, wire it into Claude Desktop/VS Code/Copilot
+Desktop)?** Jump to [Production Usage](#production-usage-mcp-server) below.
+The rest of this file (Setup/Run) is about the standalone PoC scripts in
+this folder specifically.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `tibber_client.py` | Reusable core: OAuth2 (auth code + PKCE), token store, REST calls. **This is the intended basis for the MCP adapter.** |
-| `hello_tibber.py` | Entry point: run login flow, then list homes + vehicles. |
-| `.env.example` | Template for client id/secret/redirect (copy to `.env`). |
+| `tibber_client.py` | Original PoC version of the OAuth2 client (auth code + PKCE), token store, REST calls. **Superseded by** `src/weconnect_mcp/adapter/tibber_client.py`, which is what the MCP server actually runs — kept here for reference/experimentation, not used by the production code. |
+| `hello_tibber.py` | PoC entry point: run login flow, then list homes + vehicles + full device detail. Good for quickly inspecting a raw API response; not used by the production code. |
+| `.env.example` | Template for client id/secret/redirect for the PoC scripts above (copy to `.env`, local to this folder only). **Not** the file the production server reads — see [Production Usage](#production-usage-mcp-server). |
 
 ## Setup
 
@@ -80,18 +92,150 @@ log. Modelled on evcc's implementation
 Expected output: your Tibber home(s) and the VW vehicle(s) paired to the
 account, followed by the full raw device detail (see below).
 
+## Production Usage (MCP server)
+
+This is the actual, current way to run the MCP server against Tibber —
+distinct from the PoC scripts above, which exist for experimentation only.
+Same OAuth2 client and scopes from [Setup](#setup) above; different
+credentials file and entry points.
+
+### 1. Configure credentials
+
+Unlike the PoC's `.env` (local to this folder), the production server reads
+`src/tibber_config.json` (repo root's `src/`, gitignored — see
+`src/tibber_config.example.json` for the template):
+
+```bash
+cd ../..   # back to the repo root
+cp src/tibber_config.example.json src/tibber_config.json
+```
+
+Edit it with your client id/secret from [Setup](#setup):
+
+```json
+{
+  "client_id": "your-tibber-client-id-here",
+  "client_secret": "your-tibber-client-secret-here",
+  "redirect_uri": "http://localhost:8515/callback",
+  "token_path": "/absolute/path/to/weconnect_mvp/tibber_tokens.json"
+}
+```
+
+`token_path` can be relative (default `./tibber_tokens.json`, resolved
+against whatever process launches the server — an **absolute** path avoids
+any ambiguity, especially when an MCP client like Claude Desktop launches
+the server with its own working directory). Environment variables
+(`TIBBER_CLIENT_ID`, `TIBBER_CLIENT_SECRET`, `TIBBER_REDIRECT_URI`,
+`TIBBER_TOKEN_PATH`) override this file's values when both are present —
+see `_build_tibber_adapter()` in `src/weconnect_mcp/cli/mcp_server_cli.py`.
+
+### 2. Generate the token (the actual login step)
+
+This is the one interactive step that has to happen locally — a server
+process (especially a headless one, e.g. in Docker) can never do this
+itself, since it needs a real browser and a human clicking "allow":
+
+```bash
+python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json
+```
+
+A browser opens for Tibber login + consent. On success, this writes the
+token to the `token_path` from your config file (or `TIBBER_TOKEN_PATH`/the
+`./tibber_tokens.json` default if you're using environment variables
+instead of a config file) with `0600` permissions, and prints the
+vehicle(s) found in your Tibber account as a sanity check. You will not be
+asked to log in again after this — every subsequent run of the MCP server
+just refreshes this token non-interactively, for as long as the resulting
+`refresh_token` stays valid (see the troubleshooting note below for what
+"stays valid" means in practice).
+
+The config file argument is optional — omit it to fall back to
+`TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET`/etc. environment variables
+instead, with identical precedence to the server itself
+(`--backend tibber`).
+
+### 3. Start the MCP server
+
+`tibber` is the default backend, so no flags are strictly required if you
+used `src/tibber_config.json` above:
+
+```bash
+python -m weconnect_mcp.cli.mcp_server_cli src/tibber_config.json
+```
+
+(Explicit `--backend tibber` also works and is harmless, since it's already
+the default — see the top-level [README.md](../../README.md#cli-parameters).)
+
+### 4. Wire it into an AI assistant
+
+Use the project's generator scripts rather than hand-editing an MCP
+client's config — they already point at `src/tibber_config.json` with
+`--backend tibber` and warn you if that file doesn't exist yet:
+
+```bash
+./scripts/create_claude_config.sh            # Claude Desktop
+./scripts/create_github_copilot_config.sh    # VS Code Copilot
+./scripts/create_copilot_desktop_config.sh   # Microsoft Copilot Desktop
+```
+
+If you're hand-editing an existing MCP client config instead (e.g. merging
+`weconnect` alongside other MCP servers you already have configured), make
+sure the entry has all of: the config file path, `--backend`, `tibber`, and
+a `"cwd"` pointing at this repo — a missing `"cwd"` lets a relative
+`token_path` resolve against the *client's* working directory instead of
+this project's, which is a real, previously-hit failure mode, not a
+theoretical one.
+
+### Troubleshooting: "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set"
+
+Means neither the config file nor environment variables supplied
+credentials — check `src/tibber_config.json` exists and has the right keys,
+or that the env vars are actually reaching the process (an MCP client like
+Claude Desktop does **not** inherit your shell's `export`s — see
+[Security](#security) below and the top-level README's
+[Choosing a Backend](../../README.md#choosing-a-backend)).
+
+### Troubleshooting: "No cached Tibber tokens found" / `TibberAuthError`
+
+Run step 2 above (`tibber_login_cli`) — this backend never opens a browser
+on its own, by design, so a missing token always needs that manual step.
+
+### Troubleshooting: "Token endpoint returned 400: {\"error\":\"invalid_grant\"}"
+
+Your `refresh_token` has been invalidated — either it expired (~30 days),
+was revoked, or was rotated away by a *different* successful refresh (Tibber
+rotates refresh tokens; confirmed live, see `TIBBER_API.md` §3.4 — every
+successful `grant_type=refresh_token` call returns a **new** refresh token,
+which invalidates whichever one you had cached elsewhere). This is not
+recoverable from client id/secret alone — Tibber has no
+`client_credentials` grant (same §3.4) — so just re-run step 2. Your
+existing `client_id`/`client_secret` remain valid; only the token itself
+needs regenerating. **Don't repeatedly test raw `refresh_token` grant calls
+against Tibber's token endpoint outside of this tool's own refresh
+logic** (e.g. via manual `curl` experiments) — each one rotates the token,
+and if the rotated copy isn't the one your running server actually
+persists, you'll invalidate your own working session this way.
+
 ## Security
 
-- `.env` and `.tibber_tokens.json` are gitignored (locally here **and** at
-  the repo root). Secrets/tokens must never be committed.
+- PoC files: `.env` and `.tibber_tokens.json` (local to this folder).
+  Production files: `src/tibber_config.json` and whatever `token_path`
+  points at (default `./tibber_tokens.json` at the repo root). **All** of
+  these are gitignored — secrets/tokens must never be committed.
 - The token cache is written with `0600` permissions.
 - The client never logs the client secret or tokens (only HTTP error bodies
   from the token endpoint, which do not echo the request).
+- An MCP client (Claude Desktop, VS Code) launches the server with its
+  **own** environment, not your shell's — `export`ed env vars never reach
+  it. That's why production credentials go in `src/tibber_config.json`
+  rather than only environment variables; see
+  [Production Usage](#production-usage-mcp-server) above.
 
 ## Notes / limitations
 
 - The Tibber Data API is **read-only** — there is no charging/climate
-  control endpoint (see `TIBBER_API.md` §5). This PoC can read status only.
+  control endpoint (see `TIBBER_API.md` §5). Neither this PoC nor the
+  production `TibberAdapter` can do more than read status.
 - `offline_access` scope is required to receive a refresh token.
 
 ## Data point comparison: Tibber Data API vs. CarConnectivity
