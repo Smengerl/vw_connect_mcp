@@ -26,6 +26,14 @@
 > reason. See [Choosing a Backend](#choosing-a-backend) below — and
 > [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md)
 > for the full research behind it.
+>
+> **`carconnectivity` is deprecated on this branch.** `main` currently still contains both
+> backends, but since `carconnectivity` (VW-direct) is non-functional for the reasons above and
+> there is no indication VW will restore access, it is being removed from `main` entirely —
+> tracked in [`cleanup/remove-carconnectivity`](https://github.com/Smengerl/vw_connect_mcp/tree/cleanup/remove-carconnectivity).
+> Once that lands, `main` will be Tibber-only. The VW-direct code remains permanently available,
+> unmaintained, on the [`carconnectivity` branch](https://github.com/Smengerl/vw_connect_mcp/tree/carconnectivity)
+> for anyone who wants it if VW access is ever restored.
 
 **MCP Server for Volkswagen Vehicles**  
 A developer-focused server that exposes information from VW vehicles via a Model Context Protocol (MCP) interface. This project is designed for integration, automation, and experimentation with connected car data.
