@@ -10,6 +10,6 @@ dockerfilePath = "Dockerfile"
 # Railway injects $PORT at runtime; image default is 8080 (ENV PORT=8080 in Dockerfile).
 # healthcheckPath must respond 200 without authentication.
 healthcheckPath = "/health"
-healthcheckTimeout = 300     # seconds – VW API login takes up to 30s + build overhead
+healthcheckTimeout = 300     # seconds – Tibber token refresh takes up to 30s + build overhead
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

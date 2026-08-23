@@ -80,16 +80,16 @@ Verify comprehensive test coverage exists:
 - Unit tests should cover core functionality
 - Tests should be organized by feature/module
 - Both success and error cases should be tested
-- Mock tests should not require real VW API credentials
-- Integration tests should be clearly marked (slow/real_api markers)
+- Mock tests should not require real Tibber API credentials
+- Tests exercising real capability-parsing logic should use fixture data
+  from ARCHITECTURE.md rather than only a mock adapter
 
 **Expected Test Structure:**
 ```
 tests/
-├── commands/          # Command execution tests
-├── tools/            # MCP tool tests
-├── test_caching.py   # Cache behavior tests
-├── test_carconnectivity_adapter.py
+├── tools/                     # MCP tool tests
+├── test_caching.py            # CacheMixin behavior tests
+├── test_tibber_extraction.py  # Tibber capability parsing + VIN extraction
 └── test_mcp_server.py
 ```
 
@@ -118,7 +118,8 @@ Ensure all CLI scripts are documented in README.md with usage examples:
 - `start_server_fg.sh` - Start server in foreground
 - `start_server_bg.sh` - Start server in background
 - `stop_server_bg.sh` - Stop background server
-- `vehicle_command.sh` - Vehicle command execution
+- `start_server_http.sh` - Start server in HTTP mode
+- `test_mcp_auth.sh` - End-to-end MCP OAuth smoke test
 
 **What to Check:**
 ```bash

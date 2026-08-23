@@ -173,12 +173,6 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
    where python
    ```
 
-4. **Run diagnostic tool:**
-
-   ```powershell
-   & .\scripts\diagnose_python.ps1
-   ```
-
 ### Setting Up Tibber Credentials
 
 1. **Register an OAuth2 client** at <https://data-api.tibber.com/clients/manage/> — see

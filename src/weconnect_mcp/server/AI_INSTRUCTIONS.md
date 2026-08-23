@@ -75,7 +75,7 @@ Use either:
 Both formats work automatically. `license_plate` is always `null` (not available via Tibber).
 
 ### 3. Read Vehicle Data
-Use `get_vehicles`, `get_vehicle_info`, `get_battery_status`, `get_charging_status` — these are the only 5 tools that exist.
+Use `get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status` — these are the only 5 tools that exist.
 
 ### 4. Do NOT Attempt Control
 There is no command tool in this deployment. If the user wants to lock the car, precondition the cabin, or start charging, tell them this server can only read status, not control the vehicle.
