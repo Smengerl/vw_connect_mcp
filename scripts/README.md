@@ -87,10 +87,12 @@ generated `claude_desktop_config.json` / `mcp.json`.
 
 The `tibber` backend additionally needs a one-time interactive login before
 first use (a browser step that can't run inside the MCP server process
-itself):
+itself). It takes the same optional credentials-file argument as the
+server, with identical file/env precedence:
 
 ```bash
-python -m weconnect_mcp.cli.tibber_login_cli
+python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json   # if using the file
+python -m weconnect_mcp.cli.tibber_login_cli                          # if using env vars
 ```
 
 **For Docker/Railway specifically**, that login can't run inside the

@@ -60,7 +60,7 @@ Get up and running in 3 steps:
    ```bash
    cp src/tibber_config.example.json src/tibber_config.json
    # edit src/tibber_config.json with your client_id/client_secret
-   python -m weconnect_mcp.cli.tibber_login_cli   # one-time interactive login
+   python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json   # one-time interactive login
    ```
    See [Choosing a Backend](#choosing-a-backend) for where to get the client id/secret.  
    (Or, if VW access is available to you: edit `src/config.json` with your VW credentials and
@@ -152,19 +152,32 @@ third-party access, switch back with `--backend carconnectivity`.
    export TIBBER_TOKEN_PATH="./tibber_tokens.json"                # optional, this is the default
    ```
 3. **Run the one-time interactive login** (opens a browser; only needs to be done once — the
-   server itself never opens a browser, it only refreshes the resulting token non-interactively):
+   server itself never opens a browser, it only refreshes the resulting token non-interactively).
+   `tibber_login_cli` takes the same optional credentials-file argument as the server, with
+   identical file/env precedence — pass it if you used Option A above:
    ```bash
-   python -m weconnect_mcp.cli.tibber_login_cli
+   python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json   # Option A (file)
+   python -m weconnect_mcp.cli.tibber_login_cli                          # Option B (env vars)
    ```
+   On success this writes the token to `token_path` (from the file, or `TIBBER_TOKEN_PATH`/its
+   `./tibber_tokens.json` default) and lists the vehicle(s) found in your Tibber account. You
+   won't be asked to log in again — every later run just refreshes this token.
 4. **Start the server** — `tibber` is the default backend, and the config file is optional
    (pass it if you used Option A above):
    ```bash
    python -m weconnect_mcp.cli.mcp_server_cli [src/tibber_config.json]
    ```
 
-`./scripts/create_claude_config.sh` and `./scripts/create_github_copilot_config.sh` (see
-[Quick Start](#quick-start)) already generate configs pointing at `src/tibber_config.json` — no
-manual editing of the generated MCP client config needed.
+`./scripts/create_claude_config.sh`, `./scripts/create_github_copilot_config.sh`, and
+`./scripts/create_copilot_desktop_config.sh` (see [Quick Start](#quick-start)) already generate
+configs pointing at `src/tibber_config.json` with `--backend tibber` and a correct `"cwd"` — no
+manual editing of the generated MCP client config needed. If you hand-edit an MCP client config
+instead, make sure it has a `"cwd"` pointing at this repo: without one, a relative `token_path`
+resolves against the *client's* working directory (e.g. Claude Desktop's own), not this project's
+— a real failure mode, not a theoretical one. See
+[`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md#production-usage-mcp-server)
+for the full walkthrough plus troubleshooting for specific error messages (missing credentials, no
+cached token, `invalid_grant`).
 
 ### Setting Up the CarConnectivity Backend (VW-direct, currently blocked)
 
@@ -706,7 +719,9 @@ Every `git push` followed by `railway up` redeploys the service.
 ```bash
 cp .env.example .env   # fill in your real credentials
 
-# Tibber backend only, first run: seed the token (see the caveat above)
+# Tibber backend only, first run: seed the token (see the caveat above).
+# tibber_login_cli doesn't load .env itself, so export it into the shell first:
+set -a && source .env && set +a
 python -m weconnect_mcp.cli.tibber_login_cli
 echo "TIBBER_TOKEN_JSON=$(cat tibber_tokens.json)" >> .env
 

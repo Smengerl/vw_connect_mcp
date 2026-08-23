@@ -45,7 +45,7 @@ only needed if you're testing against a live backend:
   ```bash
   cp src/tibber_config.example.json src/tibber_config.json
   nano src/tibber_config.json  # Add your Tibber OAuth2 client credentials
-  python -m weconnect_mcp.cli.tibber_login_cli  # one-time interactive login
+  python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json  # one-time interactive login
   ```
 
 ## Testing Requirements
