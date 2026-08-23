@@ -1154,6 +1154,22 @@ consumer of this API, not just that one integration:
   himself (interactive, needs his browser) before Claude Desktop's
   `weconnect` server will actually connect.
 
+### 2026-08-23 — production usage flow documented in the experiment README
+- `experiment/tibber-integration/README.md` was still entirely framed
+  around the original `hello_tibber.py` PoC from before `TibberAdapter`
+  existed — no mention of `src/tibber_config.json`, the config-file-aware
+  `tibber_login_cli`, or how to actually wire the server into an AI
+  client. Added a "Production Usage (MCP server)" section covering the
+  real current flow end-to-end (configure → generate token → start server
+  → wire into Claude Desktop/VS Code/Copilot Desktop), plus three
+  troubleshooting entries for the exact errors hit while fixing Simon's
+  Claude Desktop connection in the entry above (missing credentials,
+  missing token, `invalid_grant`).
+- Also tightened the `Files`/`Security`/`Notes` sections to stop
+  conflating the PoC's local `.env`/`.tibber_tokens.json` with the
+  production `src/tibber_config.json`/`token_path` — they're separate
+  files with separate purposes and that wasn't previously clear.
+
 <!--
 Add new entries above this line, newest at the bottom, oldest at the top —
 do not delete or rewrite prior entries, append instead. Update §1's Status
