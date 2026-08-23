@@ -7,10 +7,11 @@ Project guidance for Claude Code sessions working in this repository.
 An MCP (Model Context Protocol) server that exposes vehicle data to AI
 assistants (Claude Desktop, VS Code Copilot, Claude Code, ChatGPT, Claude.ai)
 via the **Tibber Data API** — read-only. Originally built for Volkswagen
-(direct VW API access is blocked to third parties, see the warning at the
-top of `README.md`), but the Tibber backend is **not VW-specific**: Tibber's
-vehicle integration runs through Enode, covering 30+ EV brands, so any
-vehicle paired to the connected Tibber account works identically.
+(direct VW API access is blocked to third parties, see
+[What This Server Can Do](README.md#what-this-server-can-do) in `README.md`),
+but the Tibber backend is **not VW-specific**: Tibber's vehicle integration
+runs through Enode, covering 30+ EV brands, so any vehicle paired to the
+connected Tibber account works identically.
 
 There used to be a second backend (`carconnectivity`, VW-direct). It has
 been fully removed from `main`; that code lives on permanently, unmaintained,

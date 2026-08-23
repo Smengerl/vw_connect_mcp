@@ -5,34 +5,6 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
-> [!WARNING]
-> **VW API Access Currently Blocked for Third-Party and Open-Source Projects**
->
-> As of May 2026, Volkswagen has shut down the brand-app interface previously used by this project
-> and other third-party tools (Home Assistant, EVCC, openWB, …). Third-party clients — including
-> a direct VW-integration approach this project used to have — are **no longer able to connect**
-> to VW's backend.
->
-> The new interface requires cryptographic device attestation ("client assertion") proving that API
-> requests originate from an official VW app on an unmodified device. Open-source projects cannot
-> obtain this credential without a formal, paid partnership with VW Group Info Services. As of
-> June 2026, **no simple alternative is known** for open-source projects. VW has stated they are
-> in dialogue with the open-source community, but no concrete solution has been announced.
->
-> [Transition to next-generation vehicle data interfaces](https://drivesomethinggreater.com/newsroom/short-news/2026-4-02-Transition) (April 2, 2026)
->
-> **This project's answer**: it now runs entirely on the read-only
-> [Tibber Data API](https://data-api.tibber.com/docs/) (Tibber is an official VW integration
-> partner and can still reach VW vehicle data) — see [Getting Started](#getting-started) below and
-> [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md)
-> for the full research behind it.
->
-> The previous VW-direct integration (via the `carconnectivity` library) is non-functional for the
-> reasons above, with no indication VW will restore access. Its code has been removed from this
-> branch entirely, but remains permanently available, unmaintained, on the
-> [`carconnectivity` branch](https://github.com/Smengerl/vw_connect_mcp/tree/carconnectivity) for
-> anyone who wants it if VW access is ever restored.
-
 **MCP Server for Vehicles via the Tibber Data API**  
 A developer-focused server that exposes vehicle data via a Model Context Protocol (MCP) interface. Originally built for Volkswagen vehicles — but since moving to the Tibber Data API backend, **it isn't limited to VW**: Tibber's vehicle integration is built on [Enode](https://enode.com), which covers 30+ EV brands (VW Group included), so any vehicle paired to your Tibber account works identically, regardless of make. This project is designed for integration, automation, and experimentation with connected car data.
 
@@ -105,7 +77,8 @@ For detailed instructions, see sections below.
 
 - **MCP Server**: Provides a standard MCP interface for accessing vehicle data
 - **Tibber Data API backend** — read-only, via [Tibber](https://data-api.tibber.com/docs/) (an
-  official VW integration partner); works despite VW's third-party API block (see warning above)
+  official VW integration partner); works despite VW's third-party API block (see
+  [What This Server Can Do](#what-this-server-can-do))
 - **Not limited to VW**: Tibber's vehicle integration (via [Enode](https://enode.com)) covers
   30+ EV brands, not only VW Group — any vehicle paired to your Tibber account works the same way
 - **AI Assistant Ready**: Works with Claude Desktop, VS Code Copilot, ChatGPT, Claude.ai and other MCP-compatible tools
@@ -116,18 +89,29 @@ For detailed instructions, see sections below.
 
 ## What This Server Can Do
 
+> [!NOTE]
+> **Why Tibber, not VW directly?** In May 2026, VW shut down third-party access to its WeConnect
+> API (new device-attestation requirements open-source projects can't obtain — see
+> [`experiment/vw-device-flow-attestation-bypass/FINDING.md`](experiment/vw-device-flow-attestation-bypass/FINDING.md)).
+> This project's original direct integration (the `carconnectivity` library) stopped working
+> because of that, so the whole server was redesigned around the read-only
+> [Tibber Data API](https://data-api.tibber.com/docs/) instead. The old VW-direct code still
+> exists, unmaintained, on the permanent
+> [`carconnectivity` branch](https://github.com/Smengerl/vw_connect_mcp/tree/carconnectivity).
+>
+> That redesign is a trade-off: it loses most of what the old integration could do (see below),
+> but in exchange it's no longer VW-specific — Tibber's vehicle integration covers 30+ EV brands,
+> so this server now works with any vehicle paired to your Tibber account, not just VW.
+
 The Tibber Data API is **read-only** and covers only what Tibber's 5 confirmed vehicle
 capabilities expose: identity (VIN, brand, model, name, online state) plus charging/range (state
 of charge, target SoC, remaining range, plug status, charging state) for electric vehicles. There
 is no door/window/tyre/light/climate/GPS/maintenance data, and no remote commands (lock, climate,
 charging control, lights) at all — Tibber's API has no write endpoints whatsoever.
 
-**Vehicle compatibility**: this is a Tibber-generic capability set, not a VW-specific one. Tibber's
-integration is built on Enode, which supports 30+ EV brands — VW Group vehicles were what this
-project was built and verified against (the `brand` field, e.g. `"Volkswagen"`, comes straight
-through from Tibber), but any vehicle you've paired to your Tibber account works identically, no
-code changes needed. `vehicle_id` resolution (VIN/name/license-plate lookup) and the response
-shape are the same regardless of make.
+`vehicle_id` resolution (VIN/name/license-plate lookup) and the response shape are the same
+regardless of make — the `brand` field just reflects whatever your paired vehicle actually is
+(e.g. `"Volkswagen"` for the vehicle this project was built and verified against).
 
 See the full 51-point comparison against the old VW-direct data in
 [`experiment/tibber-integration/README.md`](experiment/tibber-integration/README.md) and the
