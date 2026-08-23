@@ -1,12 +1,22 @@
 # GitHub Copilot Instructions for WeConnect MCP
 
-**Type**: MCP Server (Python) for Volkswagen WeConnect vehicle data and control  
-**Architecture**: Modular adapter with mixins (CacheMixin, VehicleResolutionMixin, CommandMixin, StateExtractionMixin)  
-**Key Library**: `carconnectivity` (third-party VW API wrapper)  
-**Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)  
-**Test Suite**: 215 tests (197 mock + 18 real API) - **197 MOCK TESTS MUST PASS** before committing
+**Type**: MCP Server (Python) for Volkswagen vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/)
+**Architecture**: Modular adapter with mixins (`CacheMixin`, `VehicleResolutionMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`
+**Key Library**: `fastmcp` (MCP server framework). No third-party VW API library is used — the old `carconnectivity` (VW-direct) backend was removed after VW blocked third-party access; its code lives on, unmaintained, on the permanent `carconnectivity` git branch.
+**Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)
+**Test Suite**: 36 tests (all mock, no real API calls) — **ALL 36 MUST PASS** before committing
 
-> For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**.
+> For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**. For the AI-facing description of the tool surface (kept in sync with the actual tools) see **src/weconnect_mcp/server/AI_INSTRUCTIONS.md**.
+
+## Critical Context: Read-Only, Narrow Surface
+
+The Tibber Data API is **read-only** (no write/command endpoints exist at all) and exposes only
+identity + 5 charging/range capabilities for electric vehicles. There is no doors/windows/tyres/
+lights/climatization/GPS/maintenance data, and **no command tools of any kind** (no lock/unlock,
+climate control, charging control, lights, honk). Don't add a "command" mixin, a `CommandMixin`,
+or any `lock_vehicle()`/`start_charging()`-style method — there is nothing on the Tibber side to
+back it. If a data point or action isn't in the 5-tool list below, it doesn't exist for this
+backend; say so rather than guessing at a tool name.
 
 ## Code Style (Non-Negotiable)
 
@@ -20,236 +30,244 @@ def get_vehicle(vehicle_id):  # ❌ Bad - no types
 
 **Imports**: Standard library → Third-party → Local imports
 
-**None Handling**: ALWAYS check for `None` - VW API is unreliable
+**None Handling**: ALWAYS check for `None` — Tibber only reports a handful of fields, and many
+are `None` by design (not an error — a structural limitation of the API), not a runtime failure to guard against
 ```python
 # ✅ Good
-battery = vehicle.battery
-if battery is not None:
-    level = battery.level.value if battery.level is not None else None
+charging = energy_status.electric.charging
+if charging is not None:
+    soc = charging.current_soc_percent if charging.current_soc_percent is not None else None
 
 # ❌ Bad - will crash
-level = vehicle.battery.level.value
+soc = energy_status.electric.charging.current_soc_percent
 ```
 
 ## Architecture (Mixin Pattern)
 
-Main adapter uses **multiple inheritance** to compose functionality:
+`TibberAdapter` (`src/weconnect_mcp/adapter/tibber_adapter.py`) uses **multiple inheritance** to
+compose functionality:
 
 ```python
-class CarConnectivityAdapter(
-    CacheMixin,              # Caching with 5-min TTL
-    VehicleResolutionMixin,  # Resolve VIN/name to vehicle
-    CommandMixin,            # 10 vehicle control commands
-    StateExtractionMixin,    # Extract state from carconnectivity
-    AbstractAdapter          # Base class
+class TibberAdapter(
+    CacheMixin,                  # Caching with 5-min TTL
+    VehicleResolutionMixin,      # Resolve VIN/name/license plate to vehicle
+    TibberStateExtractionMixin,  # Extract charging/range state from Tibber's device-detail response
+    AbstractAdapter               # Base class (abstract interface)
 ):
     ...
 ```
 
+| Mixin | File |
+|---|---|
+| `CacheMixin` | `src/weconnect_mcp/adapter/mixins/cache_mixin.py` |
+| `VehicleResolutionMixin` | `src/weconnect_mcp/adapter/mixins/vehicle_resolution_mixin.py` |
+| `TibberStateExtractionMixin` | `src/weconnect_mcp/adapter/mixins/tibber_state_extraction_mixin.py` |
+| `TibberAdapter` (composes the above) | `src/weconnect_mcp/adapter/tibber_adapter.py` |
+| `AbstractAdapter` + Pydantic models | `src/weconnect_mcp/adapter/abstract_adapter.py` |
+| `TibberDataAPI` (OAuth2 + PKCE HTTP client) | `src/weconnect_mcp/adapter/tibber_client.py` |
+| `StartingAdapter` (no-op stub while HTTP-mode backend connects) | `src/weconnect_mcp/adapter/starting_adapter.py` |
+
 **Key Points**:
 - Each mixin = single responsibility
-- Type errors in isolated mixins are OK (resolved when combined)
-- All Pydantic models use `Optional` fields (VW API unreliable)
+- `AbstractAdapter` only declares what Tibber can actually back: `list_vehicles`, `get_vehicle`,
+  `get_energy_status`, `shutdown`. There are **no command methods** and no
+  physical/climate/position/maintenance read methods to stub out — they were removed from the
+  interface entirely rather than kept as permanent `None`/"not supported" no-ops.
+- All Pydantic models use `Optional` fields — most stay `None` for this backend by design.
 
 ## Important Domain Knowledge
 
 ### Vehicle Identification
-- **Name**: `"Golf"`, `"ID.7"` (preferred for readability)
-- **VIN**: `"WVWZZZAUZPW123456"` (unique identifier)
-- **License Plate**: ⚠️ **NOT SUPPORTED** - VW API doesn't provide this (as of Feb 2026)
+- **Name**: `"ID.7"` (preferred for readability), matched case-insensitively (partial match on name)
+- **VIN**: `"WVWZZZED4SE003938"` (unique identifier)
+- **License Plate**: ⚠️ **NOT SUPPORTED** — Tibber's API doesn't provide it; `license_plate` is always `null`
 
 ### Vehicle Types
-- **BEV** (Battery Electric Vehicle): Full electric (e.g., ID.7)
-- **PHEV** (Plug-in Hybrid): Electric + combustion
-- **Combustion**: Traditional fuel only
-
-**Key Point**: Battery/charging tools only work for BEV/PHEV!
+Tibber's VW integration **only ever reports electric vehicles**. `EnergyStatusModel.combustion` is
+always `None` for this backend; the `combustion` fields/models still exist in
+`abstract_adapter.py` only because `tests/test_adapter.py`'s mock covers both vehicle types for
+test purposes.
 
 ### Caching Strategy
 - **Duration**: 5 minutes (300 seconds) via `CacheMixin`
-- **Purpose**: Respect VW API rate limits
-- **Auto-invalidation**: Cache invalidates after any command (lock, climate, charging, etc.)
+- **Purpose**: Be a polite Tibber API citizen (Tibber's docs ask clients to avoid excessive polling)
+- **No auto-invalidation on write** — there are no commands to invalidate after. `invalidate_cache()`
+  exists on `AbstractAdapter`/`CacheMixin` but nothing in this codebase calls it.
 
-### Command Parameters
-- **Climate**: `target_temp_celsius` (float) - `start_climatization("Golf", 22.0)`
-- **Lights**: `duration_seconds` (int) - `flash_lights("Golf", 10)`
-- **Honk**: `duration_seconds` (int) - `honk_and_flash("Golf", 5)`
+### What Tibber Actually Reports (5 capabilities)
+Extracted in `TibberStateExtractionMixin` from a Tibber device-detail response's flat
+`capabilities` list:
 
-### Battery State of Charge (SOC) - Fallback Mechanism
+| Capability id | Meaning |
+|---|---|
+| `storage.stateOfCharge` | Current battery % |
+| `storage.targetStateOfCharge` | Target charge % |
+| `range.remaining` | Remaining range (meters — converted to km) |
+| `connector.status` | Plugged in? (`connected`/`disconnected`) |
+| `charging.status` | `charging`/`idle` |
 
-The battery SOC (State of Charge) is retrieved from **two sources** with automatic fallback:
-
-1. **Primary Source**: `vehicle.drives.drives['electric'].battery.level` (used in `_get_range_info()`)
-2. **Fallback Source**: `vehicle.battery.level` (used in `_get_charging_state()`)
-
-**Why fallback is needed**: VW API is unreliable. Sometimes `drives` data is unavailable (e.g., when vehicle is in low-power mode or hasn't communicated with WeConnect recently), but `battery` data is still present.
-
-**Implementation** (in `get_energy_status()`):
-```python
-# Try primary source (drives)
-if range_info and range_info.electric_drive:
-    battery_level = range_info.electric_drive.battery_level_percent
-
-# Fallback to charging state if drives data unavailable
-if battery_level is None and charging_state and charging_state.current_soc_percent is not None:
-    battery_level = charging_state.current_soc_percent
-```
-
-**Important**: SOC should be available **even when not charging**! The fallback ensures maximum data availability.
+`charging_power_kw` and `remaining_time_minutes` are always `None` — Tibber doesn't expose them.
 
 ## Testing Guidelines (CRITICAL)
 
-**Golden Rule**: All 197 mock tests MUST pass before committing. No exceptions.  
-**Always use `./scripts/test.sh --skip-slow`** (not `pytest` directly) — see `tests/README.md` for full test structure and commands.
+**Golden Rule**: All 36 tests MUST pass before committing. No exceptions.
+**Always use `./scripts/test.sh`** (not `pytest` directly) — see `tests/README.md` for full test
+structure and commands. `--skip-slow` is accepted but currently a no-op: there are no slow/real-API
+tests (the Tibber API is read-only, so the mock adapter already covers everything it can return).
 
-### Writing Tests - MANDATORY for New Features
-
-**Rule**: Every new feature MUST have tests covering:
-1. ✅ Success case (happy path)
-2. ✅ Error case (vehicle not found)
-3. ✅ Edge cases (None values, missing data)
-4. ✅ Type-specific behavior (BEV vs combustion)
-
-**Example - Adding a New Command**:
-```python
-# File: tests/commands/test_new_feature.py
-from weconnect_mcp.adapter import TestAdapter
-
-def test_new_command_success():
-    adapter = TestAdapter()
-    result = adapter.new_command("TestVehicle")
-    assert result["success"] is True
-    assert "message" in result
-
-def test_new_command_vehicle_not_found():
-    adapter = TestAdapter()
-    result = adapter.new_command("NonExistent")
-    assert result["success"] is False
-    assert "not found" in result["error"].lower()
-
-def test_new_command_invalidates_cache():
-    adapter = TestAdapter()
-    adapter.new_command("TestVehicle")
-    assert adapter._last_fetch_time is None
+### Test Layout
+```
+tests/
+  conftest.py            # shared fixtures: adapter, mcp_server, mcp_client
+  test_adapter.py         # TestAdapter — mock AbstractAdapter implementation (NOT in the adapter package)
+  test_data.py            # shared VIN constants + expected-value dicts
+  test_caching.py
+  test_mcp_server.py      # MCP protocol / tool-registration tests
+  tools/
+    test_get_vehicle.py
+    test_get_energy_status.py
+    test_list_vehicles.py
 ```
 
-**Example - Adding a New State Getter**:
+### Writing Tests — MANDATORY for New Features
+
+**Rule**: Every new read tool or adapter method MUST have tests covering:
+1. ✅ Success case (happy path)
+2. ✅ Error case (vehicle not found → `None` / `{"error": ...}`)
+3. ✅ Edge cases (`None` values — most Tibber fields are optional by design)
+
+**Example — Adding a New State Getter** (there is no "add a command" example: no command surface exists):
 ```python
 # File: tests/tools/test_get_new_status.py
-from weconnect_mcp.adapter import TestAdapter
+from test_adapter import TestAdapter  # not weconnect_mcp.adapter — TestAdapter lives in tests/
 
 def test_get_new_status_success():
     adapter = TestAdapter()
-    status = adapter.get_new_status("TestVehicle")
+    status = adapter.get_new_status("ID7")  # TestAdapter's mock vehicle names: "T7", "ID7"
     assert status is not None
 
 def test_get_new_status_vehicle_not_found():
     adapter = TestAdapter()
     assert adapter.get_new_status("NonExistent") is None
-
-def test_get_new_status_handles_none_values():
-    adapter = TestAdapter()
-    status = adapter.get_new_status("VehicleWithPartialData")
-    assert status is not None  # Should not crash, fields may be None
 ```
+
+Prefer the `adapter` fixture from `conftest.py` (module-scoped `TestAdapter()`) over instantiating
+`TestAdapter()` directly inside `tools/` tests — see existing tests for the pattern.
 
 ### Test Development Workflow
 
 1. **Write test first** (TDD approach recommended)
-2. **Run test** - should fail (red)
-3. **Implement feature** - minimum code to pass
-4. **Run test** - should pass (green)
-5. **Refactor** - improve code quality
-6. **Run ALL tests** - ensure nothing broke: `./scripts/test.sh --skip-slow`
-7. **Commit only if 197 mock tests pass**
+2. **Run test** — should fail (red)
+3. **Implement feature** — minimum code to pass
+4. **Run test** — should pass (green)
+5. **Run ALL tests**: `./scripts/test.sh`
+6. **Commit only if all 36 tests pass**
 
 ### Using TestAdapter (Mock)
 
-Always use `TestAdapter` for unit tests (no real API calls):
+`TestAdapter` (in `tests/test_adapter.py`, **not** part of the `weconnect_mcp.adapter` package) is
+a full mock `AbstractAdapter` implementation with 2 hardcoded vehicles — no real Tibber calls:
 
 ```python
-from weconnect_mcp.adapter import TestAdapter
+from test_adapter import TestAdapter  # requires tests/ on sys.path — conftest.py does this
 
-adapter = TestAdapter()  # Mock adapter with fake data
+adapter = TestAdapter()
 
-# Commands return success/error dicts
-result = adapter.lock_vehicle("TestVehicle")
-assert result["success"] is True
-
-# State methods return Pydantic models or None
-doors = adapter.get_vehicle_doors("TestVehicle")
-assert doors.lock_state == "locked"
+vehicles = adapter.list_vehicles()          # -> list[VehicleListItem], 2 entries
+vehicle = adapter.get_vehicle("ID7")         # -> VehicleModel | None
+energy = adapter.get_energy_status("ID7")    # -> EnergyStatusModel | None (electric)
+energy = adapter.get_energy_status("T7")     # -> EnergyStatusModel | None (combustion, for type-awareness tests only)
 ```
 
-For real VW API testing, use `./scripts/vehicle_command.sh <vehicle_id> <command>` (requires VW credentials).
+There is no `./scripts/vehicle_command.sh` and no way to test against the real Tibber API from a
+script — there are no commands to test, and read-only calls against a real account require a
+one-time interactive login (`weconnect_mcp.cli.tibber_login_cli`) that isn't part of the test suite.
 
 ## Common Patterns & Anti-Patterns
 
 ### ✅ DO: Handle None Values
 ```python
-# Good - VW API often returns incomplete data
-battery = vehicle.battery
-if battery is not None:
-    level = battery.level.value if battery.level is not None else None
+# Good - most Tibber fields are optional by design
+charging = energy_status.electric.charging if energy_status.electric else None
+if charging is not None:
+    soc = charging.current_soc_percent
 
 # Bad - will crash
-level = vehicle.battery.level.value
+soc = energy_status.electric.charging.current_soc_percent
 ```
 
-### ✅ DO: Use Type Guards
+### ✅ DO: Check `energy_status.electric` Before Reading Charging/Battery Data
 ```python
-# Good - check instance type before using type-specific features
-if isinstance(vehicle, ElectricVehicle):
-    charging = vehicle.charging  # Safe: only EVs have charging
+# Good - electric can be None (e.g. combustion vehicle in the mock adapter)
+if energy_status is None or energy_status.electric is None:
+    return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
 ```
 
-### ✅ DO: Invalidate Cache After Commands
+### ❌ DON'T: Add a Command Method or "Not Supported" Stub
 ```python
-# Good - implemented in CommandMixin
+# Bad - there is no write endpoint on Tibber's API; don't add a stub that always
+# returns {"success": False, "error": "not supported"} either. Just don't add the method.
 def lock_vehicle(self, vehicle_id: str) -> dict[str, Any]:
-    # ... execute command ...
-    self.invalidate_cache()  # Force fresh data on next read
-    return {"success": True}
+    ...
 ```
+
+### ❌ DON'T: Invent a Resource Layer
+MCP Resources were deliberately not implemented (would have been a 1:1 duplicate of the tools with
+no benefit for this project's target clients) — see `read_tools.py`'s module docstring. Don't add
+`@mcp.resource(...)` registrations.
 
 ## MCP-Specific Guidelines
 
 ### Tool Implementation
-Tools are defined in `tools.py` and call adapter methods:
+Tools are registered via `register_read_tools()` in `src/weconnect_mcp/server/mixins/read_tools.py`
+using FastMCP's `@mcp.tool(...)` decorator (not the raw MCP SDK's `@server.call_tool()` dispatcher):
 
 ```python
-@server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    if name == "get_battery_status":
-        vehicle_id = arguments.get("vehicle_id")
-        result = adapter.get_battery_status(vehicle_id)
-        return [TextContent(type="text", text=json.dumps(result.model_dump()))]
+@mcp.tool(
+    name="get_battery_status",
+    description="...",
+    tags={"energy", "read", "battery", "bev-phev"},
+    annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True},
+)
+def get_battery_status(
+    vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+) -> str:
+    energy_status = adapter.get_energy_status(vehicle_id)
+    if energy_status is None or energy_status.electric is None:
+        return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
+    result = {...}
+    return json.dumps(result)
 ```
 
 **Pattern**:
-1. Extract arguments from `arguments` dict
-2. Call adapter method
-3. Convert Pydantic model to dict with `.model_dump()`
-4. Return as JSON string in `TextContent`
+1. Extract `vehicle_id` (and any other args) as function parameters (FastMCP infers the schema from type hints/`Annotated`)
+2. Call the adapter method
+3. Return **a JSON string** built with `json.dumps(...)` — tools here return `str`, not `TextContent`
+   (FastMCP wraps the return value for the wire protocol itself)
+4. On a not-found vehicle, return `json.dumps({"error": "..."})` — this is the **only** error case;
+   there is no "not supported" response to model, since unsupported operations simply have no tool
 
-### Error Handling
-```python
-try:
-    result = adapter.some_method(vehicle_id)
-    if result is None:
-        return [TextContent(type="text", text=json.dumps({"error": "Not found"}))]
-    return [TextContent(type="text", text=json.dumps(result.model_dump()))]
-except Exception as e:
-    return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
-```
+### The 5 Tools (Complete List — Nothing Else Exists)
+`get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status`
+— all in `src/weconnect_mcp/server/mixins/read_tools.py`. `get_vehicle_state` returns the same data
+as `get_vehicle_info`; there's no richer combined snapshot for this backend, so don't try to make
+them diverge.
+
+### Prompts
+11 workflow prompts in `src/weconnect_mcp/server/mixins/prompts.py`, registered via
+`register_prompts()`. Steps that would need a command (start charging, climate control) are
+advisory-only — they tell the user to act via the vehicle's own app. Steps that would need GPS
+position ask the user for the location instead of calling a tool.
 
 ## Logging
 
-Use Python logging (configured in `carconnectivity_adapter.py`):
+Configured centrally in `src/weconnect_mcp/cli/logging_config.py` (`configure_logging()`,
+`get_logger()`) — chooses the right stream (stdout for `http` transport, stderr for `stdio`),
+optionally writes to a file, and clamps third-party library levels.
 
 ```python
-import logging
-logger = logging.getLogger(__name__)
+from weconnect_mcp.cli import logging_config
+logger = logging_config.get_logger(__name__)
 
 logger.debug("Detailed debug info")
 logger.info("Important state change")
@@ -257,7 +275,7 @@ logger.warning("Unexpected but handled")
 logger.error("Error that needs attention")
 ```
 
-**MCP Requirement**: All logs to `stderr` (not `stdout`) because MCP uses `stdout` for protocol.
+**MCP Requirement**: In `stdio` transport, all logs go to `stderr` (MCP uses `stdout` for the protocol).
 
 ## Documentation
 
@@ -265,25 +283,21 @@ logger.error("Error that needs attention")
 Use Google-style docstrings:
 
 ```python
-def get_vehicle_info(self, vehicle_id: str) -> Optional[VehicleModel]:
-    """Get basic vehicle information.
-    
+def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
+    """Get vehicle info. Fields with no Tibber equivalent stay None.
+
     Args:
-        vehicle_id: Vehicle name or VIN
-        
+        vehicle_id: VIN, name, or license plate
+        details: BASIC, FULL, or ALL
+
     Returns:
-        VehicleModel with basic info, or None if not found
-        
-    Example:
-        >>> info = adapter.get_vehicle_info("Golf")
-        >>> print(info.model)
-        "Golf 8"
+        VehicleModel, or None if the vehicle isn't found
     """
 ```
 
 ### Comments
 - Explain **why**, not **what** (code should be self-explanatory)
-- Document workarounds for VW API quirks
+- Document Tibber API quirks/limitations (many already documented at the top of each module)
 - Mark TODOs with `# TODO: description`
 
 ## Git Workflow
@@ -291,34 +305,58 @@ def get_vehicle_info(self, vehicle_id: str) -> Optional[VehicleModel]:
 ### Commits
 - Use conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`
 - Keep commits atomic (one logical change)
-- Run tests before committing: `./scripts/test.sh --skip-slow`
+- Run tests before committing: `./scripts/test.sh`
+
+### Keeping Docs in Sync (Important)
+Whenever you add, remove, or rename an MCP tool or prompt, update **all** of:
+`README.md`, `src/weconnect_mcp/server/AI_INSTRUCTIONS.md`,
+`src/weconnect_mcp/server/mixins/read_tools.py`, `src/weconnect_mcp/server/mixins/prompts.py`.
+These four are the source of truth for the exposed interface and must stay consistent.
 
 ## Quick Reference
 
-### Add New Command
-1. Add method to `CommandMixin` in `mixins/command_mixin.py`
-2. Add tool definition in `server/tools.py`
-3. Add test in `tests/commands/test_*.py`
-4. Update `AI_INSTRUCTIONS.md`
-5. Run tests: `./scripts/test.sh --skip-slow` (197 must pass)
+### Add a New Read Tool
+1. Add a method to `TibberAdapter` in `src/weconnect_mcp/adapter/tibber_adapter.py` (and, if it
+   needs new extraction logic, to `TibberStateExtractionMixin` in
+   `src/weconnect_mcp/adapter/mixins/tibber_state_extraction_mixin.py`)
+2. Add the corresponding abstract method + Pydantic model to `AbstractAdapter` in
+   `src/weconnect_mcp/adapter/abstract_adapter.py` if needed
+3. Implement the same method on `TestAdapter` in `tests/test_adapter.py`
+4. Register the tool in `src/weconnect_mcp/server/mixins/read_tools.py`
+5. Add tests in `tests/tools/test_*.py`
+6. Update `README.md` and `src/weconnect_mcp/server/AI_INSTRUCTIONS.md` (see "Keeping Docs in Sync" above)
+7. Run tests: `./scripts/test.sh` (all 36+ must pass)
 
-### Add New State Extraction
-1. Add method to `StateExtractionMixin` in `mixins/state_extraction_mixin.py`
-2. Add Pydantic model to `AbstractAdapter` if needed
-3. Add public method to main adapter
-4. Add tool in `server/tools.py`
-5. Add test in `tests/tools/test_*.py`
-6. Run tests: `./scripts/test.sh --skip-slow` (197 must pass)
+### There is no "Add New Command" section
+No command surface exists on this backend — see "Critical Context" above.
 
-### Debug MCP Server
+### Run / Debug the MCP Server
 ```bash
-# Run server in debug mode
-python -m weconnect_mcp.server
+# stdio (local, for Claude Desktop / VS Code Copilot)
+python -m weconnect_mcp.cli.mcp_server_cli src/tibber_config.json
 
-# Test with MCP inspector
-npx @modelcontextprotocol/inspector python -m weconnect_mcp.server
+# http (cloud / local API access)
+python -m weconnect_mcp.cli.mcp_server_cli --transport http --port 8089
+
+# Or via the installed console script (pyproject.toml [project.scripts]):
+weconnect-mcp src/tibber_config.json
+
+# One-time interactive Tibber login (required before the server can start):
+python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json
+# or: weconnect-tibber-login
+
+# Test with MCP inspector:
+npx @modelcontextprotocol/inspector python -m weconnect_mcp.cli.mcp_server_cli
 ```
+
+There is no `weconnect_mcp.server.__main__` — `python -m weconnect_mcp.server` does not work.
+The entry point is always `weconnect_mcp.cli.mcp_server_cli` (module `main()` or the `weconnect-mcp`
+console script).
 
 ---
 
-**Remember**: This is an MCP server for AI assistants. The code should be reliable, well-typed, and handle VW API flakiness gracefully. When in doubt, return `None` or error dict rather than crashing.
+**Remember**: This is a read-only MCP server backed by the Tibber Data API. The code should be
+reliable, well-typed, and handle Tibber's narrow, mostly-`None` data surface gracefully — but there
+is no VW-direct unreliability to work around anymore, and no command surface to guard. When in
+doubt, return `None` or a `{"error": ...}` dict rather than crashing, and don't invent a tool or
+method for something Tibber simply doesn't expose.
