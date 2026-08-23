@@ -372,31 +372,40 @@ python -m weconnect_mcp.cli.mcp_server_cli src/config.json --backend carconnecti
 
 ## AI Integration
 
-This MCP server provides **18 tools** (8 read + 10 command) that AI assistants can use to interact with your VW vehicle, plus 15 URI-based **MCP Resources** for declarative data access.
+This MCP server provides **18 tools** (8 read + 10 command) that AI assistants can use, plus 15
+URI-based **MCP Resources** for declarative data access. The tool/resource *registrations* are
+shared between both backends — but which ones actually return data (and which always fail)
+depends entirely on which backend is running. The tables below describe the default **`tibber`**
+backend specifically, since that's what a fresh install actually runs; see the callouts for what
+changes under `carconnectivity`.
 
-> **Source of truth:** The canonical, up-to-date tool reference lives in  
+> **Source of truth:** The canonical, up-to-date reference — including the exact wording each
+> tool/resource/prompt reports for the Tibber backend — lives in  
 > [`src/weconnect_mcp/server/AI_INSTRUCTIONS.md`](src/weconnect_mcp/server/AI_INSTRUCTIONS.md)  
-> and in the tool registration files  
-> `src/weconnect_mcp/server/mixins/read_tools.py` / `command_tools.py`.
+> and in the registration files  
+> `src/weconnect_mcp/server/mixins/{read_tools,command_tools,resources,prompts}.py`.
 
 ### MCP Tools (Preferred for AI Assistants)
 
-**Read tools (8) — query vehicle data:**
+**Read tools (8) — with the Tibber backend, only 4 return real data:**
 
-| Tool | Description |
-|------|-------------|
-| `get_vehicles` | List all available vehicles (name, VIN, model) |
-| `get_vehicle_info` | Basic vehicle info (model, year, type) |
-| `get_vehicle_state` | Complete state snapshot (battery, doors, climate, position, …) |
-| `get_vehicle_doors` | Door lock and open/closed status |
-| `get_battery_status` | Quick battery level check (BEV/PHEV) |
-| `get_climatization_status` | Climate control status and target temperature |
-| `get_charging_status` | Charging details and remaining time (BEV/PHEV) |
-| `get_vehicle_position` | GPS location (latitude, longitude, heading) |
+| Tool | Tibber backend | `carconnectivity` backend |
+|------|---|---|
+| `get_vehicles` | ✅ VIN, name, model (`license_plate` always `null`) | ✅ Same, `license_plate` populated |
+| `get_vehicle_info` | ✅ Manufacturer, model, name, online state only | ✅ Full: + year, odometer, software version |
+| `get_vehicle_state` | ✅ Same as `get_vehicle_info` — no richer snapshot exists for this backend | ✅ Combined battery/doors/climate/position snapshot |
+| `get_vehicle_doors` | ❌ **Not supported** — always returns a not-found error | ✅ Door lock and open/closed status |
+| `get_battery_status` | ✅ Battery level, electric range, charging flag | ✅ Same |
+| `get_climatization_status` | ❌ **Not supported** — always returns a not-found error | ✅ Climate state and target temperature |
+| `get_charging_status` | ✅ Charging/plug state, target/current SOC (`charging_power_kw`/`remaining_time_minutes` always `null`) | ✅ Full, including power and remaining time |
+| `get_vehicle_position` | ❌ **Not supported** — always returns a not-found error | ✅ GPS location |
 
-**Command tools (10) — control vehicle remotely:**
+**Command tools (10) — with the Tibber backend, all 10 always fail (read-only API, no write
+endpoints exist at all — see [`experiment/tibber-integration/TIBBER_API.md`](experiment/tibber-integration/TIBBER_API.md) §5).
+They stay registered so an MCP client gets a structured `{"success": false, "error": "..."}`
+instead of the tool not existing:**
 
-| Tool | Description |
+| Tool | Description (applies to `carconnectivity` only) |
 |------|-------------|
 | `lock_vehicle` | Lock all doors |
 | `unlock_vehicle` | Unlock all doors |
@@ -411,32 +420,39 @@ This MCP server provides **18 tools** (8 read + 10 command) that AI assistants c
 
 ### MCP Resources (URI-Based Read Access)
 
-Resources provide the same data as read tools via stable URIs and are suited for declarative access patterns. **AI assistants should prefer Tools** for interactive conversations.
+Resources provide the same data as read tools via stable URIs. **AI assistants should prefer
+Tools** for interactive conversations. Same split as above — 6 of 15 work with Tibber:
 
-| Resource URI | Description |
-|---|---|
-| `data://vehicles` | List all vehicles |
-| `data://vehicle/{id}/info` | Basic vehicle information |
-| `data://vehicle/{id}/state` | Complete vehicle state snapshot |
-| `data://vehicle/{id}/doors` | Door lock/open status |
-| `data://vehicle/{id}/windows` | Window open/closed status |
-| `data://vehicle/{id}/tyres` | Tyre pressure and temperature |
-| `data://vehicle/{id}/type` | Propulsion type (BEV / PHEV / ICE) |
-| `data://vehicle/{id}/charging` | Detailed charging status (BEV/PHEV) |
-| `data://vehicle/{id}/climate` | Climate control status |
-| `data://vehicle/{id}/maintenance` | Service schedule information |
-| `data://vehicle/{id}/range` | Range and fuel/battery levels |
-| `data://vehicle/{id}/window-heating` | Window heating/defrost status |
-| `data://vehicle/{id}/lights` | Lights status |
-| `data://vehicle/{id}/position` | GPS location |
-| `data://vehicle/{id}/battery` | Quick battery check (BEV/PHEV) |
+| Resource URI | Tibber backend | `carconnectivity` backend |
+|---|---|---|
+| `data://vehicles` | ✅ | ✅ |
+| `data://vehicle/{id}/info` | ✅ (identity only) | ✅ (full) |
+| `data://vehicle/{id}/state` | ✅ (same as `/info`) | ✅ (combined snapshot) |
+| `data://vehicle/{id}/doors` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/windows` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/tyres` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/type` | ❌ Not supported (propulsion type not reported) | ✅ |
+| `data://vehicle/{id}/charging` | ✅ (power/remaining-time always `null`) | ✅ (full) |
+| `data://vehicle/{id}/climate` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/maintenance` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/range` | ✅ (electric only) | ✅ (electric + combustion) |
+| `data://vehicle/{id}/window-heating` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/lights` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/position` | ❌ Not supported | ✅ |
+| `data://vehicle/{id}/battery` | ✅ | ✅ |
 
 ### What AI Assistants Can Do
 
+**With the default Tibber backend:**  
 ✅ List vehicles and identify them by name or VIN  
-✅ Read full or targeted vehicle status (battery, doors, climate, position, …)  
+✅ Read battery level, range, and charging/plug status  
+✅ Answer "How much charge does my car have?" / "Is it plugged in?"  
+❌ Cannot read doors, windows, climate, position, tyres, lights, or maintenance data — not available via Tibber  
+❌ Cannot execute any remote command (lock, climate, charging control, lights) — the Tibber Data API is read-only, full stop
+
+**With the `carconnectivity` backend** (currently blocked by VW, see the warning at the top of this file):  
+✅ All of the above, plus doors/windows/climate/position/tyres/lights/maintenance data  
 ✅ Execute remote commands (lock, charge, climatize, flash lights, …)  
-✅ Answer natural questions like "Where is my car?" or "Is it locked?"  
 ✅ Combine multiple queries and commands for complex tasks  
 
 ---
@@ -454,27 +470,33 @@ Reload Claude Desktop and ask questions like:
 
 - "What vehicles are available?"
 - "Show me my car's battery status"
-- "Are my doors locked?"
+- "Are my doors locked?" *(only with `carconnectivity` — see caveat below)*
 
 #### Example Usage
 
-**Check battery status and state of charge:**
+> The screenshots below were captured against the `carconnectivity` (VW-direct) backend, before
+> it was blocked and Tibber became the default — see [AI Integration](#ai-integration) above for
+> exactly which of these still work with the default Tibber backend today. Position and starting
+> a charging session specifically do **not** work with Tibber (position: not available at all;
+> charging control: read-only API, no command endpoint).
+
+**Check battery status and state of charge** *(works with Tibber)*:
 
 ![Claude checking battery SOC](examples/claude_check_soc.png)
 
-**Get complete vehicle status:**
+**Get complete vehicle status** *(Tibber: identity + battery/charging only, no doors/climate/position)*:
 
 ![Claude showing vehicle status](examples/claude_status.png)
 
-**Check vehicle position:**
+**Check vehicle position** *(`carconnectivity` only — not available via Tibber)*:
 
 ![Claude showing vehicle position](examples/claude_vehicle_pos.png)
 
-**Start charging session:**
+**Start charging session** *(`carconnectivity` only — Tibber is read-only, cannot start/stop charging)*:
 
 ![Claude starting charging](examples/claude_charging.png)
 
-**Interactive demo video:**
+**Interactive demo video** *(recorded against `carconnectivity`)*:
 
 ![Claude interaction demo](examples/claude_example_interaction.mov)
 
@@ -493,11 +515,15 @@ Restart VS Code and verify installation by typing `/list` in Copilot Chat. Look 
 
 #### Example Usage
 
+> Captured against `carconnectivity`, same caveat as the Claude Desktop screenshots above — the
+> doors/location parts of this workflow don't work with the default Tibber backend, only
+> battery/charging status does.
+
 **Prepare for a trip - check battery, charging status, doors, and location:**
 
 ![GitHub Copilot preparing for trip](examples/github_copilot_prepare_trip.png)
 
-**Interactive demo video:**
+**Interactive demo video** *(recorded against `carconnectivity`)*:
 
 ![GitHub Copilot interaction demo](examples/github_copilot_example_interaction.mov)
 
