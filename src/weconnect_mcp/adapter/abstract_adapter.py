@@ -18,28 +18,35 @@ from enum import Enum
 
 
 class ChargingModel(BaseModel):
-    """Charging info for electric/hybrid vehicles"""
+    """Charging info for electric/hybrid vehicles.
+
+    charging_power_kw, remaining_time_minutes, and charge_mode were removed
+    entirely (not just left None) -- Tibber's Data API never reports them
+    for any backend/vehicle, confirmed via its OpenAPI schema (see
+    ARCHITECTURE.md §3.1). Keeping always-empty fields in the response
+    schema would just be noise for a client to parse around.
+    """
     is_charging: Optional[bool] = None
     is_plugged_in: Optional[bool] = None
-    charging_power_kw: Optional[float] = None
     charging_state: Optional[str] = None
-    remaining_time_minutes: Optional[int] = None
     target_soc_percent: Optional[int] = None
     current_soc_percent: Optional[float] = None
-    charge_mode: Optional[str] = None
 
 class VehicleModel(BaseModel):
+    """Basic vehicle identity.
+
+    license_plate, odometer, state, type, software_version, and model_year
+    were removed entirely (not just left None) -- Tibber's Data API never
+    reports any of them, confirmed via its OpenAPI schema (see
+    ARCHITECTURE.md §3.1/§5). Keeping always-empty fields in the response
+    schema would just be noise for a client to parse around.
+    """
     vin: Optional[str] # only mandatory field
     model: Optional[str] = None
     name: Optional[str] = None
-    license_plate: Optional[str] = None
-    odometer: Optional[float] = None
     manufacturer: Optional[str] = None
-    state: Optional[str] = None
-    type: Optional[str] = None
-    software_version: Optional[str] = None
-    model_year: Optional[int] = None
     connection_state: Optional[str] = None
+    last_seen: Optional[str] = None  # ISO 8601; Tibber's status.lastSeen, same call as connection_state
 
 class VehicleListItem(BaseModel):
     """Simplified vehicle info for listing"""
@@ -50,8 +57,8 @@ class VehicleListItem(BaseModel):
 
 class VehicleDetailLevel(str, Enum):
     """Detail level for vehicle information."""
-    BASIC = "basic"      # VIN, name, model, type, manufacturer
-    FULL = "full"        # BASIC + state, connection_state, odometer, year, software
+    BASIC = "basic"      # VIN, name, model, manufacturer
+    FULL = "full"        # BASIC + connection_state + last_seen (costs an extra Tibber API call)
 
 class RangeInfo(BaseModel):
     """Consolidated range info"""
@@ -78,6 +85,20 @@ class EnergyStatusModel(BaseModel):
     range: RangeInfo
     electric: Optional[ElectricDriveInfo] = None  # BEV/PHEV
     combustion: Optional[CombustionDriveInfo] = None  # PHEV/Combustion
+    last_seen: Optional[str] = None  # ISO 8601; Tibber's status.lastSeen
+
+class AdapterUnavailableError(RuntimeError):
+    """Raised when the adapter cannot serve any data right now, and fixing
+    it needs an operator to take a step outside a single request (e.g.
+    re-authorizing a backend whose credentials expired) -- unlike a single
+    vehicle_id not being found, which is a normal per-request outcome, not
+    an adapter-wide failure.
+
+    Concrete adapters raise this (or a backend-specific subclass) so the
+    MCP tool layer can report "server unavailable" without needing to know
+    which backend-specific failure caused it.
+    """
+
 
 class AbstractAdapter(ABC):
     """Base adapter interface for vehicle data providers."""
@@ -88,7 +109,7 @@ class AbstractAdapter(ABC):
 
         Args:
             vehicle_id: VIN, name, or license plate
-            details: BASIC, FULL, or ALL
+            details: BASIC or FULL
         """
         pass
 

@@ -17,11 +17,20 @@ client then loads non-interactively.
 
 SECURITY: This module never logs client secrets or tokens, and persists
 tokens only to a local JSON file with 0600 permissions.
+
+Concurrent instances: Tibber rotates refresh tokens (every successful
+refresh returns a new one, invalidating the old), so if more than one
+instance of this server shares one token file, refreshing needs to be
+coordinated or the "losing" instance burns its already-superseded
+refresh_token and gets stuck failing forever. See TokenStore.locked() and
+the "Token refresh" section (ARCHITECTURE.md §2.4) for the fix and its
+limits (same-machine/shared-filesystem only, not multi-host).
 """
 
 from __future__ import annotations
 
 import base64
+import fcntl
 import hashlib
 import json
 import logging
@@ -30,6 +39,7 @@ import secrets
 import threading
 import time
 import webbrowser
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -61,9 +71,54 @@ USER_AGENT = "weconnect-mcp/0.1.0 (github.com/weconnect_mvp)"
 # Refresh the access token this many seconds before it actually expires.
 _REFRESH_SKEW = 60
 
+_REAUTH_REQUIRED_MESSAGE = (
+    "Tibber authorization has expired and could not be refreshed "
+    "automatically. This server cannot fetch vehicle data until a human "
+    "re-authorizes it: run `python -m weconnect_mcp.cli.tibber_login_cli` "
+    "on the server host, then restart the server."
+)
+
 
 class TibberAuthError(RuntimeError):
     """Raised when the client needs authorization it isn't allowed to obtain."""
+
+
+class TibberTokenEndpointError(TibberAuthError):
+    """Raised when Tibber's token endpoint rejects a request.
+
+    Carries the raw status_code/body so callers can tell a genuine
+    rejection of the credentials themselves (invalid_grant / invalid_client
+    / unauthorized_client -- the refresh_token or client registration is
+    dead) apart from a transient failure (5xx, rate limiting) that's worth
+    leaving the stored token alone for and simply retrying later.
+    """
+
+    _REAUTH_REQUIRED_ERRORS = {"invalid_grant", "invalid_client", "unauthorized_client"}
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"Token endpoint returned {status_code}: {body}")
+
+    @property
+    def is_reauth_required(self) -> bool:
+        """True if this rejection means the refresh token itself is dead --
+        not a transient server-side hiccup worth just retrying."""
+        if self.status_code != 400:
+            return False
+        try:
+            error = json.loads(self.body).get("error")
+        except (json.JSONDecodeError, AttributeError):
+            return False
+        return error in self._REAUTH_REQUIRED_ERRORS
+
+
+class TibberReauthRequiredError(TibberAuthError):
+    """Raised once a refresh failure is confirmed as a genuine rejection --
+    not a race with another instance sharing this token file (see
+    TokenStore.locked()) -- so interactive re-authorization via
+    tibber_login_cli is required before this server can serve vehicle data
+    again. See ARCHITECTURE.md §2.4."""
 
 
 # ── Token storage ─────────────────────────────────────────────────────────────
@@ -123,6 +178,28 @@ class TokenStore:
 
     def clear(self) -> None:
         self.path.unlink(missing_ok=True)
+
+    @contextmanager
+    def locked(self):
+        """Exclusive lock guarding read-modify-write access to the token
+        file, so concurrent instances sharing this file don't race on
+        Tibber's rotating (single-use) refresh_token -- see
+        ARCHITECTURE.md §2.4.
+
+        POSIX advisory lock (`flock`) on a sidecar `.lock` file -- only
+        coordinates processes on the same machine with access to this same
+        file, not multiple hosts. The OS releases the lock automatically if
+        the holding process dies, so there's no stale-lock cleanup needed.
+        """
+        lock_path = self.path.with_name(self.path.name + ".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
 
 # ── PKCE helpers ──────────────────────────────────────────────────────────────
@@ -268,28 +345,68 @@ class TibberDataAPI:
         return self._token_request(data)
 
     def _refresh(self) -> None:
+        """Refresh the access token, coordinating with any other instance
+        sharing this token file (see TokenStore.locked() and
+        ARCHITECTURE.md §2.4).
+
+        Holds the lock for the whole read-check-refresh-write sequence, and
+        always re-reads from disk once it's held -- another instance may
+        have already refreshed (or already discovered the refresh_token is
+        dead) while we were waiting, and its result is authoritative over
+        whatever we loaded at construction or on a previous refresh.
+        """
         assert self.tokens is not None
-        if not self.tokens.refresh_token:
-            if not self.allow_interactive_login:
-                raise TibberAuthError(
-                    "Cached Tibber token has no refresh_token and "
-                    "interactive login is disabled in this context. Re-run "
-                    "the one-time setup tool: python -m "
-                    "weconnect_mcp.cli.tibber_login_cli"
+        with self.store.locked():
+            current = self.store.load()
+
+            if current is None:
+                # Another instance already confirmed the refresh_token is
+                # dead and cleared it -- that verdict still holds, no need
+                # to spend another call on Tibber's token endpoint.
+                self.tokens = None
+                raise TibberReauthRequiredError(_REAUTH_REQUIRED_MESSAGE)
+
+            if not current.expired:
+                # Another instance already refreshed while we waited for
+                # the lock -- adopt its result instead of refreshing again
+                # (and instead of burning our own now-superseded copy).
+                self.tokens = current
+                return
+
+            if not current.refresh_token:
+                if not self.allow_interactive_login:
+                    raise TibberAuthError(
+                        "Cached Tibber token has no refresh_token and "
+                        "interactive login is disabled in this context. "
+                        "Re-run the one-time setup tool: python -m "
+                        "weconnect_mcp.cli.tibber_login_cli"
+                    )
+                self.tokens = self._interactive_login()
+                self.store.save(self.tokens)
+                return
+
+            data = {
+                "grant_type": "refresh_token",
+                "refresh_token": current.refresh_token,
+                "client_id": self.client_id,
+            }
+            if self.client_secret:
+                data["client_secret"] = self.client_secret
+            try:
+                self.tokens = self._token_request(data)
+            except TibberTokenEndpointError as exc:
+                if not exc.is_reauth_required:
+                    raise  # transient (5xx, rate limit, ...) -- leave the store alone, retry later
+                self.store.clear()
+                self.tokens = None
+                logger.error(
+                    "Tibber rejected the refresh token (%s) -- cleared the "
+                    "stale token file, interactive re-authorization required",
+                    exc,
                 )
-            self.tokens = self._interactive_login()
+                raise TibberReauthRequiredError(_REAUTH_REQUIRED_MESSAGE) from exc
             self.store.save(self.tokens)
-            return
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": self.tokens.refresh_token,
-            "client_id": self.client_id,
-        }
-        if self.client_secret:
-            data["client_secret"] = self.client_secret
-        self.tokens = self._token_request(data)
-        self.store.save(self.tokens)
-        logger.info("Refreshed Tibber access token")
+            logger.info("Refreshed Tibber access token")
 
     def _token_request(self, data: dict[str, str]) -> TokenSet:
         resp = httpx.post(
@@ -303,9 +420,7 @@ class TibberDataAPI:
         )
         if resp.status_code != 200:
             # Never echo the request body (contains secrets); response only.
-            raise TibberAuthError(
-                f"Token endpoint returned {resp.status_code}: {resp.text}"
-            )
+            raise TibberTokenEndpointError(resp.status_code, resp.text)
         return TokenSet.from_response(resp.json())
 
     # ---- REST calls ---------------------------------------------------------

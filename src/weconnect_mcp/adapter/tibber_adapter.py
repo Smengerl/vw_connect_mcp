@@ -29,19 +29,35 @@ remediation message.
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any, Dict, List, Optional
 
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, VehicleModel, VehicleListItem, VehicleDetailLevel,
-    EnergyStatusModel, RangeInfo, ElectricDriveInfo,
+    AbstractAdapter, AdapterUnavailableError, VehicleModel, VehicleListItem,
+    VehicleDetailLevel, EnergyStatusModel, RangeInfo, ElectricDriveInfo,
 )
 from weconnect_mcp.adapter.mixins import CacheMixin, TibberStateExtractionMixin
 from weconnect_mcp.adapter.tibber_client import (
-    TibberDataAPI, TokenStore, vin_from_external_id,
+    TibberDataAPI, TibberReauthRequiredError, TokenStore, vin_from_external_id,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _translate_auth_errors(fn):
+    """Convert a Tibber-specific reauth failure into the adapter port's
+    generic AdapterUnavailableError, so callers (the MCP tool layer) don't
+    need to know this adapter happens to be backed by Tibber. See
+    ARCHITECTURE.md §2.4.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except TibberReauthRequiredError as exc:
+            raise AdapterUnavailableError(str(exc)) from exc
+    return wrapper
 
 
 class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
@@ -110,6 +126,7 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
 
     # ── vehicle lookup helpers ────────────────────────────────────────────────
 
+    @_translate_auth_errors
     def list_vehicles(self) -> list[VehicleListItem]:
         """Get list of vehicles with VIN, name, model.
 
@@ -146,6 +163,7 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
 
     # ── read methods ─────────────────────────────────────────────────────────
 
+    @_translate_auth_errors
     def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
         """Get vehicle info. Fields with no Tibber equivalent stay None."""
         entry = self._find_vehicle_entry(vehicle_id)
@@ -156,11 +174,13 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
         vin = vin_from_external_id(entry.get("externalId", ""))
 
         connection_state = None
+        last_seen = None
         if details != VehicleDetailLevel.BASIC:
             detail = self.client.device(entry["homeId"], entry["id"])
             for attr in detail.get("attributes", []):
                 if attr.get("id") == "isOnline":
                     connection_state = "online" if attr.get("value") else "offline"
+            last_seen = detail.get("status", {}).get("lastSeen")
 
         return VehicleModel(
             vin=vin,
@@ -168,10 +188,10 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
             name=info.get("name"),
             manufacturer=info.get("brand"),
             connection_state=connection_state,
-            # license_plate, odometer, state, type, software_version,
-            # model_year: no Tibber equivalent (ARCHITECTURE.md §5 table)
+            last_seen=last_seen,
         )
 
+    @_translate_auth_errors
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
         """Get energy and range info from Tibber's charging capabilities."""
         detail = self._get_device_detail(vehicle_id)
@@ -199,4 +219,5 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
             range=range_model,
             electric=electric_info,
             combustion=None,
+            last_seen=detail.get("status", {}).get("lastSeen"),
         )

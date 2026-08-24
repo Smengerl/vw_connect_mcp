@@ -3,9 +3,12 @@ src/config.json
 src/tibber_config.json
 claude_desktop_config.json
 
-# Tibber OAuth token cache (produced by tibber_login_cli)
+# Tibber OAuth token cache (produced by tibber_login_cli), and the
+# sidecar lock file TokenStore.locked() uses to coordinate refreshes
+# across concurrent instances sharing this file (see ARCHITECTURE.md §2.4)
 tibber_tokens.json
 *tibber_tokens.json
+*tibber_tokens.json.lock
 
 # Local-only artifacts (backups, scratch files, rescued secrets) -- never checked in
 local/

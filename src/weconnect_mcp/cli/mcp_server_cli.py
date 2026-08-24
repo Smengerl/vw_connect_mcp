@@ -218,7 +218,8 @@ def run_server_from_cli(config_path: Optional[str] = None, transport: str = DEFA
         # transparently use the real adapter once the connection completes.
         import threading
         from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
-        from weconnect_mcp.adapter.starting_adapter import StartingAdapter
+        from weconnect_mcp.adapter.starting_adapter import StartingAdapter, UnavailableAdapter
+        from weconnect_mcp.adapter.tibber_client import TibberAuthError
 
         class _AdapterProxy(AbstractAdapter):
             """Thin proxy that delegates to whichever adapter is current."""
@@ -245,6 +246,14 @@ def run_server_from_cli(config_path: Optional[str] = None, transport: str = DEFA
                 real_adapter.append(adapter)
                 proxy._swap(adapter)
                 logger.info("Tibber adapter connected – server fully ready")
+            except TibberAuthError as exc:
+                # No cached tokens, or a refresh that was genuinely rejected
+                # (ARCHITECTURE.md §2.4) -- won't resolve itself. Swap in a
+                # stub that reports this clearly on every tool call instead
+                # of leaving StartingAdapter's silent "still starting"
+                # responses in place forever.
+                logger.error("Tibber adapter unavailable: %s", exc)
+                proxy._swap(UnavailableAdapter(str(exc)))
             except Exception as exc:
                 logger.error("Tibber adapter failed to connect: %s", exc)
 
@@ -276,7 +285,23 @@ def run_server_from_cli(config_path: Optional[str] = None, transport: str = DEFA
 
     else:
         # ── stdio mode (local) ────────────────────────────────────────────────
-        with _build_tibber_adapter(config_path) as adapter:
+        # A failed Tibber login (no cached tokens, or a refresh that was
+        # genuinely rejected -- see ARCHITECTURE.md §2.4) must not crash the
+        # whole process before any MCP client ever connects. Start the
+        # server anyway with a stub adapter so every tool call reports the
+        # real cause via a clean "server_unavailable" response instead of
+        # the client just seeing the server fail to launch.
+        from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
+        from weconnect_mcp.adapter.starting_adapter import UnavailableAdapter
+        from weconnect_mcp.adapter.tibber_client import TibberAuthError
+
+        try:
+            adapter: AbstractAdapter = _build_tibber_adapter(config_path)
+        except TibberAuthError as exc:
+            logger.error("Tibber adapter unavailable at startup: %s", exc)
+            adapter = UnavailableAdapter(str(exc))
+
+        with adapter:
             logger.debug("Starting MCP server")
             server = get_server(adapter, api_key=resolved_api_key)
             try:

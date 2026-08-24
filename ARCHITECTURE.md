@@ -103,6 +103,59 @@ restart — either the `refresh_token` itself, or a full repeat of the interacti
 why `mcp_server_cli.py` needs `TIBBER_TOKEN_JSON` to bootstrap headless deployments — see the root
 README's [Cloud Deployment](README.md#cloud-deployment) section.)
 
+### 2.4 Coordinating token refresh across multiple concurrent instances
+
+**Confirmed live**: two stdio instances of this server were found running against the same
+`tibber_tokens.json`, and every tool call started failing identically with `Token endpoint
+returned 400: {"error":"invalid_grant"}`. Root cause: §2.3 already establishes that Tibber
+**rotates** refresh tokens — every successful `grant_type=refresh_token` call returns a new one
+and invalidates the old. `TokenStore` originally had no locking, and each `TibberDataAPI` loaded
+its tokens into memory once at construction and never re-read the file before refreshing. So when
+both instances' access tokens expired around the same time (unsurprising — they'd started at
+the same time), whichever refreshed first silently invalidated the other's cached `refresh_token`.
+The "losing" instance then failed every subsequent call the same way, forever, with no path back
+to a working state short of a human diagnosing this from source.
+
+**Fix**: `TokenStore.locked()` — an exclusive POSIX advisory lock (`flock`) on a sidecar
+`tibber_tokens.json.lock` file, held for the entire read-check-refresh-write sequence in
+`TibberDataAPI._refresh()`. The key move is re-reading the token file from disk *after* acquiring
+the lock rather than trusting whatever was loaded earlier:
+
+- If the freshly-read token is no longer expired, another instance already refreshed while we
+  waited — adopt it, skip the network call entirely (no wasted request, no chance of burning an
+  already-rotated `refresh_token`).
+- If the freshly-read token file is simply gone, another instance already confirmed the
+  `refresh_token` was genuinely dead and cleared it — that verdict still holds, so raise
+  `TibberReauthRequiredError` immediately instead of repeating a doomed request.
+- Only if the reload still shows an expired token does this instance actually call Tibber's token
+  endpoint.
+
+Because writes only ever happen while holding the lock, and every reader re-checks disk under
+that same lock, two instances can no longer race on one rotating refresh token. The OS releases
+`flock` automatically if the holding process dies, so there's no stale-lock cleanup to worry
+about.
+
+A **genuine** rejection (Tibber responds `invalid_grant`/`invalid_client`/`unauthorized_client`
+even after the re-read — see `TibberTokenEndpointError.is_reauth_required`) is treated as
+authoritative, not a race: the token file is cleared and `TibberReauthRequiredError` is raised.
+`tibber_adapter.py` translates that into the backend-agnostic `AdapterUnavailableError`
+(`abstract_adapter.py`), and every read tool (`read_tools.py`) catches that and returns
+`{"error": "server_unavailable", "message": "..."}` instead of letting a raw exception reach the
+MCP client — see §6 for what that response means and how to recover. A transient failure (5xx,
+rate limiting) is *not* treated as reauth-required and leaves the stored token untouched, so it's
+simply retried on the next call.
+
+**Limits — this only works on one machine.** `flock` coordinates processes that can open the same
+file on the same filesystem. It does **not** extend to a horizontally-scaled deployment across
+multiple hosts/containers without a shared volume (e.g. several Railway/Docker replicas each with
+their own disk) — those would need a different mechanism entirely: either a distributed lock
+(Redis, a DB row lock, etcd) around the same read-check-refresh-write sequence, or an architecture
+with a single dedicated "refresher" that owns the refresh token and proactively renews it, with
+every other instance only ever reading the current access token rather than refreshing it itself.
+Neither is implemented — this project currently only runs as either a single local stdio instance
+or a single HTTP instance per deployment, so the shared-filesystem fix covers every case that has
+actually occurred.
+
 ## 3. API reference
 
 Confirmed directly from the OpenAPI playground (`https://data-api.tibber.com/playground/`) — this
@@ -113,9 +166,18 @@ GET /v1/homes
 GET /v1/homes/{homeId}/devices
 GET /v1/homes/{homeId}/devices/{deviceId}
 GET /v1/homes/{homeId}/devices/{deviceId}/history
-GET /v1/homes/{homeId}/live-events            (SSE, meters only)
-GET /v1/homes/{homeId}/live-events/devices
+GET /v1/homes/{homeId}/live-events            (SSE, meters only -- not vehicles)
+GET /v1/homes/{homeId}/live-events/devices    (same restriction, per-device variant)
 ```
+
+Confirmed via Tibber's own docs (`data-api.tibber.com/docs/devices/live-events/`): "Stream
+real-time measurements from meters over Server-Sent Events" — Tibber Pulse/Watty only. No mention
+of vehicles anywhere in that page. This lines up with the scope split in §2.1:
+`data-api-meters-read` (ungranted, unused here) is a separate category from
+`data-api-vehicles-read` — live events are gated behind the meters scope, not the vehicles one.
+**Neither live-events endpoint is a viable path to real-time vehicle updates**; the only way to get
+fresher-than-cache vehicle data is polling `GET .../devices/{deviceId}` more often (subject to
+Tibber's own rate-limit guidance, §3.2).
 
 **Every endpoint is `GET`.** There is no write/command endpoint anywhere in the schema — no
 start/stop charging, no target-SoC set, no climate control trigger. This is a hard limitation
@@ -153,8 +215,9 @@ genericized:
 ```
 
 - `attributes` — static identity data (`vinNumber`, `isOnline`), separate from `capabilities`.
-- `status.lastSeen` — ISO 8601 timestamp of the last vehicle update; useful as a staleness
-  indicator.
+- `status.lastSeen` — ISO 8601 timestamp of the last vehicle update; a staleness indicator,
+  exposed as `last_seen` by `get_vehicle_info`/`get_charging_status` (only fetched together with
+  `connection_state`, i.e. not on a `BASIC` `get_vehicle()` call).
 - `externalId` is the **bare VIN, no `vendor:` prefix** for this VW/Enode-backed vehicle — this
   contradicts the `vendor:VIN` format (e.g. `tesla:5YJSA1E26MF1234567`) that other Tibber-supported
   brands may use (per evcc's own code, see §5). `vin_from_external_id()` in
@@ -299,15 +362,28 @@ Desktop does **not** inherit your shell's `export`s).
 `python -m weconnect_mcp.cli.tibber_login_cli` once. This backend never opens a browser on its
 own, by design, so a missing token always needs that manual step.
 
-**"Token endpoint returned 400: `{\"error\":\"invalid_grant\"}`"** — the `refresh_token` has been
-invalidated: either it expired (~30 days), was revoked, or was rotated away by a *different*
-successful refresh (Tibber rotates refresh tokens — every successful `grant_type=refresh_token`
-call returns a **new** refresh token, invalidating whichever one you had cached elsewhere). Not
-recoverable from client id/secret alone (§2.3) — just re-run `tibber_login_cli`; your existing
-`client_id`/`client_secret` remain valid, only the token needs regenerating. Don't repeatedly test
-raw `refresh_token` grant calls outside this tool's own refresh logic (e.g. manual `curl`
-experiments) — each one rotates the token, and if the rotated copy isn't the one your running
-server actually persists, you'll invalidate your own working session this way.
+**A tool call returns `{"error": "server_unavailable", "message": "Tibber authorization has
+expired..."}`** — this is what the raw `Token endpoint returned 400:
+{"error":"invalid_grant"}` failure below now surfaces as to an MCP client, once §2.4's
+multi-instance-race explanation has been ruled out (i.e. Tibber genuinely rejected the
+`refresh_token`, not just a losing race with a sibling instance). The stale token file has
+already been cleared automatically; the fix is still manual, on the server host: re-run
+`python -m weconnect_mcp.cli.tibber_login_cli`, then **restart the server process** (the running
+process keeps the dead token in memory otherwise). Not something fixable from within the chat —
+no tool exists to perform this, by design (§2.4).
+
+**"Token endpoint returned 400: `{\"error\":\"invalid_grant\"}`"** (raw form — only ever seen now
+in server logs, or for the errors `is_reauth_required` doesn't classify as reauth-worthy, see
+§2.4) — the `refresh_token` has been invalidated: either it expired (~30 days), was revoked, or
+was rotated away by a *different* successful refresh (Tibber rotates refresh tokens — every
+successful `grant_type=refresh_token` call returns a **new** refresh token, invalidating whichever
+one you had cached elsewhere — including a *sibling instance of this same server* sharing the
+token file, see §2.4). Not recoverable from client id/secret alone (§2.3) — just re-run
+`tibber_login_cli`; your existing `client_id`/`client_secret` remain valid, only the token needs
+regenerating. Don't repeatedly test raw `refresh_token` grant calls outside this tool's own
+refresh logic (e.g. manual `curl` experiments) — each one rotates the token, and if the rotated
+copy isn't the one your running server actually persists, you'll invalidate your own working
+session this way.
 
 ## 7. Reference implementation
 
@@ -347,3 +423,24 @@ Tibber.
 - **2026-08-23** — Consolidated this document and the standalone PoC scripts' README into this
   single architecture doc at the repo root; removed the `experiment/tibber-integration/` PoC
   scripts (superseded by the production code in `src/`).
+- **2026-08-24** — Found live (via a rubber-duck review against a real running instance): two
+  stdio server processes sharing one `tibber_tokens.json` raced on Tibber's rotating refresh
+  token, leaving one instance permanently stuck on `invalid_grant`. Fixed with `TokenStore.locked()`
+  (§2.4) — a same-machine `flock`-based lock plus re-read-under-lock — and a
+  `TibberReauthRequiredError` → `AdapterUnavailableError` translation chain so a genuine (non-race)
+  rejection now clears the stale token automatically and surfaces as a clear
+  `{"error": "server_unavailable", ...}` MCP tool response instead of a raw HTTP error string.
+  Documented multi-host as an explicit non-goal of this fix.
+- **2026-08-24** — Live-tested the fix above against a token that was already dead *before*
+  startup (no cached tokens, and a genuinely-rejected refresh token) and found both stdio and
+  HTTP mode still crashed the whole process before any MCP client could connect — the
+  translation chain only covered a token dying mid-session, not at startup. Fixed with a new
+  `UnavailableAdapter` (`starting_adapter.py`): `mcp_server_cli.py` now catches `TibberAuthError`
+  at startup in both transports and falls back to it instead of propagating, so the server
+  always starts and every tool call reports `server_unavailable` with the remediation message,
+  even when Tibber login has never succeeded at all. Re-verified live: two real server
+  processes started concurrently against one shared, genuinely-expired-but-still-valid token
+  both came up cleanly with only one real refresh call between them (confirmed via
+  `Client`+`StdioTransport` against real subprocesses, and via two new deterministic
+  `threading.Barrier`-based tests that contend for the real `flock` instead of simulating it
+  sequentially).
