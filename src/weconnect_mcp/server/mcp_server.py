@@ -1,6 +1,6 @@
-"""MCP Server for Volkswagen WeConnect vehicle data and control.
+"""MCP Server for Volkswagen vehicle data via the Tibber Data API.
 
-Provides FastMCP server with tools and resources for vehicle access.
+Provides FastMCP server with tools and prompts for vehicle access.
 
 Transport modes:
   - stdio:  Local usage with Claude Desktop / VS Code Copilot
@@ -22,8 +22,6 @@ from pathlib import Path
 from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
 from weconnect_mcp.server.mixins import (
     register_read_tools,
-    register_command_tools,
-    register_resources,
     register_prompts,
 )
 from weconnect_mcp.cli import logging_config
@@ -114,10 +112,8 @@ def get_server(adapter: AbstractAdapter, api_key: Optional[str] = None) -> FastM
         auth=auth_provider,
     )
     
-    # Register all MCP tools and resources
+    # Register all MCP tools
     register_read_tools(mcp, adapter)
-    register_command_tools(mcp, adapter)
-    #register_resources(mcp, adapter)
     register_prompts(mcp)
 
     # ── Health check endpoint (HTTP transport only) ───────────────────────────
@@ -128,12 +124,12 @@ def get_server(adapter: AbstractAdapter, api_key: Optional[str] = None) -> FastM
     async def health(_request):  # type: ignore[no-untyped-def]
         """Liveness + readiness probe.
 
-        Returns HTTP 200 immediately (even during VW login) so Railway's
+        Returns HTTP 200 immediately (even during Tibber login) so Railway's
         health-check window is not exhausted.  The ``ready`` field tells
-        clients whether the VW adapter has finished connecting.
+        clients whether the Tibber adapter has finished connecting.
         """
         from starlette.responses import JSONResponse
-        is_ready = getattr(adapter, "_ready", True)  # TestAdapter has no _ready
+        is_ready = getattr(adapter, "_ready", True)  # StartingAdapter is the only one with _ready = False
         return JSONResponse(
             {
                 "status": "ok" if is_ready else "starting",

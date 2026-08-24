@@ -12,7 +12,7 @@
 - ✅ README.md exists and is comprehensive (562 lines)
 - ✅ LICENSE.txt exists (Beer-ware License, Revision 42)
 - ✅ pyproject.toml exists (project metadata and dependencies defined)
-- ✅ pytest.ini configured with custom markers (real_api, slow, carconnectivity)
+- ✅ pytest.ini configured (no custom markers needed — the Tibber backend has no slow/real-API test tier)
 - ✅ tests/ directory exists with 23 test files
 - ✅ scripts/ directory exists with 10 shell scripts
 - ✅ .gitignore properly configured (excludes config.json, tokenstore, venv)
@@ -28,17 +28,19 @@
 
 **Documentation Quality Sample:**
 ```python
-"""CarConnectivity adapter for VW vehicles via WeConnect.
+"""Tibber Data API adapter for vehicles (read-only, charging/range only).
 
-Depends on third-party carconnectivity library for:
-- CarConnectivity initialization
-- vehicles_getter callable
+Reads vehicle data via the Tibber Data API -- see ARCHITECTURE.md for the
+full API research and current architecture this adapter implements.
 
-Uses mixin pattern to compose functionality:
-- CacheMixin: Data caching and invalidation
-- VehicleResolutionMixin: Resolve identifiers (VIN/name/plate) to VIN
-- CommandMixin: All vehicle control commands
-- StateExtractionMixin: Extract state from vehicle objects
+Composed of mixins for its concerns:
+- CacheMixin: data caching to avoid hammering Tibber's API
+- TibberStateExtractionMixin: extract charging/range state from a
+  Tibber device-detail response
+
+Vehicle identifier resolution (VIN/name/license plate) comes from
+AbstractAdapter's own concrete resolve_vehicle_id -- no separate mixin
+needed for that.
 """
 ```
 
@@ -74,20 +76,20 @@ All required sections present:
 - ✅ Human-friendly license terms explained in README
 
 ### 5. Unit Tests ✅
-- ✅ 23 test files organized by feature/module
+- ✅ 6 test files organized by feature/module
 - ✅ Test suite structure properly organized:
   ```
   tests/
-  ├── commands/      # Command execution tests (lock, unlock, climate, etc.)
-  ├── tools/         # MCP tool tests (get_battery_status, etc.)
-  ├── real_api/      # Integration tests with real VW API
-  ├── resources/     # Test fixtures and mock data
+  ├── tools/                     # MCP tool tests (get_battery_status, etc.)
+  ├── test_caching.py            # CacheMixin behavior tests
+  ├── test_tibber_extraction.py  # Tibber capability parsing + VIN extraction
+  └── test_mcp_server.py         # MCP protocol integration test
   ```
-- ✅ Mock tests don't require real VW API credentials
-- ✅ Integration tests clearly marked with pytest markers
-- ✅ pytest.ini properly configured with markers
+- ✅ Mock tests don't require real Tibber API credentials
+- ✅ Tibber capability-parsing logic tested against real fixture data
+  (ARCHITECTURE.md §3.1), not just through the mock adapter
 - ✅ Test documentation in tests/README.md
-- ✅ Test script (test.sh) with --skip-slow option
+- ✅ Test script (test.sh)
 
 ### 6. CLI Scripts Documentation ✅
 All 10 shell scripts documented in scripts/README.md:
@@ -103,7 +105,7 @@ All 10 shell scripts documented in scripts/README.md:
 | `start_server_fg.sh` | Start MCP server (foreground) | ✅ |
 | `start_server_bg.sh` | Start MCP server (background) | ✅ |
 | `stop_server_bg.sh` | Stop background server | ✅ |
-| `vehicle_command.sh` | Vehicle control commands | ✅ |
+| `start_server_http.sh` | Start MCP server (HTTP mode) | ✅ |
 
 **Documentation includes:**
 - Purpose and description
@@ -152,7 +154,7 @@ All publication requirements are met. The license badge issue has been fixed.
    [project]
    name = "weconnect-mcp"
    version = "1.0.0"
-   description = "MCP Server for Volkswagen WeConnect"
+   description = "MCP Server for vehicle data via the Tibber Data API"
    ```
 
 3. **Version Tagging** - Create v1.0.0 tag when ready

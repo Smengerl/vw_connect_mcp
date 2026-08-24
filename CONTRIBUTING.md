@@ -12,7 +12,7 @@ Thanks for your interest in contributing to the WeConnect MCP Server! Contributi
    - `docs:` for documentation changes
    - `test:` for test additions/modifications
    - `refactor:` for code refactoring
-4. **Add tests** for your changes - all 208+ tests must pass
+4. **Add tests** for your changes - all 47 tests must pass
 5. **Update documentation** if you change APIs or add features
 6. **Open a Pull Request** with a clear description of what you changed and why
 
@@ -27,36 +27,28 @@ cd weconnect_mvp
 ./scripts/setup.sh
 
 # Run tests -- no credentials of any kind needed for this
-./scripts/test.sh --skip-slow  # Fast mock tests only
+./scripts/test.sh
 ```
 
-The steps above are all that's needed for most contributions. Credentials are
-only needed if you're testing against a live backend:
+The steps above are all that's needed for most contributions — the whole test
+suite runs against a mock adapter, no Tibber account required. Credentials
+are only needed if you want to manually run the server against your own
+vehicle (see [README.md's Setting Up Tibber Credentials](README.md#setting-up-tibber-credentials)
+— there's no dedicated test suite against the real API, since it's read-only
+and the mock adapter already covers everything it can return):
 
-- **VW real API tests** (18 slow tests, currently untestable — VW blocks
-  third-party access, see the warning in [README.md](README.md)):
-  ```bash
-  cp src/config.example.json src/config.json
-  nano src/config.json  # Add your VW credentials
-  ```
-- **Manually running the server against Tibber** (see
-  [README.md's Choosing a Backend](README.md#choosing-a-backend) — this is
-  the currently-working backend, but has no dedicated test suite yet):
-  ```bash
-  cp src/tibber_config.example.json src/tibber_config.json
-  nano src/tibber_config.json  # Add your Tibber OAuth2 client credentials
-  python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json  # one-time interactive login
-  ```
+```bash
+cp src/tibber_config.example.json src/tibber_config.json
+nano src/tibber_config.json  # Add your Tibber OAuth2 client credentials
+python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json  # one-time interactive login
+```
 
 ## Testing Requirements
 
 **All tests must pass before submitting a PR:**
 
 ```bash
-# Run fast mock tests (197 tests, ~4 seconds)
-./scripts/test.sh --skip-slow
-
-# Run all tests including real API tests (215 tests)
+# Run the test suite (47 tests, ~0.1 seconds)
 ./scripts/test.sh
 ```
 
@@ -67,6 +59,23 @@ only needed if you're testing against a live backend:
 4. Run all tests - must pass!
 
 See [tests/README.md](tests/README.md) for detailed testing guidelines.
+
+### Publication Readiness Check
+
+The project includes a custom GitHub Copilot agent that verifies publication
+readiness: code documentation quality (docstrings, type hints), README.md
+completeness, license file presence, unit test coverage, and CLI scripts
+documentation.
+
+```bash
+# Via GitHub Copilot
+@workspace /agent publication-readiness Run publication check
+
+# Or follow the manual checklist
+cat .github/agents/publication-readiness.md
+```
+
+See [.github/agents/README.md](.github/agents/README.md) for more information.
 
 ## Code Style
 
@@ -95,7 +104,7 @@ def get_vehicle(vehicle_id):
 3. Local application imports
 
 ### None Handling
-VW API is unreliable - **always check for None**:
+Tibber only reports a handful of fields, and many are `None` by design - **always check for None**:
 
 ```python
 # ✅ Good

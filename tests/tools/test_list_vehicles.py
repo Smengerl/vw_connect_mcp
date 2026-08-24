@@ -14,12 +14,9 @@ Test data:
 - Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
 - Expected values from tests.test_data module
 """
-import pytest
 from test_data import (
     VIN_ELECTRIC,
     VIN_COMBUSTION,
-    NAME_ELECTRIC,
-    NAME_COMBUSTION,
     EXPECTED_ELECTRIC_VEHICLE,
     EXPECTED_COMBUSTION_VEHICLE,
 )
@@ -66,16 +63,3 @@ def test_list_vehicles_combustion_vehicle_data(adapter):
     assert combustion.name == EXPECTED_COMBUSTION_VEHICLE["name"]
     assert combustion.model == EXPECTED_COMBUSTION_VEHICLE["model"]
     assert combustion.license_plate == EXPECTED_COMBUSTION_VEHICLE["license_plate"]
-
-
-# ==================== MCP SERVER REGISTRATION ====================
-
-@pytest.mark.mcp_resources
-@pytest.mark.asyncio
-async def test_list_vehicles_resource_is_registered(mcp_server):
-    """Test that list_vehicles is available as a resource in the MCP server"""
-    resources = await mcp_server.get_resources()
-    
-    assert resources is not None, "Resources should not be None"
-    resource_uris = list(resources.keys())
-    assert "data://vehicles" in resource_uris, "data://vehicles resource should be registered in MCP server"

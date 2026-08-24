@@ -2,9 +2,7 @@
 
 Single entry point: call ``configure_logging()`` once at startup (in the CLI).
 All other modules just do ``logging.getLogger(__name__)`` — no setup of their
-own.  This module also provides the uvicorn log-config dict used in HTTP mode
-and a helper to re-apply third-party log levels after the carconnectivity
-library resets them during initialisation.
+own.  This module also provides the uvicorn log-config dict used in HTTP mode.
 
 Transport behaviour
 -------------------
@@ -18,15 +16,9 @@ Transport behaviour
 
 Third-party library levels
 --------------------------
-The ``carconnectivity`` library is very verbose at DEBUG / INFO.  We always
-clamp it to ``max(user_level, WARNING)`` to avoid noise, unless the user
-explicitly asks for DEBUG.  The same clamping applies to ``urllib3`` and
-``httpx``.
-
-Note: ``CarConnectivity.__init__()`` internally calls ``LOG.setLevel()`` based
-on its own config, potentially overriding what we set here.  For that reason
-``apply_third_party_levels()`` must be called *again* after the adapter has
-finished connecting (see ``_connect_vw`` in the CLI).
+``httpx`` (used by the Tibber Data API client) and ``urllib3`` are clamped to
+``max(user_level, WARNING)`` to avoid noise, unless the user explicitly asks
+for DEBUG.
 """
 
 import logging
@@ -40,9 +32,6 @@ DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Names of noisy third-party loggers we want to keep quiet.
 _THIRD_PARTY_LOGGERS = (
-    "carconnectivity",
-    "carconnectivity.connectors.volkswagen-api-debug",
-    "carconnectivity.connectors",
     "urllib3",
     "httpx",
 )
@@ -114,26 +103,14 @@ def apply_third_party_levels(user_level: int = DEFAULT_LOG_LEVEL) -> None:
 
     Clamps each third-party logger to ``max(user_level, WARNING)`` so that
     debug/info noise from those libraries is suppressed unless the user
-    explicitly chose DEBUG.  Always at minimum ERROR for the carconnectivity
-    api-debug logger (extremely spammy).
-
-    This function is intentionally callable multiple times — the CLI calls it
-    once during initial setup and once more *after* the VW adapter has
-    connected, because ``CarConnectivity.__init__()`` resets the carconnectivity
-    logger level from its config file.
+    explicitly chose DEBUG.
 
     Args:
         user_level: The log level the user selected for the application.
     """
-    # Minimum level for third-party libs: no noisier than WARNING.
     third_party_level = max(user_level, logging.WARNING)
-    # The api-debug sub-logger spams WARNING messages about unknown capability
-    # codes; clamp it further to ERROR.
-    api_debug_level = max(user_level, logging.ERROR)
-
     for name in _THIRD_PARTY_LOGGERS:
-        lvl = api_debug_level if "api-debug" in name or name == "carconnectivity.connectors" else third_party_level
-        logging.getLogger(name).setLevel(lvl)
+        logging.getLogger(name).setLevel(third_party_level)
 
 
 def get_logger(name: str) -> logging.Logger:

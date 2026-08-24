@@ -1,21 +1,23 @@
-"""Tibber Data API adapter for VW vehicles (read-only, charging/range only).
+"""Tibber Data API adapter for vehicles (read-only, charging/range only).
 
-Alternative to CarConnectivityAdapter now that VW has blocked third-party
-BFF access (see experiment/vw-device-flow-attestation-bypass/FINDING.md).
-Reads vehicle data via the Tibber Data API instead — see
-experiment/tibber-integration/TIBBER_API.md for the full API research and
-the architecture analysis (§7) this adapter implements.
+Reads vehicle data via the Tibber Data API — see ARCHITECTURE.md for the
+full API research and the current architecture (§4) this adapter
+implements. Not VW-specific despite the project's origins (ARCHITECTURE.md
+§1.1) — Tibber's vehicle integration covers 30+ EV brands via Enode. This
+is now the project's only backend; the previous VW-direct carconnectivity
+backend was removed after VW blocked third-party access (see the permanent
+`carconnectivity` branch for that code).
 
 Two hard limitations, by design, not oversight — both confirmed live and
-documented in TIBBER_API.md:
-- Read coverage: Tibber exposes only 11 of the ~51 data points
-  CarConnectivity/VW-direct provides (identity fields + SoC/range/
+documented in ARCHITECTURE.md:
+- Read coverage: Tibber exposes only 11 of the ~51 data points the old
+  carconnectivity/VW-direct backend provided (identity fields + SoC/range/
   charging/plug status). Doors, windows, tyres, lights, climatization,
-  position, and maintenance have no Tibber equivalent at all -> the
-  corresponding get_* methods always return None.
+  position, and maintenance have no Tibber equivalent at all, which is why
+  AbstractAdapter no longer declares methods/models for any of them.
 - Write coverage: the Tibber Data API is entirely read-only (confirmed via
-  its OpenAPI schema, no command endpoint exists) -> every command method
-  always returns a "not supported" result dict.
+  its OpenAPI schema, no command endpoint exists) — AbstractAdapter has no
+  command methods at all as a result.
 
 Auth: TibberDataAPI is constructed with allow_interactive_login=False, so
 this adapter's __init__ never opens a browser or blocks on user input — it
@@ -27,51 +29,48 @@ remediation message.
 
 from __future__ import annotations
 
+import functools
 import logging
-from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, VehicleModel, VehicleListItem, VehicleDetailLevel,
-    PhysicalStatusModel, EnergyStatusModel, ClimateStatusModel,
-    RangeInfo, ElectricDriveInfo, MaintenanceModel, PositionModel,
+    AbstractAdapter, AdapterUnavailableError, VehicleModel, VehicleListItem,
+    VehicleDetailLevel, EnergyStatusModel, RangeInfo, ElectricDriveInfo,
 )
-from weconnect_mcp.adapter.mixins import (
-    CacheMixin, VehicleResolutionMixin, TibberStateExtractionMixin,
-)
+from weconnect_mcp.adapter.mixins import CacheMixin, TibberStateExtractionMixin
 from weconnect_mcp.adapter.tibber_client import (
-    TibberDataAPI, TokenStore, vin_from_external_id,
+    TibberDataAPI, TibberReauthRequiredError, TokenStore, vin_from_external_id,
 )
-
-# Cache duration — same default as CarConnectivityAdapter; Tibber's own API
-# docs also ask clients to be polite about polling frequency.
-CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 logger = logging.getLogger(__name__)
 
-_NOT_SUPPORTED: Dict[str, Any] = {
-    "success": False,
-    "error": "Not supported: the Tibber Data API is read-only (no command endpoints exist).",
-}
+
+def _translate_auth_errors(fn):
+    """Convert a Tibber-specific reauth failure into the adapter port's
+    generic AdapterUnavailableError, so callers (the MCP tool layer) don't
+    need to know this adapter happens to be backed by Tibber. See
+    ARCHITECTURE.md §2.4.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except TibberReauthRequiredError as exc:
+            raise AdapterUnavailableError(str(exc)) from exc
+    return wrapper
 
 
-class TibberAdapter(
-    CacheMixin,
-    VehicleResolutionMixin,
-    TibberStateExtractionMixin,
-    AbstractAdapter,
-):
-    """Adapter for VW vehicles using the Tibber Data API.
+class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
+    """Adapter for vehicles using the Tibber Data API.
 
-    Composed of mixins for the concerns it shares with CarConnectivityAdapter:
+    Composed of mixins for its concerns:
     - CacheMixin: data caching to avoid hammering Tibber's API
-    - VehicleResolutionMixin: resolve vehicle identifiers to VIN
     - TibberStateExtractionMixin: extract charging/range state from a
       Tibber device-detail response
 
-    Deliberately has no CommandMixin equivalent — every command method
-    below returns _NOT_SUPPORTED directly, since the underlying API has no
-    write endpoint to call.
+    Vehicle identifier resolution (VIN/name/license plate) comes from
+    AbstractAdapter's own concrete `resolve_vehicle_id` — no separate
+    mixin needed for that.
     """
 
     def __init__(
@@ -92,8 +91,7 @@ class TibberAdapter(
             token_path: Path to the token file produced by
                 weconnect_mcp.cli.tibber_login_cli.
         """
-        self._last_fetch_time = None
-        self._cache_duration = timedelta(seconds=CACHE_DURATION_SECONDS)
+        super().__init__()
 
         self.client = TibberDataAPI(
             client_id=client_id,
@@ -103,7 +101,7 @@ class TibberAdapter(
             allow_interactive_login=False,
         )
         self._vehicles_cache: List[Dict[str, Any]] = []
-        self._fetch_data()  # initial fetch, mirrors CarConnectivityAdapter
+        self._fetch_data()  # initial fetch
 
     def _fetch_data(self) -> None:
         """Fetch the vehicle list from Tibber and update cache timestamp."""
@@ -128,6 +126,7 @@ class TibberAdapter(
 
     # ── vehicle lookup helpers ────────────────────────────────────────────────
 
+    @_translate_auth_errors
     def list_vehicles(self) -> list[VehicleListItem]:
         """Get list of vehicles with VIN, name, model.
 
@@ -164,6 +163,7 @@ class TibberAdapter(
 
     # ── read methods ─────────────────────────────────────────────────────────
 
+    @_translate_auth_errors
     def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
         """Get vehicle info. Fields with no Tibber equivalent stay None."""
         entry = self._find_vehicle_entry(vehicle_id)
@@ -174,11 +174,13 @@ class TibberAdapter(
         vin = vin_from_external_id(entry.get("externalId", ""))
 
         connection_state = None
+        last_seen = None
         if details != VehicleDetailLevel.BASIC:
             detail = self.client.device(entry["homeId"], entry["id"])
             for attr in detail.get("attributes", []):
                 if attr.get("id") == "isOnline":
                     connection_state = "online" if attr.get("value") else "offline"
+            last_seen = detail.get("status", {}).get("lastSeen")
 
         return VehicleModel(
             vin=vin,
@@ -186,14 +188,10 @@ class TibberAdapter(
             name=info.get("name"),
             manufacturer=info.get("brand"),
             connection_state=connection_state,
-            # license_plate, odometer, state, type, software_version,
-            # model_year: no Tibber equivalent (TIBBER_API.md README table)
+            last_seen=last_seen,
         )
 
-    def get_physical_status(self, vehicle_id: str, components: Optional[List[str]] = None) -> Optional[PhysicalStatusModel]:
-        """Doors/windows/tyres/lights have no Tibber equivalent."""
-        return None
-
+    @_translate_auth_errors
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
         """Get energy and range info from Tibber's charging capabilities."""
         detail = self._get_device_detail(vehicle_id)
@@ -201,8 +199,8 @@ class TibberAdapter(
             return None
 
         charging = self._get_tibber_charging_state(detail)
-        range_info = self._get_tibber_range_info(detail)
-        if charging is None and range_info is None:
+        range_km = self._get_tibber_range_km(detail)
+        if charging is None and range_km is None:
             return None
 
         electric_info = ElectricDriveInfo(
@@ -211,8 +209,8 @@ class TibberAdapter(
             charging=charging,
         )
         range_model = RangeInfo(
-            total_km=range_info.total_range_km if range_info else None,
-            electric_km=range_info.electric_drive.range_km if range_info and range_info.electric_drive else None,
+            total_km=range_km,
+            electric_km=range_km,
             combustion_km=None,  # Tibber only ever reports EVs
         )
 
@@ -221,48 +219,5 @@ class TibberAdapter(
             range=range_model,
             electric=electric_info,
             combustion=None,
+            last_seen=detail.get("status", {}).get("lastSeen"),
         )
-
-    def get_climate_status(self, vehicle_id: str) -> Optional[ClimateStatusModel]:
-        """Climatization and window heating have no Tibber equivalent."""
-        return None
-
-    def get_maintenance_info(self, vehicle_id: str) -> Optional[MaintenanceModel]:
-        """Maintenance schedule has no Tibber equivalent."""
-        return None
-
-    def get_position(self, vehicle_id: str) -> Optional[PositionModel]:
-        """GPS position has no Tibber equivalent."""
-        return None
-
-    # ── command methods (all unsupported — Tibber Data API is read-only) ────
-
-    def lock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def unlock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def start_climatization(self, vehicle_id: str, target_temp_celsius: Optional[float] = None) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def stop_climatization(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def start_charging(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def stop_charging(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def flash_lights(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def honk_and_flash(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def start_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED
-
-    def stop_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
-        return _NOT_SUPPORTED

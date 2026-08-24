@@ -34,16 +34,15 @@ echo "Using virtual environment: $PYTHON_PATH"
 
 echo ""
 
-# Default backend is Tibber (read-only, works today -- VW-direct is
-# currently blocked, see the warning in README.md). Credentials live in a
-# gitignored JSON file rather than environment variables, because Copilot
-# Desktop launches the server with its own environment, not your shell's --
+# Credentials live in a gitignored JSON file rather than environment
+# variables, because Copilot Desktop launches the server with its own
+# environment, not your shell's --
 # env vars set via `export` never reach it.
 TIBBER_CONFIG="$PROJECT_DIR/src/tibber_config.json"
 if [ ! -f "$TIBBER_CONFIG" ]; then
   echo "⚠️  $TIBBER_CONFIG not found."
   echo "   Register an OAuth2 client at https://data-api.tibber.com/clients/manage/"
-  echo "   (see experiment/tibber-integration/README.md for the exact scopes/redirect URI),"
+  echo "   (see ARCHITECTURE.md for the exact scopes/redirect URI),"
   echo "   then create the file:"
   echo "     cp src/tibber_config.example.json src/tibber_config.json"
   echo "     # edit src/tibber_config.json with your client_id/client_secret"
@@ -69,9 +68,7 @@ cat << EOF > "$CONFIG_FILE"
       "args": [
         "-m",
         "weconnect_mcp.cli.mcp_server_cli",
-        "$TIBBER_CONFIG",
-        "--backend",
-        "tibber"
+        "$TIBBER_CONFIG"
       ],
       "cwd": "$PROJECT_DIR"
     }
@@ -94,8 +91,3 @@ echo ""
 echo "2. Or manually copy the JSON output from $CONFIG_FILE"
 echo ""
 echo "After editing, restart Microsoft Copilot Desktop completely!"
-echo ""
-echo "ℹ️  To use the VW-direct backend instead (currently blocked by VW, see"
-echo "   README.md warning): edit the generated config, replace"
-echo "   \"$TIBBER_CONFIG\" with \"$PROJECT_DIR/src/config.json\" and"
-echo "   \"tibber\" with \"carconnectivity\"."

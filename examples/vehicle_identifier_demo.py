@@ -54,85 +54,69 @@ def main():
             print(f"      → Not found")
         print()
     
-    # 3. Demonstrate tool usage with different identifiers
+    # 3. Demonstrate energy status lookup with different identifiers
     print("\n3. Access Vehicle Data Using Different Identifiers")
     print("-" * 70)
-    
+
     # 3a. By Name
     print("   A. Access by Name: 'ID7'")
-    battery = adapter.get_battery_status('ID7')
-    position = adapter.get_position('ID7')
-    print(f"      Battery: {battery.battery_level_percent}%")
-    print(f"      Range: {battery.range_km} km")
-    print(f"      Position: {position.latitude:.4f}°N, {position.longitude:.4f}°E")
+    energy = adapter.get_energy_status('ID7')
+    print(f"      Battery: {energy.electric.battery_level_percent}%")
+    print(f"      Range: {energy.range.total_km} km")
     print()
-    
+
     # 3b. By License Plate
     print("   B. Access by License Plate: 'M-XY 5678'")
-    battery = adapter.get_battery_status('M-XY 5678')
-    position = adapter.get_position('M-XY 5678')
-    print(f"      Battery: {battery.battery_level_percent}%")
-    print(f"      Range: {battery.range_km} km")
-    print(f"      Position: {position.latitude:.4f}°N, {position.longitude:.4f}°E")
+    energy = adapter.get_energy_status('M-XY 5678')
+    print(f"      Battery: {energy.electric.battery_level_percent}%")
+    print(f"      Range: {energy.range.total_km} km")
     print()
-    
+
     # 3c. By VIN (backwards compatibility)
     print("   C. Access by VIN: 'WVWZZZED4SE003938'")
-    battery = adapter.get_battery_status('WVWZZZED4SE003938')
-    position = adapter.get_position('WVWZZZED4SE003938')
-    print(f"      Battery: {battery.battery_level_percent}%")
-    print(f"      Range: {battery.range_km} km")
-    print(f"      Position: {position.latitude:.4f}°N, {position.longitude:.4f}°E")
+    energy = adapter.get_energy_status('WVWZZZED4SE003938')
+    print(f"      Battery: {energy.electric.battery_level_percent}%")
+    print(f"      Range: {energy.range.total_km} km")
     print()
-    
+
     # 4. All three methods return identical results
     print("\n4. Verification: All Methods Return Same Data")
     print("-" * 70)
-    by_name = adapter.get_battery_status('ID7')
-    by_plate = adapter.get_battery_status('M-XY 5678')
-    by_vin = adapter.get_battery_status('WVWZZZED4SE003938')
-    
-    print(f"   By Name:          {by_name.battery_level_percent}% / {by_name.range_km} km")
-    print(f"   By License Plate: {by_plate.battery_level_percent}% / {by_plate.range_km} km")
-    print(f"   By VIN:           {by_vin.battery_level_percent}% / {by_vin.range_km} km")
+    by_name = adapter.get_energy_status('ID7')
+    by_plate = adapter.get_energy_status('M-XY 5678')
+    by_vin = adapter.get_energy_status('WVWZZZED4SE003938')
+
+    print(f"   By Name:          {by_name.electric.battery_level_percent}% / {by_name.range.total_km} km")
+    print(f"   By License Plate: {by_plate.electric.battery_level_percent}% / {by_plate.range.total_km} km")
+    print(f"   By VIN:           {by_vin.electric.battery_level_percent}% / {by_vin.range.total_km} km")
     print()
-    
+
     if by_name == by_plate == by_vin:
         print("   ✅ All methods return identical data!")
     else:
         print("   ❌ Data mismatch!")
-    
+
     # 5. Real-world use cases
     print("\n5. Real-World AI Assistant Use Cases")
     print("-" * 70)
     print()
-    
+
     use_cases = [
-        ("How much battery does my ID7 have?", "ID7", "battery_status"),
-        ("Where is the car with plate M-AB 1234?", "M-AB 1234", "position"),
-        ("Is my T7 charging?", "T7", "charging_state"),
-        ("What's the range of M-XY 5678?", "M-XY 5678", "range_info"),
+        ("How much battery does my ID7 have?", "ID7"),
+        ("Is my ID7 charging?", "ID7"),
+        ("What's the range of M-XY 5678?", "M-XY 5678"),
     ]
-    
-    for i, (query, identifier, tool) in enumerate(use_cases, 1):
+
+    for i, (query, identifier) in enumerate(use_cases, 1):
         print(f"   Use Case {i}: \"{query}\"")
-        
-        if tool == "battery_status":
-            data = adapter.get_battery_status(identifier)
-            print(f"      → Battery: {data.battery_level_percent}%, Range: {data.range_km} km")
-        elif tool == "position":
-            data = adapter.get_position(identifier)
-            print(f"      → Position: {data.latitude:.4f}°N, {data.longitude:.4f}°E")
-        elif tool == "charging_state":
-            data = adapter.get_charging_state(identifier)
-            if data:
-                status = "Charging" if data.is_charging else "Not charging"
-                print(f"      → {status} ({data.current_soc_percent}%)")
-            else:
-                print(f"      → Not an electric vehicle")
-        elif tool == "range_info":
-            data = adapter.get_range_info(identifier)
-            print(f"      → Total Range: {data.total_range_km} km")
+        data = adapter.get_energy_status(identifier)
+        if data.electric:
+            charging = data.electric.charging
+            status = "Charging" if charging and charging.is_charging else "Not charging"
+            print(f"      → Battery: {data.electric.battery_level_percent}%, "
+                  f"Range: {data.range.total_km} km, {status}")
+        else:
+            print(f"      → Combustion vehicle, tank: {data.combustion.tank_level_percent}%")
         print()
     
     print("=" * 70)

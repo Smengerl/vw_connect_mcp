@@ -51,21 +51,23 @@ echo "Upgrading pip inside venv..."
 echo "Installing project in editable mode"
 "$VENV_PIP" install -e "$ROOT_DIR"
 
-# Setup configuration file
-CONFIG_EXAMPLE="$ROOT_DIR/src/config.example.json"
-CONFIG_FILE="$ROOT_DIR/src/config.json"
+# Setup Tibber credentials file
+CONFIG_EXAMPLE="$ROOT_DIR/src/tibber_config.example.json"
+CONFIG_FILE="$ROOT_DIR/src/tibber_config.json"
 
 if [ ! -f "$CONFIG_FILE" ]; then
   if [ -f "$CONFIG_EXAMPLE" ]; then
     echo ""
-    echo "Creating config.json from example..."
+    echo "Creating tibber_config.json from example..."
     cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
-    echo "⚠️  IMPORTANT: Edit src/config.json with your VW WeConnect credentials!"
-    echo "   - username: Your VW account email"
-    echo "   - password: Your VW account password"
-    echo "   - spin: Your VW S-PIN (4 digits)"
+    echo "⚠️  IMPORTANT: Edit src/tibber_config.json with your Tibber OAuth2 client!"
+    echo "   Register a client at https://data-api.tibber.com/clients/manage/"
+    echo "   - client_id / client_secret: from that registration"
+    echo "   - redirect_uri: must match what you registered (default: http://localhost:8515/callback)"
+    echo "   Then run the one-time interactive login:"
+    echo "     $VENV_PYTHON -m weconnect_mcp.cli.tibber_login_cli"
   else
-    echo "Warning: config.example.json not found, skipping config file creation" >&2
+    echo "Warning: tibber_config.example.json not found, skipping config file creation" >&2
   fi
 else
   echo "Config file already exists at $CONFIG_FILE (not overwriting)"
@@ -82,6 +84,6 @@ fi
 echo ""
 echo "Or run scripts via the venv python directly, e.g.:"
 echo "  $VENV_PYTHON -m pytest"
-echo "  $VENV_PYTHON -m weconnect_mcp.cli.mcp_server_cli src/config.json"
+echo "  $VENV_PYTHON -m weconnect_mcp.cli.mcp_server_cli src/tibber_config.json"
 
 exit 0

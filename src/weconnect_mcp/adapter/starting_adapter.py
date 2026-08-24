@@ -1,84 +1,75 @@
-"""No-op stub adapter used while the real VW adapter is still connecting.
+"""Stub adapters used when the real (Tibber) adapter isn't in play yet.
 
-In HTTP/cloud mode the MCP server starts immediately so that cloud
-health-checks pass, while the actual VW OAuth login runs in a background
-thread.  During that warm-up window every tool call is routed through this
-stub, which returns safe "not ready yet" responses instead of crashing.
+Two distinct situations, two distinct stubs -- don't conflate them:
 
-Once the background thread finishes, :class:`AdapterProxy` swaps the delegate
-to the real :class:`CarConnectivityAdapter` and sets ``_ready = True``.
+- StartingAdapter: the real backend is still connecting (HTTP/cloud mode
+  only, transient). The MCP server starts immediately so cloud
+  health-checks pass while login runs in a background thread; during that
+  window every tool call gets a safe "nothing yet" response, not an error.
+  Once the background thread finishes, the CLI's adapter proxy swaps the
+  delegate to the real adapter and sets ``_ready = True``.
+
+- UnavailableAdapter: the real backend could not be constructed at all --
+  no cached Tibber tokens, or a refresh that failed with a genuine
+  (non-race) rejection, see ARCHITECTURE.md §2.4 -- and won't become
+  available without a human re-authorizing and restarting. Used by both
+  transports so the MCP server still starts and registers its tools
+  instead of the whole process crashing before any client ever connects:
+  every call raises AdapterUnavailableError, which read_tools.py's
+  _handle_unavailable turns into a clear "server_unavailable" tool
+  response.
 """
 from __future__ import annotations
 
 from typing import Optional
 
-from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
-
-_NOT_READY: dict = {
-    "success": False,
-    "error": "Server is still starting – please retry in a few seconds",
-}
+from weconnect_mcp.adapter.abstract_adapter import (
+    AbstractAdapter, AdapterUnavailableError, EnergyStatusModel, VehicleModel, VehicleListItem,
+)
 
 
 class StartingAdapter(AbstractAdapter):
-    """No-op stub used while VW OAuth login is in progress."""
+    """No-op stub used while the real backend is still connecting."""
 
     _ready: bool = False
 
-    # ── read methods ─────────────────────────────────────────────────────────
-
-    def list_vehicles(self):  # type: ignore[override]
+    def list_vehicles(self) -> list[VehicleListItem]:  # type: ignore[override]
         return []
 
-    def get_vehicle(self, vehicle_id: str):  # type: ignore[override]
+    def get_vehicle(self, vehicle_id: str, details=None) -> Optional[VehicleModel]:  # type: ignore[override]
         return None
 
-    def get_physical_status(self, vehicle_id: str):  # type: ignore[override]
+    def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:  # type: ignore[override]
         return None
 
-    def get_climate_status(self, vehicle_id: str):  # type: ignore[override]
-        return None
-
-    def get_energy_status(self, vehicle_id: str):  # type: ignore[override]
-        return None
-
-    def get_position(self, vehicle_id: str):  # type: ignore[override]
-        return None
-
-    def get_maintenance_info(self, vehicle_id: str):  # type: ignore[override]
-        return None
-
-    def shutdown(self):  # type: ignore[override]
+    def shutdown(self) -> None:  # type: ignore[override]
         pass
 
-    # ── command methods ───────────────────────────────────────────────────────
 
-    def lock_vehicle(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+class UnavailableAdapter(AbstractAdapter):
+    """Stub used when the real backend could not be constructed at all and
+    won't recover without a human re-authorizing (see module docstring).
+    Every method raises AdapterUnavailableError with the original
+    remediation message.
+    """
 
-    def unlock_vehicle(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+    def __init__(self, message: str) -> None:
+        self._message = message
 
-    def start_climatization(self, vehicle_id: str, target_temp_celsius: Optional[float] = None):  # type: ignore[override]
-        return _NOT_READY
+    def list_vehicles(self) -> list[VehicleListItem]:  # type: ignore[override]
+        raise AdapterUnavailableError(self._message)
 
-    def stop_climatization(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+    def get_vehicle(self, vehicle_id: str, details=None) -> Optional[VehicleModel]:  # type: ignore[override]
+        raise AdapterUnavailableError(self._message)
 
-    def start_charging(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+    def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:  # type: ignore[override]
+        raise AdapterUnavailableError(self._message)
 
-    def stop_charging(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+    def shutdown(self) -> None:  # type: ignore[override]
+        pass
 
-    def start_window_heating(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
+    def __enter__(self) -> "UnavailableAdapter":
+        return self
 
-    def stop_window_heating(self, vehicle_id: str):  # type: ignore[override]
-        return _NOT_READY
-
-    def flash_lights(self, vehicle_id: str, duration_seconds: Optional[int] = None):  # type: ignore[override]
-        return _NOT_READY
-
-    def honk_and_flash(self, vehicle_id: str, duration_seconds: Optional[int] = None):  # type: ignore[override]
-        return _NOT_READY
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.shutdown()

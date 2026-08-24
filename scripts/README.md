@@ -65,15 +65,13 @@ wsl ./scripts/test.sh --skip-slow
 
 ## Configuring Secrets
 
-The server has two backends (`--backend tibber` (default) / `carconnectivity`,
-see the main [README.md](../README.md#choosing-a-backend)), and each has its
-own credential source, resolved in this order — **environment variables
-override a credentials file** when both are present:
+The server reads Tibber Data API credentials from a file and/or environment
+variables, resolved in this order — **environment variables override a
+credentials file** when both are present:
 
-| Backend | File (gitignored) | Env vars |
-|---|---|---|
-| `tibber` (default) | `src/tibber_config.json` (template: `src/tibber_config.example.json`) | `TIBBER_CLIENT_ID`, `TIBBER_CLIENT_SECRET`, `TIBBER_REDIRECT_URI`, `TIBBER_TOKEN_PATH` |
-| `carconnectivity` | `src/config.json` (template: `src/config.example.json`) | `VW_USERNAME`, `VW_PASSWORD`, `VW_SPIN` |
+| File (gitignored) | Env vars |
+|---|---|
+| `src/tibber_config.json` (template: `src/tibber_config.example.json`) | `TIBBER_CLIENT_ID`, `TIBBER_CLIENT_SECRET`, `TIBBER_REDIRECT_URI`, `TIBBER_TOKEN_PATH` |
 
 **Use the file for local/desktop clients** (Claude Desktop, VS Code Copilot,
 Microsoft Copilot Desktop) — those launch the server with their own
@@ -85,10 +83,10 @@ generated `claude_desktop_config.json` / `mcp.json`.
 **Use environment variables for Docker/Railway** — see the main README's
 [Cloud Deployment](../README.md#cloud-deployment) section.
 
-The `tibber` backend additionally needs a one-time interactive login before
-first use (a browser step that can't run inside the MCP server process
-itself). It takes the same optional credentials-file argument as the
-server, with identical file/env precedence:
+The server additionally needs a one-time interactive login before first use
+(a browser step that can't run inside the MCP server process itself). It
+takes the same optional credentials-file argument as the server, with
+identical file/env precedence:
 
 ```bash
 python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json   # if using the file
@@ -98,7 +96,7 @@ python -m weconnect_mcp.cli.tibber_login_cli                          # if using
 **For Docker/Railway specifically**, that login can't run inside the
 container either, and Tibber has no way to mint a token from
 `client_id`/`client_secret` alone (no `client_credentials` grant — confirmed
-live, `experiment/tibber-integration/TIBBER_API.md` §3.4), so a
+live, see `ARCHITECTURE.md` §2.3), so a
 `refresh_token` must persist across restarts one way or another. The bridge:
 run `tibber_login_cli` locally as above, then paste that run's token file
 contents into the `TIBBER_TOKEN_JSON` env var (a Railway variable or
@@ -114,7 +112,7 @@ being read again.
 Run the test suite with optional filtering.
 
 ```bash
-# Run all tests (including slow real API tests)
+# Run all tests
 ./scripts/test.sh
 
 # Run only fast mock tests (recommended for CI/CD)
@@ -128,26 +126,29 @@ Run the test suite with optional filtering.
 ```
 
 **Options:**
-- `--skip-slow` - Skip tests marked as 'slow' or 'real_api'
+- `--skip-slow` - No-op today (kept for forward compatibility); would skip
+  'slow'/'real_api'-marked tests if any existed
 - `-v, --verbose` - Run pytest in verbose mode
 - `-h, --help` - Show help message
 
 **Test Statistics:**
-- 197 fast mock tests (~2-4 seconds, no VW account needed)
-- 18 slow real API tests (require valid `src/config.json`)
+- 47 fast mock/offline tests (~0.1s, no Tibber account needed)
+- No slow/real-API tests exist today — the Tibber Data API is read-only, so
+  there's nothing beyond what the mock adapter and the extraction-logic
+  fixtures already cover
 
 ---
 
 ### start_server_fg.sh
-Start the MCP server in foreground (with console output). Defaults to the
-**tibber** backend (no config file needed); pass extra `mcp_server_cli` flags
-after the config argument to change that.
+Start the MCP server in foreground (with console output). No config file
+needed if `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET` are set as env vars; pass
+extra `mcp_server_cli` flags after the config argument.
 
 ```bash
 ./scripts/start_server_fg.sh
 
-# VW-direct backend instead (currently blocked by VW, see README.md warning)
-./scripts/start_server_fg.sh src/config.json --backend carconnectivity
+# With a credentials file and a custom port
+./scripts/start_server_fg.sh src/tibber_config.json --port 8765
 ```
 
 ---
@@ -158,32 +159,22 @@ flag-forwarding as `start_server_fg.sh` above.
 
 ```bash
 ./scripts/start_server_bg.sh
-
-# VW-direct backend instead
-./scripts/start_server_bg.sh src/config.json --backend carconnectivity
 ```
 
 ---
 
 ### start_server_http.sh
 Start the MCP server in HTTP mode with API-key authentication (foreground).
-Reads `.env` from the project root if present. Defaults to the **tibber**
-backend.
+Reads `.env` from the project root if present.
 
 ```bash
-# tibber backend (default), reads TIBBER_CLIENT_ID/SECRET from env or
-# src/tibber_config.json
+# Reads TIBBER_CLIENT_ID/SECRET from env or src/tibber_config.json
 MCP_API_KEY=secret ./scripts/start_server_http.sh 8089
-
-# VW-direct backend instead (currently blocked by VW, see README.md warning)
-MCP_API_KEY=secret VW_USERNAME=... VW_PASSWORD=... VW_SPIN=... \
-  ./scripts/start_server_http.sh 8089 carconnectivity
 ```
 
-**Required:** `MCP_API_KEY` always. For the tibber backend: either
-`TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET` env vars, or `src/tibber_config.json`
-(see [Configuring Secrets](#configuring-secrets) below). For the
-carconnectivity backend: `VW_USERNAME`/`VW_PASSWORD`/`VW_SPIN`.
+**Required:** `MCP_API_KEY` always, plus either `TIBBER_CLIENT_ID`/
+`TIBBER_CLIENT_SECRET` env vars or `src/tibber_config.json` (see
+[Configuring Secrets](#configuring-secrets) below).
 
 ---
 
@@ -216,10 +207,9 @@ source ./scripts/activate_venv.sh
 
 ### create_claude_config.sh
 Generate MCP configuration for Claude Desktop. Points the generated config at
-`src/tibber_config.json` with `--backend tibber` explicit — see
-[Configuring Secrets](#configuring-secrets) below for why a file is used
-here instead of environment variables. Prints setup instructions if that
-file doesn't exist yet.
+`src/tibber_config.json` — see [Configuring Secrets](#configuring-secrets)
+below for why a file is used here instead of environment variables. Prints
+setup instructions if that file doesn't exist yet.
 
 ```bash
 ./scripts/create_claude_config.sh
@@ -231,16 +221,12 @@ file doesn't exist yet.
 - On **Windows**: Copy to `%APPDATA%\Claude\claude_desktop_config.json`
 - On **Linux**: Varies by distribution
 
-To use the VW-direct backend instead, edit the generated config: replace the
-`tibber_config.json` path with `src/config.json` and `"tibber"` with
-`"carconnectivity"`.
-
 ---
 
 ### create_github_copilot_config.sh
 Generate MCP configuration for GitHub Copilot (VS Code). Same
-`src/tibber_config.json` + `--backend tibber` default and setup-instructions
-behavior as `create_claude_config.sh` above.
+`src/tibber_config.json` default and setup-instructions behavior as
+`create_claude_config.sh` above.
 
 ```bash
 ./scripts/create_github_copilot_config.sh
@@ -269,8 +255,8 @@ The script offers 4 options:
 
 ### create_copilot_desktop_config.sh
 Generate MCP configuration for Microsoft Copilot Desktop. Same
-`src/tibber_config.json` + `--backend tibber` default and setup-instructions
-behavior as `create_claude_config.sh` above.
+`src/tibber_config.json` default and setup-instructions behavior as
+`create_claude_config.sh` above.
 
 ```bash
 ./scripts/create_copilot_desktop_config.sh
@@ -320,7 +306,7 @@ Run a full MCP OAuth flow against a running server and validate authenticated ac
 # Fast - only mock tests
 ./scripts/test.sh --skip-slow
 
-# Complete - all tests including real API
+# Complete - all tests
 ./scripts/test.sh
 ```
 

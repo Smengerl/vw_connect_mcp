@@ -11,36 +11,29 @@ Purpose:
 
 Mock vehicles:
 1. Transporter 7 (VIN: WV2ZZZSTZNH009136)
-   - Type: combustion
-   - License plate: M-AB 1234
-   - Features: Full tank (68%), diesel, parked in Berlin
+   - Combustion (internal test classification only -- VehicleModel has no
+     `type` field, since Tibber never reports one)
+   - License plate: M-AB 1234 (only exposed via VehicleListItem/get_vehicles)
+   - Features: Full tank (68%), diesel
 
 2. ID.7 Tourer (VIN: WVWZZZED4SE003938)
-   - Type: electric
-   - License plate: M-XY 5678
-   - Features: 80% battery, active heating, parked in Munich
+   - Electric (internal test classification only -- see above)
+   - License plate: M-XY 5678 (only exposed via VehicleListItem/get_vehicles)
+   - Features: 80% battery, actively charging
 
 Test data characteristics:
-- Realistic values (battery levels, pressures, temperatures)
+- Realistic values (battery levels, SOC, etc.)
 - Consistent state across methods
 - Both vehicle types represented (electric & combustion)
-- All consolidated methods implemented
+- Only the methods AbstractAdapter still declares (Tibber's surface)
 """
-from types import SimpleNamespace
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, VehicleModel, VehicleListItem, PositionModel, 
-    DoorsModel, DoorModel, WindowsModel, WindowModel, TyreModel, TyresModel, 
-    ChargingModel, ClimatizationModel, MaintenanceModel, RangeModel, DriveModel, 
-    WindowHeatingsModel, WindowHeatingModel, LightsModel, LightModel,
-    # New consolidated models
-    VehicleDetailLevel, PhysicalStatusModel, EnergyStatusModel, ClimateStatusModel,
-    RangeInfo, ElectricDriveInfo, CombustionDriveInfo
+    AbstractAdapter, VehicleModel, VehicleListItem, VehicleDetailLevel,
+    EnergyStatusModel, RangeInfo, ElectricDriveInfo, CombustionDriveInfo,
+    ChargingModel,
 )
-from weconnect_mcp.adapter.carconnectivity_adapter import VehicleModel
 
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-
+from typing import Optional
 
 
 class TestAdapter(AbstractAdapter):
@@ -49,34 +42,32 @@ class TestAdapter(AbstractAdapter):
         manufacturer='Volkswagen',
         model='Transporter 7',
         name='T7',
-        license_plate='M-AB 1234',
-        state='parked',
         vin='WV2ZZZSTZNH009136',
-        type='combustion',
-        odometer=12345.0,
-        software_version='3.2.1',
-        model_year=2023,
         connection_state='online',
+        last_seen='2024-01-15T10:30:00Z',
     )
     v2 = VehicleModel(
         manufacturer='Volkswagen',
         model='ID.7 Tourer',
         name='ID7',
-        license_plate='M-XY 5678',
-        state='parked',
         vin='WVWZZZED4SE003938',
-        type='electric',
-        odometer=31643.0,
-        software_version='4.1.0',
-        model_year=2024,
         connection_state='online',
+        last_seen='2024-01-15T10:31:00Z',
     )
     vehicles = [v1, v2]
-    
-    # Mock license plates
+
+    # Mock license plates -- only VehicleListItem (get_vehicles) has this field
     license_plates = {
         'WV2ZZZSTZNH009136': 'M-AB 1234',  # T7
         'WVWZZZED4SE003938': 'M-XY 5678',  # ID7
+    }
+
+    # Internal test-only classification, not a VehicleModel field (Tibber
+    # never reports vehicle type/propulsion) -- used to pick which branch
+    # get_energy_status returns.
+    vehicle_kinds = {
+        'WV2ZZZSTZNH009136': 'combustion',  # T7
+        'WVWZZZED4SE003938': 'electric',    # ID7
     }
 
     def _resolve_to_vin(self, vehicle_id: str) -> Optional[str]:
@@ -99,88 +90,31 @@ class TestAdapter(AbstractAdapter):
             for v in self.vehicles if v.vin
         ]
 
-    # New consolidated methods (optimized tool structure)
-    
     def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDetailLevel.FULL) -> Optional[VehicleModel]:
         """Get vehicle information with configurable detail level."""
         vin = self._resolve_to_vin(vehicle_id)
-        
+
         for v in self.vehicles:
             if v.vin == vin:
                 if details == VehicleDetailLevel.BASIC:
-                    # BASIC: only essential identifiers
+                    # BASIC: everything except connection_state
                     return VehicleModel(
                         vin=v.vin,
                         model=v.model,
                         name=v.name,
-                        license_plate=v.license_plate,
                         manufacturer=v.manufacturer,
-                        type=v.type,
                     )
-                # FULL and ALL: return everything
+                # FULL: BASIC + connection_state
                 return v
         return None
-    
-    def get_physical_status(self, vehicle_id: str, components: Optional[list[str]] = None) -> Optional[PhysicalStatusModel]:
-        """Get physical component status (doors, windows, tyres, lights)."""
-        vin = self._resolve_to_vin(vehicle_id)
-        
-        for v in self.vehicles:
-            if v.vin == vin:
-                # Determine which components to include
-                # Empty list should be treated as None (all components)
-                include_all = components is None or len(components) == 0
-                include_doors = include_all or (components is not None and "doors" in components)
-                include_windows = include_all or (components is not None and "windows" in components)
-                include_tyres = include_all or (components is not None and "tyres" in components)
-                include_lights = include_all or (components is not None and "lights" in components)
-                
-                # Mock data - you can expand this with actual test data
-                doors = DoorsModel(
-                    lock_state=True,
-                    open_state=False,
-                    front_left=DoorModel(locked=True, open=False),
-                    front_right=DoorModel(locked=True, open=False),
-                    rear_left=DoorModel(locked=True, open=False),
-                    rear_right=DoorModel(locked=True, open=False),
-                    trunk=DoorModel(locked=True, open=False),
-                    bonnet=DoorModel(locked=True, open=False),
-                ) if include_doors else None
-                
-                windows = WindowsModel(
-                    front_left=WindowModel(open=False),
-                    front_right=WindowModel(open=False),
-                    rear_left=WindowModel(open=False),
-                    rear_right=WindowModel(open=False),
-                ) if include_windows else None
-                
-                tyres = TyresModel(
-                    front_left=TyreModel(pressure=2.3, temperature=20.0),
-                    front_right=TyreModel(pressure=2.3, temperature=20.0),
-                    rear_left=TyreModel(pressure=2.5, temperature=21.0),
-                    rear_right=TyreModel(pressure=2.5, temperature=21.0),
-                ) if include_tyres else None
-                
-                lights = LightsModel(
-                    left=LightModel(state='ok'),
-                    right=LightModel(state='ok'),
-                ) if include_lights else None
-                
-                return PhysicalStatusModel(
-                    doors=doors,
-                    windows=windows,
-                    tyres=tyres,
-                    lights=lights,
-                )
-        return None
-    
+
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
         """Get consolidated energy and range information."""
         vin = self._resolve_to_vin(vehicle_id)
-        
+
         for v in self.vehicles:
             if v.vin == vin:
-                if v.type == 'electric':
+                if self.vehicle_kinds.get(vin) == 'electric':
                     # Electric vehicle
                     return EnergyStatusModel(
                         vehicle_type='electric',
@@ -194,15 +128,13 @@ class TestAdapter(AbstractAdapter):
                             charging=ChargingModel(
                                 is_charging=True,
                                 is_plugged_in=True,
-                                charging_power_kw=11.0,
                                 charging_state='charging',
-                                remaining_time_minutes=45,
                                 target_soc_percent=90,
                                 current_soc_percent=77.0,
-                                charge_mode='manual'
                             )
                         ),
                         combustion=None,
+                        last_seen='2024-01-15T10:31:00Z',
                     )
                 else:
                     # Combustion vehicle
@@ -218,178 +150,6 @@ class TestAdapter(AbstractAdapter):
                             tank_level_percent=68.0,
                             fuel_type='diesel',
                         ),
+                        last_seen='2024-01-15T10:30:00Z',
                     )
         return None
-    
-    def get_climate_status(self, vehicle_id: str) -> Optional[ClimateStatusModel]:
-        """Get climate control status (climatization + window heating)."""
-        vin = self._resolve_to_vin(vehicle_id)
-        
-        for v in self.vehicles:
-            if v.vin == vin:
-                # Mock climate data
-                if 'ID7' in (v.name or ''):
-                    climatization = ClimatizationModel(
-                        state='heating',
-                        is_active=True,
-                        target_temperature_celsius=22.0,
-                        estimated_time_remaining_minutes=8,
-                        window_heating_enabled=True,
-                        seat_heating_enabled=True,
-                        climatization_at_unlock_enabled=True,
-                        using_external_power=True
-                    )
-                    window_heating = WindowHeatingsModel(
-                        front=WindowHeatingModel(state='on'),
-                        rear=WindowHeatingModel(state='on'),
-                    )
-                else:
-                    climatization = ClimatizationModel(
-                        state='off',
-                        is_active=False,
-                        target_temperature_celsius=21.0,
-                        estimated_time_remaining_minutes=None,
-                        window_heating_enabled=False,
-                        seat_heating_enabled=False,
-                        climatization_at_unlock_enabled=False,
-                        using_external_power=None
-                    )
-                    window_heating = WindowHeatingsModel(
-                        front=WindowHeatingModel(state='off'),
-                        rear=WindowHeatingModel(state='off'),
-                    )
-                
-                return ClimateStatusModel(
-                    climatization=climatization,
-                    window_heating=window_heating,
-                )
-        return None
-
-    def get_maintenance_info(self, vehicle_id) -> Optional[MaintenanceModel]:
-        # Resolve identifier to VIN
-        vin = self._resolve_to_vin(vehicle_id)
-        
-        # Return mock maintenance info
-        for v in self.vehicles:
-            if v.vin == vin:
-                # Mock different maintenance schedules
-                if 'ID7' in (v.name or ''):
-                    # Electric vehicle - no oil service
-                    return MaintenanceModel(
-                        inspection_due_date='2026-08-15T00:00:00+00:00',
-                        inspection_due_distance_km=8500,
-                        oil_service_due_date=None,
-                        oil_service_due_distance_km=None
-                    )
-                else:
-                    # Combustion vehicle - has oil service
-                    return MaintenanceModel(
-                        inspection_due_date='2026-05-20T00:00:00+00:00',
-                        inspection_due_distance_km=12000,
-                        oil_service_due_date='2026-04-10T00:00:00+00:00',
-                        oil_service_due_distance_km=8000
-                    )
-        return None
-
-    def get_position(self, vehicle_id) -> Optional[PositionModel]:
-        # Resolve identifier to VIN
-        vin = self._resolve_to_vin(vehicle_id)
-        
-        # Return mock position data
-        for v in self.vehicles:
-            if v.vin == vin:
-                # Mock different positions for different vehicles
-                if v.name and 'ID7' in v.name:
-                    # ID.7 in Munich
-                    return PositionModel(
-                        latitude=48.1351,
-                        longitude=11.5820,
-                        heading=270
-                    )
-                else:
-                    # T7 in Berlin
-                    return PositionModel(
-                        latitude=52.5200,
-                        longitude=13.4050,
-                        heading=90
-                    )
-        return None
-
-    def lock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock lock vehicle."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Vehicle locked"}
-
-    def unlock_vehicle(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock unlock vehicle."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Vehicle unlocked"}
-
-    def start_climatization(self, vehicle_id: str, target_temp_celsius: Optional[float] = None) -> Dict[str, Any]:
-        """Mock start climatization."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        msg = "Climatization started"
-        if target_temp_celsius is not None:
-            msg += f" at {target_temp_celsius}°C"
-        return {"success": True, "message": msg}
-
-    def stop_climatization(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock stop climatization."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Climatization stopped"}
-
-    def start_charging(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock start charging."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Charging started"}
-
-    def stop_charging(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock stop charging."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Charging stopped"}
-
-    def flash_lights(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
-        """Mock flash lights."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        msg = "Lights flashed"
-        if duration_seconds is not None:
-            msg += f" for {duration_seconds} seconds"
-        return {"success": True, "message": msg}
-
-    def honk_and_flash(self, vehicle_id: str, duration_seconds: Optional[int] = None) -> Dict[str, Any]:
-        """Mock honk and flash."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        msg = "Honk and flash executed"
-        if duration_seconds is not None:
-            msg += f" for {duration_seconds} seconds"
-        return {"success": True, "message": msg}
-
-    def start_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock start window heating."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Window heating started"}
-
-    def stop_window_heating(self, vehicle_id: str) -> Dict[str, Any]:
-        """Mock stop window heating."""
-        vin = self._resolve_to_vin(vehicle_id)
-        if not any(v.vin == vin for v in self.vehicles):
-            return {"success": False, "error": f"Vehicle {vehicle_id} not found"}
-        return {"success": True, "message": "Window heating stopped"}
