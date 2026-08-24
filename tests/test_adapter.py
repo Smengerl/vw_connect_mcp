@@ -11,14 +11,15 @@ Purpose:
 
 Mock vehicles:
 1. Transporter 7 (VIN: WV2ZZZSTZNH009136)
-   - Type: combustion
-   - License plate: M-AB 1234
-   - Features: Full tank (68%), diesel, parked in Berlin
+   - Combustion (internal test classification only -- VehicleModel has no
+     `type` field, since Tibber never reports one)
+   - License plate: M-AB 1234 (only exposed via VehicleListItem/get_vehicles)
+   - Features: Full tank (68%), diesel
 
 2. ID.7 Tourer (VIN: WVWZZZED4SE003938)
-   - Type: electric
-   - License plate: M-XY 5678
-   - Features: 80% battery, active heating, parked in Munich
+   - Electric (internal test classification only -- see above)
+   - License plate: M-XY 5678 (only exposed via VehicleListItem/get_vehicles)
+   - Features: 80% battery, actively charging
 
 Test data characteristics:
 - Realistic values (battery levels, SOC, etc.)
@@ -41,34 +42,32 @@ class TestAdapter(AbstractAdapter):
         manufacturer='Volkswagen',
         model='Transporter 7',
         name='T7',
-        license_plate='M-AB 1234',
-        state='parked',
         vin='WV2ZZZSTZNH009136',
-        type='combustion',
-        odometer=12345.0,
-        software_version='3.2.1',
-        model_year=2023,
         connection_state='online',
+        last_seen='2024-01-15T10:30:00Z',
     )
     v2 = VehicleModel(
         manufacturer='Volkswagen',
         model='ID.7 Tourer',
         name='ID7',
-        license_plate='M-XY 5678',
-        state='parked',
         vin='WVWZZZED4SE003938',
-        type='electric',
-        odometer=31643.0,
-        software_version='4.1.0',
-        model_year=2024,
         connection_state='online',
+        last_seen='2024-01-15T10:31:00Z',
     )
     vehicles = [v1, v2]
 
-    # Mock license plates
+    # Mock license plates -- only VehicleListItem (get_vehicles) has this field
     license_plates = {
         'WV2ZZZSTZNH009136': 'M-AB 1234',  # T7
         'WVWZZZED4SE003938': 'M-XY 5678',  # ID7
+    }
+
+    # Internal test-only classification, not a VehicleModel field (Tibber
+    # never reports vehicle type/propulsion) -- used to pick which branch
+    # get_energy_status returns.
+    vehicle_kinds = {
+        'WV2ZZZSTZNH009136': 'combustion',  # T7
+        'WVWZZZED4SE003938': 'electric',    # ID7
     }
 
     def _resolve_to_vin(self, vehicle_id: str) -> Optional[str]:
@@ -98,16 +97,14 @@ class TestAdapter(AbstractAdapter):
         for v in self.vehicles:
             if v.vin == vin:
                 if details == VehicleDetailLevel.BASIC:
-                    # BASIC: only essential identifiers
+                    # BASIC: everything except connection_state
                     return VehicleModel(
                         vin=v.vin,
                         model=v.model,
                         name=v.name,
-                        license_plate=v.license_plate,
                         manufacturer=v.manufacturer,
-                        type=v.type,
                     )
-                # FULL and ALL: return everything
+                # FULL: BASIC + connection_state
                 return v
         return None
 
@@ -117,7 +114,7 @@ class TestAdapter(AbstractAdapter):
 
         for v in self.vehicles:
             if v.vin == vin:
-                if v.type == 'electric':
+                if self.vehicle_kinds.get(vin) == 'electric':
                     # Electric vehicle
                     return EnergyStatusModel(
                         vehicle_type='electric',
@@ -131,15 +128,13 @@ class TestAdapter(AbstractAdapter):
                             charging=ChargingModel(
                                 is_charging=True,
                                 is_plugged_in=True,
-                                charging_power_kw=11.0,
                                 charging_state='charging',
-                                remaining_time_minutes=45,
                                 target_soc_percent=90,
                                 current_soc_percent=77.0,
-                                charge_mode='manual'
                             )
                         ),
                         combustion=None,
+                        last_seen='2024-01-15T10:31:00Z',
                     )
                 else:
                     # Combustion vehicle
@@ -155,5 +150,6 @@ class TestAdapter(AbstractAdapter):
                             tank_level_percent=68.0,
                             fuel_type='diesel',
                         ),
+                        last_seen='2024-01-15T10:30:00Z',
                     )
         return None

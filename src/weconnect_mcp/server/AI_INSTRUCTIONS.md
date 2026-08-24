@@ -2,6 +2,8 @@
 
 **Purpose**: Access vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) through Model Context Protocol (MCP) — this project was originally built for Volkswagen (used because direct VW WeConnect API access is currently blocked to third parties), but the Tibber backend itself is **not VW-specific**: Tibber's vehicle integration is backed by Enode (see `ARCHITECTURE.md` §1.1), which covers 30+ EV brands. Any vehicle paired to the connected Tibber account works — the `brand` field reflects whatever that vehicle actually is (e.g. `"Volkswagen"` for the vehicle this project was verified against), not a fixed value.
 
+**Prerequisite the user must complete themselves**: this server only ever sees vehicles the user has already paired to their Tibber account (in the Tibber app, outside this server entirely). There is no tool to perform or check that pairing. If `get_vehicles()` returns an empty list or is missing a vehicle the user expects, tell them to pair it in the Tibber app first — don't treat it as a bug in this server.
+
 **Key Features**:
 - Read a small, confirmed set of vehicle data: identity (VIN, brand, model, name, online state) and charging/range status (state of charge, target SOC, range, plug status, charging state)
 - Automatic caching (5 minutes) to be a polite API citizen
@@ -19,12 +21,10 @@ The Tibber Data API has no write/command endpoints at all (confirmed by reading 
 This server provides **Tools** and **Prompts** via the Model Context Protocol — no Resources layer (a URI-based, 1:1 duplicate of the tools with no realized benefit for the MCP clients this project targets was considered and deliberately removed; see `src/weconnect_mcp/server/mixins/read_tools.py`'s module docstring for the reasoning).
 
 ### **MCP Tools**
-- **5 total tools, all fully functional** — every tool below reliably returns real data; nothing is registered "for interface compatibility" that always fails:
+- **3 total tools, all fully functional** — every tool below reliably returns real data; nothing is registered "for interface compatibility" that always fails:
   - `get_vehicles()` - List all vehicles
-  - `get_vehicle_info(vehicle_id)` - Identity: manufacturer, model, name, online state
-  - `get_vehicle_state(vehicle_id)` - Same data as `get_vehicle_info` (no richer snapshot exists for this backend)
-  - `get_battery_status(vehicle_id)` - Battery level, range, charging flag
-  - `get_charging_status(vehicle_id)` - Charging state, plug status, target/current SOC
+  - `get_vehicle_info(vehicle_id)` - Identity (manufacturer, model, name, online state, last-seen timestamp) plus a quick energy snapshot (electric range, charging flag, plug-connected flag)
+  - `get_charging_status(vehicle_id)` - Charging state, plug status, target/current SOC, electric range, last-seen timestamp
 
 ### **MCP Prompts**
 - **11 workflow prompts** (`src/weconnect_mcp/server/mixins/prompts.py`), each usable with this backend. Steps that would have needed a command (start/stop charging, climate control) are advisory-only — they tell the user to act via the vehicle's own app instead of calling a tool, since no such tool exists. Steps that would have needed GPS position ask the user for the location instead of calling a tool.
@@ -39,13 +39,15 @@ Only these data points exist, for electric vehicles only:
 |---|---|
 | VIN, brand, model, name | `get_vehicles()`, `get_vehicle_info()` |
 | Online/connection state | `get_vehicle_info()` |
-| Battery level (%) | `get_battery_status()` |
-| Electric range (km) | `get_battery_status()` |
+| Last-seen timestamp (ISO 8601) | `get_vehicle_info()`, `get_charging_status()` (`last_seen`) |
+| Electric range (km) | `get_vehicle_info()`, `get_charging_status()` (`range_km`) |
+| Charging flag (bool) | `get_vehicle_info()`, `get_charging_status()` (`is_charging`) |
+| Plug connected (bool) | `get_vehicle_info()`, `get_charging_status()` (`is_plugged_in`) |
+| Battery level / current SOC (%) | `get_charging_status()` (`current_soc_percent`) |
 | Target SOC (%) | `get_charging_status()` |
-| Plug connected (bool) | `get_charging_status()` (`is_plugged_in`) |
 | Charging state (charging/idle) | `get_charging_status()` |
 
-That's the entire surface. `charging_power_kw` and `remaining_time_minutes` are always present as fields in the JSON but always `null` — Tibber doesn't report them.
+That's the entire surface.
 
 ## What This Server CANNOT Do
 
@@ -75,7 +77,7 @@ Use either:
 Both formats work automatically. `license_plate` is always `null` (not available via Tibber).
 
 ### 3. Read Vehicle Data
-Use `get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status` — these are the only 5 tools that exist.
+Use `get_vehicles`, `get_vehicle_info`, `get_charging_status` — these are the only 3 tools that exist.
 
 ### 4. Do NOT Attempt Control
 There is no command tool in this deployment. If the user wants to lock the car, precondition the cabin, or start charging, tell them this server can only read status, not control the vehicle.
@@ -94,29 +96,20 @@ All tools return JSON data. Data is cached for 5 minutes.
 - **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7", "license_plate": null}]`
 
 **`get_vehicle_info(vehicle_id)`**
-- **Purpose**: Get basic vehicle identity
+- **Purpose**: Vehicle identity plus a quick energy snapshot
 - **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: `manufacturer`, `model`, `name`, `connection_state` ("online"/"offline"). `license_plate`, `odometer`, `state`, `type`, `software_version`, `model_year` are always `null`.
-- **Example**: `get_vehicle_info("ID.7")` → `{"model": "ID.7", "manufacturer": "Volkswagen", "connection_state": "online", "odometer": null, ...}`
-
-**`get_vehicle_state(vehicle_id)`**
-- **Purpose**: Same identity data as `get_vehicle_info` — there is no richer combined snapshot for this backend (no doors/windows/climate/tyres to add).
+- **Returns**: `manufacturer`, `model`, `name`, `connection_state` ("online"/"offline"), `last_seen` (ISO 8601), `range_km`, `is_charging`, `is_plugged_in`
+- **Example**: `get_vehicle_info("ID.7")` → `{"vin": "WVWZZZ...", "model": "ID.7", "name": "ID.7", "manufacturer": "Volkswagen", "connection_state": "online", "last_seen": "2024-01-15T10:31:00Z", "range_km": 346.0, "is_charging": false, "is_plugged_in": false}`
 
 ### Energy & Range
 
-**`get_battery_status(vehicle_id)`**
-- **Purpose**: Quick battery check
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: Battery level (%), electric range (km), charging status
-- **Example**: `get_battery_status("ID.7")` → `{"battery_level_percent": 74, "range_km": 346.0, "is_charging": false}`
-
 **`get_charging_status(vehicle_id)`**
-- **Purpose**: Charging/plug status
+- **Purpose**: Charging/plug status plus electric range
 - **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: `is_charging`, `is_plugged_in`, `charging_state` ("charging"/"idle"), `target_soc_percent`, `current_soc_percent`. `charging_power_kw` and `remaining_time_minutes` are always `null`.
-- **Example**: `get_charging_status("ID.7")` → `{"is_charging": false, "is_plugged_in": false, "charging_state": "idle", "target_soc_percent": 80, "current_soc_percent": 74}`
+- **Returns**: `is_charging`, `is_plugged_in`, `charging_state` ("charging"/"idle"), `target_soc_percent`, `current_soc_percent`, `range_km`, `last_seen` (ISO 8601)
+- **Example**: `get_charging_status("ID.7")` → `{"is_charging": false, "is_plugged_in": false, "charging_state": "idle", "target_soc_percent": 80, "current_soc_percent": 74, "range_km": 346.0, "last_seen": "2024-01-15T10:31:00Z"}`
 
-There is no sixth tool. Door/window/tyre/light/climate/position/maintenance queries and every vehicle command simply have no corresponding tool — don't guess a name and try calling it.
+There is no fourth tool. Door/window/tyre/light/climate/position/maintenance queries and every vehicle command simply have no corresponding tool — don't guess a name and try calling it. There used to be a separate `get_battery_status` tool, but every field it returned duplicated `get_vehicle_info`/`get_charging_status` or is now folded into them, so it was merged away.
 
 ---
 
@@ -125,22 +118,22 @@ There is no sixth tool. Door/window/tyre/light/climate/position/maintenance quer
 ### Quick Battery Check
 ```python
 get_vehicles()
-get_battery_status("ID.7")
-# Result: Battery at 74%, 346 km range, not charging
+get_charging_status("ID.7")
+# Result: 74% charged (current_soc_percent), 346 km range (range_km), not charging
 ```
 
 ### Charging Status Check
 ```python
 get_vehicles()
 get_charging_status("ID.7")
-# Result: {"is_charging": false, "is_plugged_in": false, "current_soc_percent": 74, "target_soc_percent": 80}
+# Result: {"is_charging": false, "is_plugged_in": false, "current_soc_percent": 74, "target_soc_percent": 80, "range_km": 346.0}
 ```
 
 ### Basic Vehicle Identity
 ```python
 get_vehicles()
 get_vehicle_info("ID.7")
-# Result: {"manufacturer": "Volkswagen", "model": "ID.7", "connection_state": "online"}
+# Result: {"manufacturer": "Volkswagen", "model": "ID.7", "connection_state": "online", "range_km": 346.0, "is_charging": false, "is_plugged_in": false}
 ```
 
 There is no meaningful pre-trip check, remote climate control, charging control, security, or "find my car" workflow with this server — all of those need commands or position/door data that don't exist here. (The 11 prompts in `prompts.py` work around this by asking the user for location and telling them to act via their vehicle's own app where a command would otherwise be needed.)
@@ -156,13 +149,13 @@ There is no meaningful pre-trip check, remote climate control, charging control,
 Prefer `"ID.7"` over the full VIN.
 
 ### 3. Know the Boundary
-There are only 5 tools, and all 5 return real data: `get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status`. Nothing else exists — no physical status, climate, position, maintenance, or command tool. Don't guess a tool name; check "What This Server CAN Do" above.
+There are only 3 tools, and all 3 return real data: `get_vehicles`, `get_vehicle_info`, `get_charging_status`. Nothing else exists — no physical status, climate, position, maintenance, or command tool. Don't guess a tool name; check "What This Server CAN Do" above.
 
 ### 4. Trust the Cache
 Data is cached for 5 minutes automatically.
 
 ### 5. Handle Errors Gracefully
-A tool returns `{"error": "..."}` only when the vehicle identifier doesn't resolve to a known vehicle. That's the only error case — there's no "not supported" response to reason about, since unsupported operations simply have no tool.
+A tool returns `{"error": "..."}` in two cases: the vehicle identifier doesn't resolve to a known vehicle (all three tools), or — for `get_charging_status` only — the vehicle resolves but doesn't support charging (e.g. no battery). Check the error message text to tell the two apart; there's still no "not supported" response beyond that, since unsupported operations otherwise simply have no tool.
 
 ### 6. Don't Attempt Charging/Climate/Lock Workflows
 There is no command tool of any kind. If the user wants control, say so directly instead of looking for a tool that doesn't exist.
@@ -205,40 +198,51 @@ Tibber's vehicle integration only ever reports EVs, regardless of brand — comb
 Access tokens last ~1 hour and refresh automatically using a stored refresh token (~30 days). If the refresh token itself expires or is revoked, the server will fail to start with a clear `TibberAuthError` — re-run `weconnect_mcp.cli.tibber_login_cli` to re-authorize (a one-time interactive step; the running server can't do this itself, by design — see "Architecture" above).
 
 ### 5. Cache Freshness
-Data is cached for 5 minutes; a very recent state change made through the vehicle's own app (or Tibber's app) may take up to 5 minutes to show up here.
+Data is cached for 5 minutes; a very recent state change made through the vehicle's own app (or Tibber's app) may take up to 5 minutes to show up here. `last_seen` (from `get_vehicle_info`/`get_charging_status`) is a separate, independent timestamp — it's when Tibber itself last heard from the vehicle, not when this server last fetched it; use it to judge whether the underlying vehicle data is stale, on top of (not instead of) this 5-minute cache window.
 
 ---
 
 ## Error Handling
 
-Tools return a single error format when the vehicle identifier doesn't resolve:
+All tools use the same `{"error": "..."}` shape, but there are two distinct causes:
 
+Unresolvable `vehicle_id` (any of the 3 tools):
 ```json
 {
   "error": "Vehicle ID.7 not found"
 }
 ```
+Use `get_vehicles()` to confirm the vehicle exists and check the identifier.
 
-There is no other error case: every tool that exists is fully functional, so an error always means an unresolvable `vehicle_id` — use `get_vehicles()` to confirm the vehicle exists.
+Vehicle resolves but doesn't support charging (`get_charging_status` only):
+```json
+{
+  "error": "Vehicle ID.7 not found or doesn't support charging"
+}
+```
+The message text always says which case it is — check it rather than assuming every error is an unresolvable `vehicle_id`.
 
 ---
 
 ## Examples (Copy-Paste Ready)
 
-### Example 1: Battery Check
+### Example 1: Quick Status (Range + Charging Flag)
 ```python
 vehicles = get_vehicles()
 # Result: [{"name": "ID.7", "model": "ID.7", "vin": "WVWZZZ..."}]
 
-battery = get_battery_status("ID.7")
-# Result: {"battery_level_percent": 74, "range_km": 346.0, "is_charging": false}
+info = get_vehicle_info("ID.7")
+# Result: {"vin": "WVWZZZ...", "model": "ID.7", "name": "ID.7", "manufacturer": "Volkswagen",
+#          "connection_state": "online", "last_seen": "2024-01-15T10:31:00Z",
+#          "range_km": 346.0, "is_charging": false, "is_plugged_in": false}
 ```
 
-### Example 2: Charging Status
+### Example 2: Detailed Charging Status (SOC + Target)
 ```python
 charging = get_charging_status("ID.7")
 # Result: {"is_charging": false, "is_plugged_in": false, "charging_state": "idle",
-#          "target_soc_percent": 80, "current_soc_percent": 74}
+#          "target_soc_percent": 80, "current_soc_percent": 74, "range_km": 346.0,
+#          "last_seen": "2024-01-15T10:31:00Z"}
 ```
 
 ### Example 3: User Asks to Start Charging
@@ -255,24 +259,24 @@ AI: "I can't do that — this server reads vehicle status via Tibber's API, whic
 ## Summary (TL;DR for AI Assistants)
 
 1. **Always start** with `get_vehicles()` to discover available vehicles
-2. **There are only 5 tools, and all 5 work**: `get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status`
+2. **There are only 3 tools, and all 3 work**: `get_vehicles`, `get_vehicle_info`, `get_charging_status`
 3. **Nothing else exists** — no physical status, climate, position, maintenance, or command tool of any kind
 4. **No control is possible** — if asked to lock/unlock/charge/climate/flash, say so directly, there's no tool to attempt
 5. **License plates DON'T WORK** — Tibber doesn't provide them
 6. **Cache is automatic** — 5 minutes
-7. **Errors are JSON** — `{"error": "..."}` when a vehicle identifier doesn't resolve; that's the only error case
+7. **Errors are JSON** — `{"error": "..."}`, either an unresolvable vehicle identifier or (for `get_charging_status` only) a vehicle that doesn't support charging; check the message text to tell them apart
 
-**Most important**: Be upfront about the read-only, narrow-data nature of this server. Don't look for a tool that doesn't exist and then report its absence as a failure — check the 5-tool list above first.
+**Most important**: Be upfront about the read-only, narrow-data nature of this server. Don't look for a tool that doesn't exist and then report its absence as a failure — check the 3-tool list above first.
 
 ---
 
 ## Technical Reference: Tool Tags
 
 **Operation Type**: `read` (there is no `write`/`command` tag — no such tool exists)
-**Functional Areas**: `discovery`, `vehicle-info`, `energy`, `comprehensive`
-**Specific Features**: `battery`, `charging`, `bev-phev`
+**Functional Areas**: `discovery`, `vehicle-info`, `energy`
+**Specific Features**: `charging`, `bev-phev`
 
-**Usage**: MCP clients can filter tools by tags. All 5 tools are fully functional, so tags here are purely organizational (unlike a hypothetical dual-backend deployment, there's no "check the description to see if it actually works" caveat needed).
+**Usage**: MCP clients can filter tools by tags. All 3 tools are fully functional, so tags here are purely organizational (unlike a hypothetical dual-backend deployment, there's no "check the description to see if it actually works" caveat needed).
 
 ---
 

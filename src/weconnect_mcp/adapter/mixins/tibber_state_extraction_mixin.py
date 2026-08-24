@@ -62,12 +62,9 @@ class TibberStateExtractionMixin:
         return ChargingModel(
             is_charging=is_charging,
             is_plugged_in=is_plugged_in,
-            charging_power_kw=None,  # not exposed by Tibber
             charging_state=charging_state_str,
-            remaining_time_minutes=None,  # not exposed by Tibber
             target_soc_percent=target_soc,
             current_soc_percent=current_soc,
-            charge_mode=None,  # not exposed by Tibber
         )
 
     def _get_tibber_range_km(self, detail: dict[str, Any]) -> Optional[float]:

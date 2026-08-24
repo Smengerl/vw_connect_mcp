@@ -62,8 +62,7 @@ def demo_get_vehicle_with_plate():
     print(f"   Name: {vehicle.name}")
     print(f"   Model: {vehicle.model}")
     print(f"   License Plate: {vehicle.license_plate}")  # ✅ Now available!
-    print(f"   Odometer: {vehicle.odometer} km")
-    print(f"   State: {vehicle.state}")
+    print(f"   Connection state: {vehicle.connection_state}")
     print()
 
 

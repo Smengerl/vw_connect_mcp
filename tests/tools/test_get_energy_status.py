@@ -8,14 +8,20 @@ What is tested:
 - Electric vehicle energy status (battery level, charging state, electric range)
 - Combustion vehicle energy status (tank level, fuel type, combustion range)
 - Range information and consistency
-- Charging state details (is_charging, is_plugged_in, charging_power_kw)
+- Charging state details (is_charging, is_plugged_in)
 - Vehicle type awareness (electric vs combustion data separation)
 - Data completeness validation
 - Invalid vehicle handling
-- MCP server tool registration (get_charging_state, get_range_info, get_battery_status)
+
+Note: this file tests the `adapter.get_energy_status()` method directly, not
+an MCP tool of the same name -- no such tool exists. The MCP tools built on
+top of this adapter method are `get_vehicle_info` and `get_charging_status`
+(see tests/tools/test_get_vehicle.py and read_tools.py); there used to be a
+separate `get_battery_status` tool too, but every field it returned was
+redundant with those two, so it was merged away.
 
 Key features:
-- Consolidated method replaces multiple old methods (get_charging_state, get_range_info, get_battery_status)
+- Single adapter method serving both MCP tools
 - Vehicle type-specific data (electric.battery_level vs combustion.tank_level)
 - Unified range model with electric_km and combustion_km fields
 - Charging information only for electric/hybrid vehicles
@@ -67,11 +73,18 @@ def test_energy_status_electric_range(adapter):
 def test_energy_status_electric_charging(adapter):
     """Test electric vehicle charging information"""
     energy = adapter.get_energy_status(VIN_ELECTRIC)
-    
+
     assert energy.electric is not None
     assert energy.electric.charging is not None
     assert hasattr(energy.electric.charging, 'is_charging')
     assert hasattr(energy.electric.charging, 'is_plugged_in')
+
+
+def test_energy_status_electric_last_seen(adapter):
+    """Test electric vehicle last-seen timestamp (Tibber's status.lastSeen)"""
+    energy = adapter.get_energy_status(VIN_ELECTRIC)
+
+    assert energy.last_seen == EXPECTED_ENERGY_ELECTRIC["last_seen"]
 
 
 # ==================== TESTS - COMBUSTION VEHICLE ====================
@@ -98,11 +111,18 @@ def test_energy_status_combustion_tank_level(adapter):
 def test_energy_status_combustion_range(adapter):
     """Test combustion vehicle range information"""
     energy = adapter.get_energy_status(VIN_COMBUSTION)
-    
+
     assert energy.range is not None
     assert energy.range.total_km == EXPECTED_ENERGY_COMBUSTION["total_range_km"]
     assert energy.range.combustion_km == EXPECTED_ENERGY_COMBUSTION["combustion_range_km"]
     assert energy.range.electric_km is None or energy.range.electric_km == 0
+
+
+def test_energy_status_combustion_last_seen(adapter):
+    """Test combustion vehicle last-seen timestamp (Tibber's status.lastSeen)"""
+    energy = adapter.get_energy_status(VIN_COMBUSTION)
+
+    assert energy.last_seen == EXPECTED_ENERGY_COMBUSTION["last_seen"]
 
 
 def test_energy_status_combustion_fuel_type(adapter):
@@ -140,18 +160,13 @@ def test_energy_status_range_consistency(adapter):
 # ==================== TESTS - CHARGING STATE ====================
 
 def test_energy_status_charging_information(adapter):
-    """Test charging state and power information"""
+    """Test charging state information (no charging power -- Tibber never reports it)"""
     energy = adapter.get_energy_status(VIN_ELECTRIC)
-    
+
     # Charging state should be boolean
     assert energy.electric.charging.is_charging in [True, False]
     assert energy.electric.charging.is_plugged_in in [True, False]
-    
-    # Power only relevant when charging
-    if energy.electric.charging.is_charging:
-        assert energy.electric.charging.charging_power_kw is not None
-        assert energy.electric.charging.charging_power_kw > 0
-    # If not charging, power can be None or 0
+    assert not hasattr(energy.electric.charging, "charging_power_kw")
 
 
 # ==================== TESTS - INVALID VEHICLE ====================

@@ -55,10 +55,12 @@ def test_charging_state_full_response():
     assert charging.is_plugged_in is False
     assert charging.is_charging is False
     assert charging.charging_state == "idle"
-    # Confirmed not exposed by the Tibber Data API at all.
-    assert charging.charging_power_kw is None
-    assert charging.remaining_time_minutes is None
-    assert charging.charge_mode is None
+    # charging_power_kw/remaining_time_minutes/charge_mode confirmed not
+    # exposed by the Tibber Data API at all -- removed from ChargingModel
+    # entirely rather than kept as always-None fields.
+    assert not hasattr(charging, "charging_power_kw")
+    assert not hasattr(charging, "remaining_time_minutes")
+    assert not hasattr(charging, "charge_mode")
 
 
 def test_charging_state_connected_and_charging():

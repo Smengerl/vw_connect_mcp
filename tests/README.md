@@ -6,13 +6,13 @@ Test suite for the WeConnect MCP server (Tibber Data API backend).
 
 | Category | Tests | Files | Scope | Description |
 |----------|-------|-------|-------|-------------|
-| **Tools** | 31 | 3 | Unit | Data retrieval operations (adapter methods) |
+| **Tools** | 32 | 3 | Unit | Data retrieval operations (adapter methods) |
 | **Tibber extraction** | 9 | 1 | Unit | TibberStateExtractionMixin + vin_from_external_id, against real fixture data |
 | **Caching** | 5 | 1 | Unit | CacheMixin behavior (expiry, fetch-once, refetch) |
 | **MCP Server** | 1 | 1 | Integration | MCP protocol layer (client connection) |
-| **Total** | **46** | **6** | All | Complete coverage |
+| **Total** | **47** | **6** | All | Complete coverage |
 
-All 46 tests are fast mock/offline tests (~0.1s) — there is no separate
+All 47 tests are fast mock/offline tests (~0.1s) — there is no separate
 slow/real-API suite: the Tibber Data API is read-only, so nothing exists to
 test beyond what the mock adapter and the pure extraction-logic fixtures
 already cover.
@@ -23,10 +23,10 @@ already cover.
 tests/
 ├── conftest.py                    # ⭐ Central fixtures (adapter, mcp_server, mcp_client)
 │
-├── tools/                         # Unit Tests: Adapter Methods (31 tests)
+├── tools/                         # Unit Tests: Adapter Methods (32 tests)
 │   ├── test_list_vehicles.py      # 4 tests  - List all vehicles
-│   ├── test_get_vehicle.py        # 11 tests - Get vehicle details (BASIC/FULL)
-│   └── test_get_energy_status.py  # 16 tests - Battery, charging, range
+│   ├── test_get_vehicle.py        # 10 tests - Get vehicle details (BASIC/FULL)
+│   └── test_get_energy_status.py  # 18 tests - Battery, charging, range, last-seen
 │
 ├── test_mcp_server.py             # Integration: MCP client connection (1 test)
 ├── test_caching.py                # Unit: CacheMixin behavior (5 tests)
@@ -66,7 +66,7 @@ pytest tests/ --cov=src/weconnect_mcp --cov-report=html
 
 ## Test Categories
 
-### 1. Unit Tests: Tools (31 tests)
+### 1. Unit Tests: Tools (32 tests)
 **What**: Individual adapter data retrieval methods
 **Fixtures**: `adapter` (TestAdapter with 2 mock vehicles)
 **Run**: `pytest tests/tools/ -v`

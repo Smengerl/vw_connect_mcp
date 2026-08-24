@@ -53,8 +53,8 @@ EXPECTED_ELECTRIC_VEHICLE = {
     "name": NAME_ELECTRIC,
     "model": "ID.7 Tourer",  # Updated to match TestAdapter
     "manufacturer": "Volkswagen",
-    "type": "electric",
-    "license_plate": LICENSE_PLATE_ELECTRIC,
+    "license_plate": LICENSE_PLATE_ELECTRIC,  # only on VehicleListItem, not VehicleModel
+    "last_seen": "2024-01-15T10:31:00Z",
 }
 
 # Vehicle Info - Combustion (T7)
@@ -63,8 +63,8 @@ EXPECTED_COMBUSTION_VEHICLE = {
     "name": NAME_COMBUSTION,
     "model": "Transporter 7",  # Updated to match TestAdapter
     "manufacturer": "Volkswagen",
-    "type": "combustion",
-    "license_plate": LICENSE_PLATE_COMBUSTION,
+    "license_plate": LICENSE_PLATE_COMBUSTION,  # only on VehicleListItem, not VehicleModel
+    "last_seen": "2024-01-15T10:30:00Z",
 }
 
 # Energy Status - Electric
@@ -74,6 +74,7 @@ EXPECTED_ENERGY_ELECTRIC = {
     "total_range_km": 312.0,  # Updated to match TestAdapter
     "electric_range_km": 312.0,
     "is_charging": True,  # Updated: vehicle is charging in TestAdapter
+    "last_seen": "2024-01-15T10:31:00Z",
 }
 
 # Energy Status - Combustion
@@ -82,6 +83,7 @@ EXPECTED_ENERGY_COMBUSTION = {
     "total_range_km": 650.0,  # Updated to match TestAdapter
     "combustion_range_km": 650.0,
     "tank_level_percent": 68.0,  # Updated to match TestAdapter
+    "last_seen": "2024-01-15T10:30:00Z",
 }
 
 

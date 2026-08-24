@@ -48,11 +48,10 @@ def register_prompts(mcp: FastMCP) -> None:
         """
         return f"""Check whether vehicle {vehicle_id} is ready to start charging:
 
-1. Get current battery status using get_battery_status
-2. Get current charging status using get_charging_status
-3. Check if battery level is well below target SOC, which is typically 80% (don't bother charging if already full)
-4. Check if vehicle is plugged in (charging_state == "connected" or "charging")
-5. Report readiness to the user; if not plugged in or already full/charging, explain why
+1. Get current charging status using get_charging_status
+2. Check if battery level (current_soc_percent) is well below target SOC, which is typically 80% (don't bother charging if already full)
+3. Check if vehicle is plugged in (is_plugged_in, or charging_state == "connected"/"charging")
+4. Report readiness to the user; if not plugged in or already full/charging, explain why
 
 Note: the Tibber Data API is read-only. To actually start charging, the user must use the vehicle's own app or the charge point — this tool can only report status, not issue the command."""
 
@@ -73,9 +72,8 @@ Note: the Tibber Data API is read-only. To actually start charging, the user mus
         """
         return f"""Perform a health check for vehicle {vehicle_id}:
 
-1. Get basic vehicle info using get_vehicle_info
-2. Get current vehicle state using get_vehicle_state
-3. Get battery status using get_battery_status (if BEV/PHEV)
+1. Get basic vehicle info using get_vehicle_info (includes range and charging flag)
+2. Get charging status using get_charging_status for the exact battery level (current_soc_percent, if BEV/PHEV)
 
 Analyze results and provide a summary:
 - Connection/online state
@@ -135,26 +133,25 @@ Note: This is a monitoring workflow — explain to the user it requires periodic
 1. Get current charging status using get_charging_status
    - Current SOC (State of Charge)
    - Estimated time to 80% SOC
-2. Get battery status using get_battery_status
-   - Current range estimate
-3. Ask the user for the vehicle's current location (Tibber has no GPS data)
-4. Calculate route to destination using navigation API:
+   - Current range estimate (range_km)
+2. Ask the user for the vehicle's current location (Tibber has no GPS data)
+3. Calculate route to destination using navigation API:
    - Distance to {destination_address}
    - Estimated driving time with current traffic
    - Energy consumption estimate based on distance
-5. Determine required SOC for trip:
+4. Determine required SOC for trip:
    - Calculate energy needed for journey
    - Add 20% buffer for safety
    - Check if current SOC is sufficient or charging needed
-6. Calculate time budget:
+5. Calculate time budget:
    - Current time to required arrival time: {required_arrival_time}
    - Subtract driving time
    - Remaining time available for charging
-7. Compare charging time needed vs. available:
+6. Compare charging time needed vs. available:
    - If sufficient: "You have enough time. Can depart at [time] with [SOC]%"
    - If tight: "Schedule is tight. Monitor charging. Depart by [time] at minimum [SOC]%"
    - If insufficient: "Cannot meet schedule. Options: fast charger, alternative transport, reschedule"
-8. Provide recommendations:
+7. Provide recommendations:
    - Optimal departure time
    - Minimum SOC needed
    - Whether to stop charging early or continue (the user must do this themselves — the Tibber Data API cannot)
@@ -179,9 +176,9 @@ Combines charging data, navigation, and time management for schedule feasibility
         """
         return f"""Assess range adequacy for {vehicle_id} trip to {destination_address}:
 
-1. Get current battery status using get_battery_status
+1. Get current charging status using get_charging_status
    - Current SOC percentage
-   - Estimated range (km/miles)
+   - Estimated range (range_km)
 2. Ask the user for the vehicle's current location (Tibber has no GPS data)
 3. Calculate route to destination:
    - Total distance
@@ -230,9 +227,9 @@ Eliminates range anxiety with comprehensive multi-factor analysis."""
         """
         return f"""Optimize battery preconditioning for {vehicle_id} departing at {planned_departure_time}:
 
-1. Get current battery and charging status:
-   - get_battery_status: Current SOC
-   - get_charging_status: Charging state
+1. Get current charging status using get_charging_status:
+   - Current SOC
+   - Charging state
 2. Ask the user for the vehicle's current location (Tibber has no GPS data)
 3. Get weather forecast for departure time:
    - Temperature at {planned_departure_time}
@@ -277,9 +274,9 @@ Combines weather and electricity pricing for optimal efficiency; execution is le
         return f"""Perform a travel readiness check for {vehicle_id} to {destination_address} at {departure_time}:
 
 **VEHICLE STATUS:**
-1. Get vehicle state using get_vehicle_state
-2. Get battery status using get_battery_status (if electric)
-   - SOC percentage and range
+1. Get vehicle info using get_vehicle_info (includes range and charging flag)
+2. Get charging status using get_charging_status (if electric)
+   - SOC percentage
    - Check if charging needed
 3. Ask the user for the vehicle's current location (Tibber has no GPS data) and to confirm doors/windows are closed (Tibber has no door/window sensors)
 
@@ -353,46 +350,45 @@ Combines vehicle battery data with external route/weather sources; execution of 
 1. Get charging status using get_charging_status
    - Is the vehicle currently plugged in? (is_plugged_in)
    - Current SOC and target SOC
-2. Get battery status using get_battery_status
-   - Current range estimate
-3. Ask the user for the vehicle's current location (needed for weather and electricity price lookup — Tibber has no GPS data)
+   - Current range estimate (range_km)
+2. Ask the user for the vehicle's current location (needed for weather and electricity price lookup — Tibber has no GPS data)
 
 **STEP 2 – WEATHER FORECAST**
-4. Get weather forecast for the vehicle location:
+3. Get weather forecast for the vehicle location:
    - Overnight low temperature (between now and {target_departure_time})
    - Temperature at {target_departure_time}
    - Precipitation (rain, snow, frost)
-5. Estimate weather impact on battery range:
+4. Estimate weather impact on battery range:
    - Below 0°C: range reduced by ~25–35 %, battery needs preconditioning
    - 0–10°C: range reduced by ~10–20 %
    - Above 20°C (with AC): range reduced by ~5–10 %
 
 **STEP 3 – ELECTRICITY PRICE FORECAST**
-6. Fetch electricity spot prices or time-of-use tariffs for the overnight period:
+5. Fetch electricity spot prices or time-of-use tariffs for the overnight period:
    - Use location (country/region) from the user
    - Search for ENTSO-E day-ahead prices, Tibber, aWATTar, or similar for the region
    - Identify cheapest 4-hour window between now and {target_departure_time}
    - Identify most expensive periods to avoid
-7. Calculate cost comparison:
+6. Calculate cost comparison:
    - Cheapest window price per kWh
    - Average/peak price per kWh
    - Potential savings by shifting charging
 
 **STEP 4 – REQUIRED ENERGY CALCULATION**
-8. Calculate energy needed:
+7. Calculate energy needed:
    - Target SOC for departure (80 % default, 100 % if long trip)
    - Weather-adjusted range target (add buffer for cold weather)
    - Energy gap = (target_soc - current_soc) × battery_capacity_kWh
-9. Include preconditioning energy if temperature < 5°C (approx. 3–5 kWh extra)
+8. Include preconditioning energy if temperature < 5°C (approx. 3–5 kWh extra)
 
 **STEP 5 – OPTIMAL SCHEDULE**
-10. Calculate optimal charging schedule:
+9. Calculate optimal charging schedule:
     - Fit charging window into cheapest electricity period
     - Ensure charging completes at least 30 min before {target_departure_time} (for preconditioning)
     - If not plugged in: remind user to connect cable
 
 **STEP 6 – RECOMMENDATION**
-11. Present the plan, and tell the user to start/stop charging themselves at the recommended times (via the vehicle's own app):
+10. Present the plan, and tell the user to start/stop charging themselves at the recommended times (via the vehicle's own app):
 
 ```
 ⚡ CHARGING PLAN FOR {{vehicle_name}}
@@ -436,9 +432,9 @@ Combines vehicle battery data with external route/weather sources; execution of 
         return f"""Optimise the trip to {destination} for {vehicle_id}:
 
 **STEP 1 – VEHICLE ENERGY STATE**
-1. Get energy status using get_energy_status
-   - Current SOC / fuel level and estimated range
-   - Vehicle type (electric / hybrid / combustion)
+1. Get current charging status using get_charging_status
+   - Current SOC and estimated range (range_km)
+   - Vehicle type: Tibber's vehicle integration only ever reports electric vehicles, so this is always electric — no tool call needed to determine it
 2. Ask the user for the vehicle's current location (starting point) — Tibber has no GPS data
 
 **STEP 2 – CALENDAR & TIME CONSTRAINTS**
@@ -532,8 +528,8 @@ Combines vehicle battery data with external route/weather sources; execution of 
 **STEP 1 – VEHICLE DETAILS**
 1. Get vehicle info using get_vehicle_info
    - Manufacturer, model (model year is always null with Tibber — ask the user if the Euro standard lookup needs it)
-   - Vehicle type (electric, hybrid, combustion) via get_energy_status
-2. For electric/hybrid: Get current SOC via get_battery_status (relevant for PHEV electric range)
+   - Vehicle type: Tibber's vehicle integration only ever reports electric vehicles, so this is always electric — no tool call needed to determine it
+2. Get current SOC via get_charging_status (relevant for range at the destination)
 
 **STEP 2 – ZONE RESTRICTION RESEARCH**
 3. Research entry restrictions for {destination}:
@@ -639,21 +635,20 @@ Combines vehicle battery data with external route/weather sources; execution of 
 1. Get charging status using get_charging_status
    - Current SOC, target SOC, charging state
    - Is vehicle currently charging?
-2. Get battery status using get_battery_status
-   - SOC percentage, estimated range
-3. Get vehicle info using get_vehicle_info
+   - Estimated range (range_km)
+2. Get vehicle info using get_vehicle_info
    - Model → used to look up battery specs
-4. Ask the user for the vehicle's current location (needed for weather — Tibber has no GPS data)
+3. Ask the user for the vehicle's current location (needed for weather — Tibber has no GPS data)
 
 **STEP 2 – WEATHER & TEMPERATURE**
-5. Get current temperature at the vehicle's location:
+4. Get current temperature at the vehicle's location:
    - Below 10°C: lithium-ion batteries charge less efficiently, higher internal resistance
    - Below 0°C: charging at high rates can cause lithium plating (permanent damage)
    - Above 35°C: accelerated degradation during charging
-6. Assess if temperature-related charging caution is needed
+5. Assess if temperature-related charging caution is needed
 
 **STEP 3 – BATTERY HEALTH RESEARCH**
-7. Look up battery health guidelines for this specific vehicle:
+6. Look up battery health guidelines for this specific vehicle:
    - Search for "{{manufacturer}} {{model}} battery longevity tips" or "{{model}} charging recommendations"
    - Standard best practices for lithium-ion:
      * Daily charge target: 80% (not 100%) for regular use
@@ -661,24 +656,24 @@ Combines vehicle battery data with external route/weather sources; execution of 
      * Avoid staying at 100% for extended periods (>2 h)
      * Avoid deep discharge below 10–15%
      * Preferred daily operating range: 20–80%
-8. Check manufacturer-specific recommendations (e.g. VW ID series: "home charging" mode targets 80%)
+7. Check manufacturer-specific recommendations (e.g. VW ID series: "home charging" mode targets 80%)
 
 **STEP 4 – CURRENT BEHAVIOUR ASSESSMENT**
-9. Assess current charging settings vs. best practice:
+8. Assess current charging settings vs. best practice:
    - Current target SOC vs. recommended daily target (80%)
    - Is vehicle often charged to 100%? (infer from current settings)
-10. Note any active charging if running
+9. Note any active charging if running
 
 **STEP 5 – USAGE CONTEXT**
-11. Ask or infer from calendar/context:
+10. Ask or infer from calendar/context:
     - Is the user taking a long trip soon? → 100% charge may be justified
     - Normal daily commute (<100 km)? → 80% is optimal
     - Vehicle parked for >24 h? → avoid high SOC
-12. If charging is currently active and target SOC > 80% with no long trip planned:
+11. If charging is currently active and target SOC > 80% with no long trip planned:
     - Suggest the user reduce target SOC in the vehicle's own app
 
 **STEP 6 – CHARGING RATE ADVICE**
-13. Temperature-based advice:
+12. Temperature-based advice:
     - Below 0°C: recommend the user precondition the battery via the vehicle's app before charging
     - Above 35°C: consider charging at a cooler time of day
 
@@ -687,7 +682,7 @@ Combines vehicle battery data with external route/weather sources; execution of 
 🔋 BATTERY HEALTH REPORT: {{vehicle_name}}
 ────────────────────────────────────────────────
 📊 Current SOC: {{soc}}% | Target: {{target_soc}}% | Range: {{range}} km
-⚡ Charging: {{state}} | Mode: {{charge_mode}}
+⚡ Charging: {{state}}
 🌡️  Temperature: {{temp}}°C → {{temp_risk_level}}
 
 🏥 HEALTH ASSESSMENT:

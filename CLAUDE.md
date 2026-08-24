@@ -53,9 +53,15 @@ command/write tools (Tibber's API has no write endpoints at all).
 
 ### MCP surface (keep README.md and AI_INSTRUCTIONS.md in sync with this)
 
-5 tools, all fully functional (no "registered but always fails" tools exist):
-`get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`,
-`get_charging_status`. Plus 11 workflow prompts in `prompts.py`.
+3 tools, all fully functional (no "registered but always fails" tools exist):
+`get_vehicles`, `get_vehicle_info`, `get_charging_status`. Plus 11 workflow
+prompts in `prompts.py`. Two tools were merged away rather than kept as
+duplicates: `get_vehicle_state` returned byte-identical data to
+`get_vehicle_info`; `get_battery_status` returned fields that were either
+already present elsewhere (`battery_level_percent` was literally
+`charging.current_soc_percent` under a different name) or have since been
+folded into `get_vehicle_info`/`get_charging_status` directly (`range_km`,
+`is_plugged_in`).
 
 **Whenever you add/remove/rename a tool or prompt, update all three:**
 `README.md` (AI Integration section), `AI_INSTRUCTIONS.md`, and the
@@ -85,7 +91,7 @@ registration file itself.
 ./scripts/test.sh -v       # verbose
 ```
 
-46 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
+47 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
 fake vehicles: electric ID.7 Tourer, combustion Transporter 7 — see that
 file's docstring for exact values), plus `test_tibber_extraction.py`, which
 exercises `TibberStateExtractionMixin`/`vin_from_external_id` directly
@@ -94,7 +100,7 @@ involved). No slow/real-API test suite exists beyond that: the Tibber Data
 API is read-only, so mock + fixture coverage is everything there is to
 test. See `tests/README.md` for full structure.
 
-**All 46 tests must pass before committing.** When adding a tool, add tests
+**All 47 tests must pass before committing.** When adding a tool, add tests
 under `tests/tools/test_<name>.py` following the existing pattern (success
 case, vehicle-not-found case, edge cases).
 

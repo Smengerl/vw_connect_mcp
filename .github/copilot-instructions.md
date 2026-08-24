@@ -4,7 +4,7 @@
 **Architecture**: Modular adapter with mixins (`CacheMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`; vehicle identifier resolution is a concrete default method on `AbstractAdapter` itself, not a separate mixin
 **Key Library**: `fastmcp` (MCP server framework). No third-party VW API library is used — the old `carconnectivity` (VW-direct) backend was removed after VW blocked third-party access; its code lives on, unmaintained, on the permanent `carconnectivity` git branch.
 **Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)
-**Test Suite**: 46 tests (all mock/offline, no real API calls) — **ALL 46 MUST PASS** before committing
+**Test Suite**: 47 tests (all mock/offline, no real API calls) — **ALL 47 MUST PASS** before committing
 
 > For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**. For the AI-facing description of the tool surface (kept in sync with the actual tools) see **src/weconnect_mcp/server/AI_INSTRUCTIONS.md**.
 
@@ -106,11 +106,11 @@ Extracted in `TibberStateExtractionMixin` from a Tibber device-detail response's
 | `connector.status` | Plugged in? (`connected`/`disconnected`) |
 | `charging.status` | `charging`/`idle` |
 
-`charging_power_kw` and `remaining_time_minutes` are always `None` — Tibber doesn't expose them.
+`ChargingModel` has no `charging_power_kw` or `remaining_time_minutes` fields at all — Tibber never exposes them, so they were removed from the model entirely rather than kept as always-`None` fields.
 
 ## Testing Guidelines (CRITICAL)
 
-**Golden Rule**: All 46 tests MUST pass before committing. No exceptions.
+**Golden Rule**: All 47 tests MUST pass before committing. No exceptions.
 **Always use `./scripts/test.sh`** (not `pytest` directly) — see `tests/README.md` for full test
 structure and commands. `--skip-slow` is accepted but currently a no-op: there are no slow/real-API
 tests (the Tibber API is read-only, so the mock adapter already covers everything it can return).
@@ -162,7 +162,7 @@ Prefer the `adapter` fixture from `conftest.py` (module-scoped `TestAdapter()`) 
 3. **Implement feature** — minimum code to pass
 4. **Run test** — should pass (green)
 5. **Run ALL tests**: `./scripts/test.sh`
-6. **Commit only if all 46 tests pass**
+6. **Commit only if all 47 tests pass**
 
 ### Using TestAdapter (Mock)
 
@@ -225,34 +225,42 @@ using FastMCP's `@mcp.tool(...)` decorator (not the raw MCP SDK's `@server.call_
 
 ```python
 @mcp.tool(
-    name="get_battery_status",
+    name="get_charging_status",
     description="...",
-    tags={"energy", "read", "battery", "bev-phev"},
-    annotations={"title": "Get Battery Status", "readOnlyHint": True, "idempotentHint": True},
+    tags={"energy", "read", "charging", "bev-phev"},
+    annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True},
 )
-def get_battery_status(
+def get_charging_status(
     vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
 ) -> str:
     energy_status = adapter.get_energy_status(vehicle_id)
-    if energy_status is None or energy_status.electric is None:
-        return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
-    result = {...}
+    if energy_status is None or energy_status.electric is None or energy_status.electric.charging is None:
+        return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
+    result = energy_status.electric.charging.model_dump()
+    result["range_km"] = energy_status.range.electric_km if energy_status.range else None
+    result["last_seen"] = energy_status.last_seen
     return json.dumps(result)
 ```
 
 **Pattern**:
 1. Extract `vehicle_id` (and any other args) as function parameters (FastMCP infers the schema from type hints/`Annotated`)
-2. Call the adapter method
+2. Call the adapter method(s) — `get_vehicle_info` now calls both `get_vehicle()` and
+   `get_energy_status()` to merge identity with a quick energy snapshot
 3. Return **a JSON string** built with `json.dumps(...)` — tools here return `str`, not `TextContent`
    (FastMCP wraps the return value for the wire protocol itself)
-4. On a not-found vehicle, return `json.dumps({"error": "..."})` — this is the **only** error case;
-   there is no "not supported" response to model, since unsupported operations simply have no tool
+4. On a not-found vehicle, return `json.dumps({"error": "..."})`. `get_charging_status`
+   additionally returns `{"error": "..."}` when the vehicle resolves but doesn't support charging
+   — so "not found" is not the only error case for that tool; there is still no other "not
+   supported" response to model beyond that, since unsupported operations simply have no tool.
 
-### The 5 Tools (Complete List — Nothing Else Exists)
-`get_vehicles`, `get_vehicle_info`, `get_vehicle_state`, `get_battery_status`, `get_charging_status`
-— all in `src/weconnect_mcp/server/mixins/read_tools.py`. `get_vehicle_state` returns the same data
-as `get_vehicle_info`; there's no richer combined snapshot for this backend, so don't try to make
-them diverge.
+### The 3 Tools (Complete List — Nothing Else Exists)
+`get_vehicles`, `get_vehicle_info`, `get_charging_status`
+— all in `src/weconnect_mcp/server/mixins/read_tools.py`. Two tools were merged away rather than
+kept as duplicates: `get_vehicle_state` returned byte-identical data to `get_vehicle_info` (no
+richer combined snapshot exists for this backend); `get_battery_status` returned fields that were
+either already present elsewhere (`battery_level_percent` was literally
+`charging.current_soc_percent` under a different name) or have since been folded into
+`get_vehicle_info`/`get_charging_status` directly (`range_km`, `is_plugged_in`).
 
 ### Prompts
 11 workflow prompts in `src/weconnect_mcp/server/mixins/prompts.py`, registered via
@@ -326,7 +334,7 @@ These four are the source of truth for the exposed interface and must stay consi
 4. Register the tool in `src/weconnect_mcp/server/mixins/read_tools.py`
 5. Add tests in `tests/tools/test_*.py`
 6. Update `README.md` and `src/weconnect_mcp/server/AI_INSTRUCTIONS.md` (see "Keeping Docs in Sync" above)
-7. Run tests: `./scripts/test.sh` (all 46+ must pass)
+7. Run tests: `./scripts/test.sh` (all 47+ must pass)
 
 ### There is no "Add New Command" section
 No command surface exists on this backend — see "Critical Context" above.

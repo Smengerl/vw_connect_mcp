@@ -132,7 +132,7 @@ Run the test suite with optional filtering.
 - `-h, --help` - Show help message
 
 **Test Statistics:**
-- 46 fast mock/offline tests (~0.1s, no Tibber account needed)
+- 47 fast mock/offline tests (~0.1s, no Tibber account needed)
 - No slow/real-API tests exist today — the Tibber Data API is read-only, so
   there's nothing beyond what the mock adapter and the extraction-logic
   fixtures already cover

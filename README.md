@@ -1,7 +1,7 @@
 # weconnect_mvp — MCP Server for Connected Vehicles via Tibber
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-47%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
@@ -55,6 +55,7 @@ this backend, and the current architecture in [`ARCHITECTURE.md`](ARCHITECTURE.m
 2. **No door/window/tyre/light/climate/GPS/maintenance data:** Tibber's confirmed capabilities cover only identity and charging/range — see above.
 3. **Read-only:** No remote commands (lock, climate, charging control, lights) are possible — Tibber's API has no write endpoints at all.
 4. **Refresh token rotation:** Tibber rotates the refresh token on every use; the token file must be on writable, persisted storage or re-authentication will eventually be required.
+5. **Vehicle pairing is manual, outside this server:** a vehicle only shows up in `get_vehicles()` after the user has paired it to their Tibber account in the Tibber app. This server has no tool to perform or check that pairing — if a vehicle is missing, that's the fix, not a bug here.
 
 ---
 
@@ -459,13 +460,15 @@ The server will then be available at `http://localhost:8089`.
 
 ## MCP Tool & Prompt Reference
 
-This MCP server provides **5 tools** and **11 prompts** that AI assistants can use. There is no
+This MCP server provides **3 tools** and **11 prompts** that AI assistants can use. There is no
 separate MCP Resources layer: it would have been a 1:1 duplicate of the tools with no added
 capability for the clients this project targets (Claude Desktop, VS Code Copilot, Claude Code) —
-see `src/weconnect_mcp/server/mixins/read_tools.py` for the reasoning. All 5 tools are fully
-functional — none of them ever fail due to missing backend data, because everything the Tibber
-Data API doesn't provide (doors, windows, tyres, lights, climate, GPS position, maintenance, and
-any remote command) simply has no tool at all, rather than a tool that always returns an error.
+see `src/weconnect_mcp/server/mixins/read_tools.py` for the reasoning. All 3 tools are fully
+functional — everything the Tibber Data API doesn't provide (doors, windows, tyres, lights,
+climate, GPS position, maintenance, and any remote command) simply has no tool at all, rather than
+a tool that always returns an error. `get_charging_status` can still return `{"error": "..."}` for
+an individual vehicle that resolves but doesn't support charging, separately from the usual
+"vehicle not found" case.
 
 > **Source of truth:** The canonical, up-to-date reference — including the exact wording each
 > tool/prompt reports — lives in
@@ -477,10 +480,8 @@ any remote command) simply has no tool at all, rather than a tool that always re
 | Tool | Description |
 |------|---|
 | `get_vehicles` | List all vehicles: VIN, name, model (`license_plate` always `null` — Tibber doesn't provide it) |
-| `get_vehicle_info` | Manufacturer, model, name, online state (odometer/year/software version always `null`) |
-| `get_vehicle_state` | Same as `get_vehicle_info` — no richer combined snapshot exists with this backend |
-| `get_battery_status` | Battery level, electric range, charging flag |
-| `get_charging_status` | Charging/plug state, target/current SOC (`charging_power_kw`/`remaining_time_minutes` always `null`) |
+| `get_vehicle_info` | Manufacturer, model, name, online state, last-seen timestamp, plus a quick energy snapshot (electric range, charging flag, plug-connected flag) |
+| `get_charging_status` | Charging/plug state, target/current SOC, electric range, last-seen timestamp |
 
 ### What AI Assistants Can Do
 
@@ -682,7 +683,7 @@ Run the test suite with:
 
 **Test Structure:**
 
-- **46 tests** - Run in ~0.1 seconds, no Tibber account needed (mock adapter + real fixture data)
+- **47 tests** - Run in ~0.1 seconds, no Tibber account needed (mock adapter + real fixture data)
 - No slow/real-API tests exist today — the Tibber Data API is read-only, so there's nothing beyond
   what the mock adapter and the extraction-logic fixtures already cover
 
