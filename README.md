@@ -24,8 +24,7 @@ A developer-focused server that exposes vehicle data via a Model Context Protoco
 
 > [!NOTE]
 > **Why Tibber, not VW directly?** In May 2026, VW shut down third-party access to its WeConnect
-> API (new device-attestation requirements open-source projects can't obtain — see the
-> `experiment/vw-attestation-finding` branch for the technical details of that block).
+> API (new device-attestation requirements open-source projects can't obtain).
 > This project's original direct integration (the `carconnectivity` library) stopped working
 > because of that, so the whole server was redesigned around the read-only
 > [Tibber Data API](https://data-api.tibber.com/docs/) instead. The old VW-direct code still
@@ -700,7 +699,6 @@ Contributions are welcome! Please see `CONTRIBUTING.md` and follow the code of c
 ## Additional Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Full Tibber Data API research, the 51-point data comparison against the old VW-direct (`carconnectivity`) backend, current adapter architecture, and project history
-- The technical details of VW's third-party API block (device-attestation requirements, tested live) live on the standalone [`experiment/vw-attestation-finding`](https://github.com/Smengerl/vw_connect_mcp/tree/experiment/vw-attestation-finding) branch, never merged into `main`
 - **[scripts/README.md](scripts/README.md)** - All available scripts and how to use them
 - **[scripts/lib/README.md](scripts/lib/README.md)** - Python detection library documentation
 - **[tests/README.md](tests/README.md)** - Test suite overview
