@@ -63,7 +63,7 @@ def adapter():
     Returns:
         TestAdapter with:
         - ID.7 Tourer (electric, VIN: WVWZZZED4SE003938)
-        - Transporter 7 (combustion, VIN: WV2ZZZSTZNH009136)
+        - T7 Multivan eHybrid (hybrid, VIN: WV2ZZZSTZNH009136)
     """
     return TestAdapter()
 

@@ -94,7 +94,7 @@ def main() -> int:
 
     print(
         f"\nDone. Point TIBBER_TOKEN_PATH at {token_path} (or leave it at this "
-        "default) when starting the server with --backend tibber."
+        "default) when starting the server."
     )
     return 0
 

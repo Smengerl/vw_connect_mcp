@@ -109,7 +109,7 @@ from `ARCHITECTURE.md` §3.1 — no mock adapter, no network
 
 **Mock vehicles** (in `TestAdapter`):
 1. **ID.7 Tourer** - Electric, VIN: WVWZZZED4SE003938, Name: ID7, License: M-XY 5678
-2. **Transporter 7** - Combustion, VIN: WV2ZZZSTZNH009136, Name: T7, License: M-AB 1234
+2. **T7 Multivan eHybrid** - Hybrid, VIN: WV2ZZZSTZNH009136, Name: T7, License: M-AB 1234
 
 **Test data configuration**: `tests/test_data.py`
 - Vehicle identifiers (VINs, names, license plates)

@@ -116,7 +116,7 @@ def main():
             print(f"      → Battery: {data.electric.battery_level_percent}%, "
                   f"Range: {data.range.total_km} km, {status}")
         else:
-            print(f"      → Combustion vehicle, tank: {data.combustion.tank_level_percent}%")
+            print(f"      → No electric drive, tank: {data.combustion.tank_level_percent}%")
         print()
     
     print("=" * 70)

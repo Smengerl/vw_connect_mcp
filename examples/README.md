@@ -76,9 +76,9 @@ python3 examples/caching_demo.py
 
 All examples use the `TestAdapter` (from `tests/test_adapter.py`), which provides mock data:
 
-**Vehicle 1: T7 (Transporter 7)**
+**Vehicle 1: T7 (Multivan eHybrid)**
 - VIN: `WV2ZZZSTZNH009136`
-- Type: Combustion
+- Type: Hybrid (plug-in)
 - License Plate: `M-AB 1234`
 
 **Vehicle 2: ID7 (ID.7 Tourer)**

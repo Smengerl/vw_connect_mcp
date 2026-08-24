@@ -173,7 +173,7 @@ def demo_use_cases():
     print("2. Multi-Vehicle Households")
     print("-" * 70)
     print("   Family with multiple cars:")
-    print("   • M-AB 1234: Dad's T7 Transporter")
+    print("   • M-AB 1234: Dad's T7 Hybrid")
     print("   • M-XY 5678: Mom's ID7 Electric")
     print("   → Easy to distinguish vehicles")
     print()

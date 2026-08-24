@@ -177,7 +177,7 @@ adapter = TestAdapter()
 vehicles = adapter.list_vehicles()          # -> list[VehicleListItem], 2 entries
 vehicle = adapter.get_vehicle("ID7")         # -> VehicleModel | None
 energy = adapter.get_energy_status("ID7")    # -> EnergyStatusModel | None (electric)
-energy = adapter.get_energy_status("T7")     # -> EnergyStatusModel | None (combustion, for type-awareness tests only)
+energy = adapter.get_energy_status("T7")     # -> EnergyStatusModel | None (hybrid: electric + combustion both populated)
 ```
 
 There is no `./scripts/vehicle_command.sh` and no way to test against the real Tibber API from a
@@ -199,7 +199,8 @@ soc = energy_status.electric.charging.current_soc_percent
 
 ### ✅ DO: Check `energy_status.electric` Before Reading Charging/Battery Data
 ```python
-# Good - electric can be None (e.g. combustion vehicle in the mock adapter)
+# Good - electric can be None per the model's own type (Optional[ElectricDriveInfo]),
+# even though every vehicle the mock adapter and the real Tibber backend report has it set
 if energy_status is None or energy_status.electric is None:
     return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't have a battery"})
 ```

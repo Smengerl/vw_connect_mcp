@@ -10,11 +10,16 @@ Purpose:
 - Used by all tool tests in tests/tools/ directory
 
 Mock vehicles:
-1. Transporter 7 (VIN: WV2ZZZSTZNH009136)
-   - Combustion (internal test classification only -- VehicleModel has no
-     `type` field, since Tibber never reports one)
+1. T7 Multivan eHybrid (VIN: WV2ZZZSTZNH009136)
+   - Plug-in hybrid (internal test classification only -- VehicleModel has
+     no `type` field, since Tibber never reports one). Deliberately not a
+     pure combustion vehicle: Tibber's Enode-backed integration is EV-only
+     (see ARCHITECTURE.md), so a pure ICE vehicle could never actually show
+     up here -- a PHEV, with a real battery/electric drive alongside its
+     tank, is the realistic edge case worth covering instead.
    - License plate: M-AB 1234 (only exposed via VehicleListItem/get_vehicles)
-   - Features: Full tank (68%), diesel
+   - Features: 64% battery (plugged in, not currently charging), 72% tank,
+     petrol -- both electric and combustion data populated at once
 
 2. ID.7 Tourer (VIN: WVWZZZED4SE003938)
    - Electric (internal test classification only -- see above)
@@ -24,7 +29,7 @@ Mock vehicles:
 Test data characteristics:
 - Realistic values (battery levels, SOC, etc.)
 - Consistent state across methods
-- Both vehicle types represented (electric & combustion)
+- Both vehicle types represented (electric & hybrid)
 - Only the methods AbstractAdapter still declares (Tibber's surface)
 """
 from weconnect_mcp.adapter.abstract_adapter import (
@@ -40,7 +45,7 @@ class TestAdapter(AbstractAdapter):
 
     v1 = VehicleModel(
         manufacturer='Volkswagen',
-        model='Transporter 7',
+        model='Multivan eHybrid',
         name='T7',
         vin='WV2ZZZSTZNH009136',
         connection_state='online',
@@ -66,8 +71,8 @@ class TestAdapter(AbstractAdapter):
     # never reports vehicle type/propulsion) -- used to pick which branch
     # get_energy_status returns.
     vehicle_kinds = {
-        'WV2ZZZSTZNH009136': 'combustion',  # T7
-        'WVWZZZED4SE003938': 'electric',    # ID7
+        'WV2ZZZSTZNH009136': 'hybrid',    # T7 Multivan eHybrid
+        'WVWZZZED4SE003938': 'electric',  # ID7
     }
 
     def _resolve_to_vin(self, vehicle_id: str) -> Optional[str]:
@@ -137,18 +142,29 @@ class TestAdapter(AbstractAdapter):
                         last_seen='2024-01-15T10:31:00Z',
                     )
                 else:
-                    # Combustion vehicle
+                    # Plug-in hybrid vehicle -- both electric and combustion
+                    # data populated, unlike the pure-electric/pure-ICE cases
+                    # above/below (a PHEV genuinely has both).
                     return EnergyStatusModel(
-                        vehicle_type='combustion',
+                        vehicle_type='hybrid',
                         range=RangeInfo(
-                            total_km=650.0,
-                            electric_km=None,
-                            combustion_km=650.0,
+                            total_km=630.0,
+                            electric_km=50.0,
+                            combustion_km=580.0,
                         ),
-                        electric=None,
+                        electric=ElectricDriveInfo(
+                            battery_level_percent=64.0,
+                            charging=ChargingModel(
+                                is_charging=False,
+                                is_plugged_in=True,
+                                charging_state='idle',
+                                target_soc_percent=80,
+                                current_soc_percent=64.0,
+                            )
+                        ),
                         combustion=CombustionDriveInfo(
-                            tank_level_percent=68.0,
-                            fuel_type='diesel',
+                            tank_level_percent=72.0,
+                            fuel_type='petrol',
                         ),
                         last_seen='2024-01-15T10:30:00Z',
                     )

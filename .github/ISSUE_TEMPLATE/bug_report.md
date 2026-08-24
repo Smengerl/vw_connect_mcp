@@ -29,19 +29,18 @@ What actually happened.
 ## Configuration (sanitized)
 ```json
 {
-  "carConnectivity": {
-    "log_level": "debug",
-    ...
-  }
+  "client_id": "...",
+  "redirect_uri": "http://localhost:8515/callback",
+  "token_path": "./tibber_tokens.json"
 }
 ```
-**Note:** Remove sensitive data like username/password/spin!
+**Note:** Remove sensitive data like `client_secret` and token contents!
 
 ## Logs
 If applicable, add logs from:
 ```bash
 # Run with debug logging
-python -m weconnect_mcp.cli.mcp_server_cli src/config.json --log-level DEBUG --log-file debug.log
+python -m weconnect_mcp.cli.mcp_server_cli src/tibber_config.json --log-level DEBUG --log-file debug.log
 ```
 
 <details>

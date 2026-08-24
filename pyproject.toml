@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "weconnect-mcp"
 version = "0.1.0"
-description = "MCP server for Volkswagen vehicles"
+description = "MCP server for EVs (VW Group and 30+ other brands) via the Tibber Data API"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "CC BY-SA 4.0" }

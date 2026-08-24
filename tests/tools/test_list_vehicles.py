@@ -7,18 +7,18 @@ This test suite validates the list_vehicles() adapter method and its MCP tool re
 What is tested:
 - Returns all available vehicles
 - Each vehicle contains required fields (VIN, name, model, license_plate)
-- Vehicle data accuracy (electric and combustion vehicles)
+- Vehicle data accuracy (electric and hybrid vehicles)
 - MCP server tool registration
 
 Test data:
-- Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, Transporter 7 combustion)
+- Uses TestAdapter with 2 mock vehicles (ID.7 Tourer electric, T7 Multivan eHybrid hybrid)
 - Expected values from tests.test_data module
 """
 from test_data import (
     VIN_ELECTRIC,
-    VIN_COMBUSTION,
+    VIN_HYBRID,
     EXPECTED_ELECTRIC_VEHICLE,
-    EXPECTED_COMBUSTION_VEHICLE,
+    EXPECTED_HYBRID_VEHICLE,
 )
 
 
@@ -54,12 +54,12 @@ def test_list_vehicles_electric_vehicle_data(adapter):
     assert electric.license_plate == EXPECTED_ELECTRIC_VEHICLE["license_plate"]
 
 
-def test_list_vehicles_combustion_vehicle_data(adapter):
-    """Test that combustion vehicle data is correct (also validates presence in list)"""
+def test_list_vehicles_hybrid_vehicle_data(adapter):
+    """Test that hybrid vehicle data is correct (also validates presence in list)"""
     vehicles = adapter.list_vehicles()
-    
-    combustion = next((v for v in vehicles if v.vin == VIN_COMBUSTION), None)
-    assert combustion is not None, "Combustion vehicle should be in list"
-    assert combustion.name == EXPECTED_COMBUSTION_VEHICLE["name"]
-    assert combustion.model == EXPECTED_COMBUSTION_VEHICLE["model"]
-    assert combustion.license_plate == EXPECTED_COMBUSTION_VEHICLE["license_plate"]
+
+    hybrid = next((v for v in vehicles if v.vin == VIN_HYBRID), None)
+    assert hybrid is not None, "Hybrid vehicle should be in list"
+    assert hybrid.name == EXPECTED_HYBRID_VEHICLE["name"]
+    assert hybrid.model == EXPECTED_HYBRID_VEHICLE["model"]
+    assert hybrid.license_plate == EXPECTED_HYBRID_VEHICLE["license_plate"]

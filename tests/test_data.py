@@ -14,16 +14,20 @@ Purpose:
 Contents:
 1. Vehicle Identifiers (VINs, names, license plates)
 2. Expected Values for Each Tool/Method
-   - Vehicle info (electric & combustion)
+   - Vehicle info (electric & hybrid)
    - Energy status (battery, tank, range, charging)
 3. Helper Functions
    - get_electric_vehicle_identifiers()
-   - get_combustion_vehicle_identifiers()
+   - get_hybrid_vehicle_identifiers()
    - get_all_valid_identifiers()
 
 Test Data Overview:
 - Electric: ID.7 Tourer (VIN: WVWZZZED4SE003938, plate: M-XY 5678)
-- Combustion: Transporter 7 (VIN: WV2ZZZSTZNH009136, plate: M-AB 1234)
+- Hybrid: T7 Multivan eHybrid (VIN: WV2ZZZSTZNH009136, plate: M-AB 1234) --
+  a plug-in hybrid, not a pure combustion vehicle: it has a real electric
+  drive/battery (something Tibber's Enode-backed integration could
+  plausibly actually report), unlike a pure ICE vehicle, which Tibber
+  never reports at all (see ARCHITECTURE.md -- "Tibber is EV-only").
 
 All expected values match TestAdapter mock data exactly to ensure test accuracy.
 """
@@ -35,10 +39,10 @@ VIN_ELECTRIC = "WVWZZZED4SE003938"
 NAME_ELECTRIC = "ID7"
 LICENSE_PLATE_ELECTRIC = "M-XY 5678"
 
-# Combustion Vehicle (VW T7)
-VIN_COMBUSTION = "WV2ZZZSTZNH009136"
-NAME_COMBUSTION = "T7"
-LICENSE_PLATE_COMBUSTION = "M-AB 1234"  # Updated to match TestAdapter
+# Hybrid Vehicle (VW T7 Multivan eHybrid)
+VIN_HYBRID = "WV2ZZZSTZNH009136"
+NAME_HYBRID = "T7"
+LICENSE_PLATE_HYBRID = "M-AB 1234"  # Updated to match TestAdapter
 
 # Invalid identifiers
 VIN_INVALID = "INVALID_VIN"
@@ -57,13 +61,13 @@ EXPECTED_ELECTRIC_VEHICLE = {
     "last_seen": "2024-01-15T10:31:00Z",
 }
 
-# Vehicle Info - Combustion (T7)
-EXPECTED_COMBUSTION_VEHICLE = {
-    "vin": VIN_COMBUSTION,
-    "name": NAME_COMBUSTION,
-    "model": "Transporter 7",  # Updated to match TestAdapter
+# Vehicle Info - Hybrid (T7 Multivan eHybrid)
+EXPECTED_HYBRID_VEHICLE = {
+    "vin": VIN_HYBRID,
+    "name": NAME_HYBRID,
+    "model": "Multivan eHybrid",  # Updated to match TestAdapter
     "manufacturer": "Volkswagen",
-    "license_plate": LICENSE_PLATE_COMBUSTION,  # only on VehicleListItem, not VehicleModel
+    "license_plate": LICENSE_PLATE_HYBRID,  # only on VehicleListItem, not VehicleModel
     "last_seen": "2024-01-15T10:30:00Z",
 }
 
@@ -77,12 +81,16 @@ EXPECTED_ENERGY_ELECTRIC = {
     "last_seen": "2024-01-15T10:31:00Z",
 }
 
-# Energy Status - Combustion
-EXPECTED_ENERGY_COMBUSTION = {
-    "vehicle_type": "combustion",
-    "total_range_km": 650.0,  # Updated to match TestAdapter
-    "combustion_range_km": 650.0,
-    "tank_level_percent": 68.0,  # Updated to match TestAdapter
+# Energy Status - Hybrid (both electric and combustion data present, unlike a BEV/pure ICE)
+EXPECTED_ENERGY_HYBRID = {
+    "vehicle_type": "hybrid",
+    "battery_level_percent": 64.0,
+    "total_range_km": 630.0,  # Updated to match TestAdapter
+    "electric_range_km": 50.0,
+    "combustion_range_km": 580.0,
+    "is_charging": False,
+    "is_plugged_in": True,
+    "tank_level_percent": 72.0,  # Updated to match TestAdapter
     "last_seen": "2024-01-15T10:30:00Z",
 }
 
@@ -94,14 +102,14 @@ def get_electric_vehicle_identifiers():
     return [VIN_ELECTRIC, NAME_ELECTRIC, LICENSE_PLATE_ELECTRIC]
 
 
-def get_combustion_vehicle_identifiers():
-    """Return all valid identifiers for the combustion test vehicle."""
-    return [VIN_COMBUSTION, NAME_COMBUSTION, LICENSE_PLATE_COMBUSTION]
+def get_hybrid_vehicle_identifiers():
+    """Return all valid identifiers for the hybrid test vehicle."""
+    return [VIN_HYBRID, NAME_HYBRID, LICENSE_PLATE_HYBRID]
 
 
 def get_all_valid_identifiers():
     """Return all valid vehicle identifiers."""
-    return get_electric_vehicle_identifiers() + get_combustion_vehicle_identifiers()
+    return get_electric_vehicle_identifiers() + get_hybrid_vehicle_identifiers()
 
 
 def get_invalid_identifiers():

@@ -15,7 +15,7 @@ Key features:
 - Supports two detail levels: BASIC (identity only) and FULL (BASIC + connection_state)
 - Flexible identifier resolution (VIN, name, or license plate)
 - No vehicle type/propulsion field exists -- Tibber never reports it, so there
-  is nothing to assert about electric vs combustion classification here (see
+  is nothing to assert about electric vs hybrid classification here (see
   tests/tools/test_get_energy_status.py, which dispatches on vehicle_type
   from get_energy_status instead)
 
@@ -26,11 +26,11 @@ Test data:
 import pytest
 from test_data import (
     VIN_ELECTRIC,
-    VIN_COMBUSTION,
+    VIN_HYBRID,
     NAME_ELECTRIC,
     VIN_INVALID,
     EXPECTED_ELECTRIC_VEHICLE,
-    EXPECTED_COMBUSTION_VEHICLE,
+    EXPECTED_HYBRID_VEHICLE,
     get_electric_vehicle_identifiers,
 )
 from weconnect_mcp.adapter.abstract_adapter import VehicleDetailLevel
@@ -49,14 +49,14 @@ def test_get_vehicle_basic_details_electric(adapter):
     assert vehicle.manufacturer == EXPECTED_ELECTRIC_VEHICLE["manufacturer"]
 
 
-def test_get_vehicle_basic_details_combustion(adapter):
-    """Test getting basic vehicle information for combustion vehicle"""
-    vehicle = adapter.get_vehicle(VIN_COMBUSTION, details=VehicleDetailLevel.BASIC)
+def test_get_vehicle_basic_details_hybrid(adapter):
+    """Test getting basic vehicle information for hybrid vehicle"""
+    vehicle = adapter.get_vehicle(VIN_HYBRID, details=VehicleDetailLevel.BASIC)
 
     assert vehicle is not None
-    assert vehicle.vin == EXPECTED_COMBUSTION_VEHICLE["vin"]
-    assert vehicle.name == EXPECTED_COMBUSTION_VEHICLE["name"]
-    assert vehicle.model == EXPECTED_COMBUSTION_VEHICLE["model"]
+    assert vehicle.vin == EXPECTED_HYBRID_VEHICLE["vin"]
+    assert vehicle.name == EXPECTED_HYBRID_VEHICLE["name"]
+    assert vehicle.model == EXPECTED_HYBRID_VEHICLE["model"]
 
 
 # ==================== TESTS - BASIC vs FULL ====================

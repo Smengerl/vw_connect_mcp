@@ -92,7 +92,7 @@ registration file itself.
 ```
 
 47 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
-fake vehicles: electric ID.7 Tourer, combustion Transporter 7 — see that
+fake vehicles: electric ID.7 Tourer, hybrid T7 Multivan eHybrid — see that
 file's docstring for exact values), plus `test_tibber_extraction.py`, which
 exercises `TibberStateExtractionMixin`/`vin_from_external_id` directly
 against real fixture data from `ARCHITECTURE.md` §3.1 (no mock adapter
