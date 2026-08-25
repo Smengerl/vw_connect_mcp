@@ -6,18 +6,18 @@ This test suite validates the get_vehicle() consolidated adapter method and its 
 
 What is tested:
 - BASIC vs FULL detail levels
-- Vehicle identifier resolution (VIN, name, license plate)
+- Vehicle identifier resolution (VIN, name)
 - Data consistency and completeness
 - Invalid identifier handling
 - MCP server tool registration (get_vehicle_info)
 
 Key features:
 - Supports two detail levels: BASIC (identity only) and FULL (BASIC + connection_state)
-- Flexible identifier resolution (VIN, name, or license plate)
-- No vehicle type/propulsion field exists -- Tibber never reports it, so there
-  is nothing to assert about electric vs hybrid classification here (see
-  tests/tools/test_get_energy_status.py, which dispatches on vehicle_type
-  from get_energy_status instead)
+- Flexible identifier resolution (VIN or name) -- no license plate support,
+  Tibber never reports one, see abstract_adapter.py's docstrings
+- No vehicle type/propulsion field exists -- Tibber never reports it (it's
+  EV-only, see ARCHITECTURE.md), so there is nothing to assert about
+  vehicle classification here or anywhere else in this project
 
 Test data:
 - Uses TestAdapter with 2 mock vehicles
@@ -96,7 +96,7 @@ def test_get_vehicle_full_vs_basic_has_more_fields(adapter):
 
 @pytest.mark.parametrize("identifier", get_electric_vehicle_identifiers())
 def test_get_vehicle_by_different_identifiers(adapter, identifier):
-    """Test that vehicle can be retrieved by VIN, name, or license plate"""
+    """Test that vehicle can be retrieved by VIN or name"""
     vehicle = adapter.get_vehicle(identifier, details=VehicleDetailLevel.BASIC)
 
     assert vehicle is not None

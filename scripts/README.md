@@ -41,7 +41,7 @@ See [lib/README.md](lib/README.md) for detailed documentation and usage examples
 # Git Bash handles all scripts transparently
 ./scripts/setup.sh
 ./scripts/test.sh --skip-slow
-./scripts/create_github_copilot_config.sh
+./scripts/create_mcp_config.sh vscode
 ```
 
 #### Option 2: WSL (Windows Subsystem for Linux)
@@ -76,7 +76,7 @@ credentials file** when both are present:
 **Use the file for local/desktop clients** (Claude Desktop, VS Code Copilot,
 Microsoft Copilot Desktop) — those launch the server with their own
 environment, not your shell's, so anything set via `export` never reaches
-it. The `create_*_config.sh` scripts already generate configs pointing at
+it. `create_mcp_config.sh` already generates configs pointing at
 the credentials file for exactly this reason; no secrets end up in the
 generated `claude_desktop_config.json` / `mcp.json`.
 
@@ -205,67 +205,40 @@ source ./scripts/activate_venv.sh
 
 ---
 
-### create_claude_config.sh
-Generate MCP configuration for Claude Desktop. Points the generated config at
-`src/tibber_config.json` — see [Configuring Secrets](#configuring-secrets)
-below for why a file is used here instead of environment variables. Prints
-setup instructions if that file doesn't exist yet.
+### create_mcp_config.sh
+Generate an MCP client config for **Claude Desktop**, **Microsoft Copilot
+Desktop**, or **VS Code** (GitHub Copilot) — one script, one `--client`-style
+positional argument, replacing the three near-identical scripts this project
+used to ship. Points the generated config at `src/tibber_config.json` — see
+[Configuring Secrets](#configuring-secrets) above for why a file is used here
+instead of environment variables. Prints setup instructions if that file
+doesn't exist yet.
 
 ```bash
-./scripts/create_claude_config.sh
+./scripts/create_mcp_config.sh claude
+./scripts/create_mcp_config.sh copilot-desktop
+./scripts/create_mcp_config.sh vscode
 ```
 
-**Output locations:**
-- Configuration saved to `tmp/claude_desktop/claude_desktop_config.json`
-- On **macOS**: Copy to `~/Library/Application Support/Claude/claude_desktop_config.json`
-- On **Windows**: Copy to `%APPDATA%\Claude\claude_desktop_config.json`
-- On **Linux**: Varies by distribution
+**Output locations** (staged file → real destination):
 
----
+| Client | Staged at | Copy to |
+|---|---|---|
+| `claude` | `tmp/claude_desktop/claude_desktop_config.json` | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows: `%APPDATA%\Claude\claude_desktop_config.json`; Linux: varies by distribution |
+| `copilot-desktop` | `tmp/copilot_desktop/mcp.json` | macOS: `~/Library/Application Support/Microsoft/Copilot/mcp.json`; Windows: `%APPDATA%\Microsoft\Copilot\mcp.json` |
+| `vscode` | `tmp/vscode/mcp.json` | macOS: `~/Library/Application Support/Code/User/mcp.json`; Windows: `%APPDATA%\Microsoft\VSCode\mcp.json`; Linux: `~/.config/Code/User/mcp.json` |
 
-### create_github_copilot_config.sh
-Generate MCP configuration for GitHub Copilot (VS Code). Same
-`src/tibber_config.json` default and setup-instructions behavior as
-`create_claude_config.sh` above.
+If `jq` is installed and a config already exists at the destination, the
+script prints a one-line `jq` merge command instead of you having to hand-edit
+JSON. There is no interactive auto-merge wizard any more (VS Code's script
+used to have a 4-option menu with automatic backups) — copy the file over (or
+run the printed `jq` command) and restart the client yourself.
 
-```bash
-./scripts/create_github_copilot_config.sh
-```
-
-**Output locations:**
-- Configuration saved to `tmp/github_copilot_vscode/mcp.json`
-- On **macOS**: `~/Library/Application Support/Code/User/mcp.json`
-- On **Windows**: `%APPDATA%\Microsoft\VSCode\mcp.json`
-- On **Linux**: `~/.config/Code/User/mcp.json`
-
-**Interactive installation:**
-The script offers 4 options:
-1. **🎯 Automatic** - Auto-merges into existing `mcp.json` (requires `jq`)
-2. **🖱️ GUI** - Instructions for VS Code Command Palette
-3. **✏️ Manual** - Instructions for manual file editing
-4. **ℹ️ Info** - Show all methods
-
-**After Installation:**
+**After installing the VS Code config specifically:**
 - Restart VS Code (`Cmd+Shift+P` → `Developer: Reload Window`)
 - Type `/list` in Copilot Chat to verify installation
 - Look for tools starting with `mcp_weconnect_` (e.g., `mcp_weconnect_get_vehicles`)
 - VS Code automatically prefixes tools with `mcp_{servername}_` to avoid naming conflicts
-
----
-
-### create_copilot_desktop_config.sh
-Generate MCP configuration for Microsoft Copilot Desktop. Same
-`src/tibber_config.json` default and setup-instructions behavior as
-`create_claude_config.sh` above.
-
-```bash
-./scripts/create_copilot_desktop_config.sh
-```
-
-**Output locations:**
-- Configuration saved to `tmp/copilot_desktop/mcp.json`
-- On **macOS**: `~/Library/Application Support/Microsoft/Copilot/mcp.json`
-- On **Windows**: `%APPDATA%\Microsoft\Copilot\mcp.json`
 
 ---
 

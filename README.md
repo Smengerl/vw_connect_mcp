@@ -50,7 +50,7 @@ this backend, and the current architecture in [`ARCHITECTURE.md`](ARCHITECTURE.m
 
 ### Known Limitations
 
-1. **No license plate data (Tibber API limitation):** The Tibber Data API does not provide license plate information. All vehicles will show `license_plate: null`. This is a limitation of Tibber's API, not this server.
+1. **No license plate data (Tibber API limitation):** The Tibber Data API does not provide license plate information, so there's no `license_plate` field in any tool response and no way to identify a vehicle by license plate either. This is a limitation of Tibber's API, not this server.
 2. **No door/window/tyre/light/climate/GPS/maintenance data:** Tibber's confirmed capabilities cover only identity and charging/range — see above.
 3. **Read-only:** No remote commands (lock, climate, charging control, lights) are possible — Tibber's API has no write endpoints at all.
 4. **Refresh token rotation:** Tibber rotates the refresh token on every use; the token file must be on writable, persisted storage or re-authentication will eventually be required.
@@ -97,7 +97,7 @@ Get up and running in 3 steps:
 3. **Connect an AI assistant**
 
    ```bash
-   ./scripts/create_claude_config.sh  # Claude Desktop -- copy output to Claude's config
+   ./scripts/create_mcp_config.sh claude  # Claude Desktop -- copy output to Claude's config
    ```
 
    Restart Claude Desktop and ask: *"What vehicles are available?"*
@@ -212,9 +212,9 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
    python -m weconnect_mcp.cli.mcp_server_cli [src/tibber_config.json]
    ```
 
-`./scripts/create_claude_config.sh`, `./scripts/create_github_copilot_config.sh`, and
-`./scripts/create_copilot_desktop_config.sh` (see [Connecting AI Assistants](#connecting-ai-assistants))
-already generate configs pointing at `src/tibber_config.json` with a correct `"cwd"` — no manual
+`./scripts/create_mcp_config.sh {claude,copilot-desktop,vscode}` (see
+[Connecting AI Assistants](#connecting-ai-assistants))
+already generates configs pointing at `src/tibber_config.json` with a correct `"cwd"` — no manual
 editing of the generated MCP client config needed. If you hand-edit an MCP client config instead,
 make sure it has a `"cwd"` pointing at this repo: without one, a relative `token_path` resolves
 against the *client's* working directory (e.g. Claude Desktop's own), not this project's — a real
@@ -293,7 +293,7 @@ Generate your configuration for Claude Desktop with the following script and fol
 
 ```bash
 cd /path/to/weconnect_mvp
-./scripts/create_claude_config.sh
+./scripts/create_mcp_config.sh claude
 ```
 
 Reload Claude Desktop and ask questions like:
@@ -330,7 +330,7 @@ Generate your configuration for GitHub Copilot with the following script and fol
 
 ```bash
 cd /path/to/weconnect_mvp
-./scripts/create_github_copilot_config.sh
+./scripts/create_mcp_config.sh vscode
 ```
 
 Restart VS Code and verify installation by typing `/list` in Copilot Chat. Look for tools starting with `mcp_weconnect_`
@@ -357,7 +357,7 @@ Generate your configuration for Microsoft Copilot Desktop with the following scr
 
 ```bash
 cd /path/to/weconnect_mvp
-./scripts/create_copilot_desktop_config.sh
+./scripts/create_mcp_config.sh copilot-desktop
 ```
 
 Copy the configuration file to Microsoft Copilot Desktop's config directory:
@@ -478,13 +478,13 @@ an individual vehicle that resolves but doesn't support charging, separately fro
 
 | Tool | Description |
 |------|---|
-| `get_vehicles` | List all vehicles: VIN, name, model (`license_plate` always `null` — Tibber doesn't provide it) |
+| `get_vehicles` | List all vehicles: VIN, name, model (no `license_plate` field — Tibber doesn't provide one) |
 | `get_vehicle_info` | Manufacturer, model, name, online state, last-seen timestamp, plus a quick energy snapshot (electric range, charging flag, plug-connected flag) |
 | `get_charging_status` | Charging/plug state, target/current SOC, electric range, last-seen timestamp |
 
 ### What AI Assistants Can Do
 
-✅ List vehicles and identify them by name, VIN, or license plate
+✅ List vehicles and identify them by name or VIN
 ✅ Read battery level, range, and charging/plug status
 ✅ Answer "How much charge does my car have?" / "Is it plugged in?"
 ❌ Cannot read doors, windows, climate, position, tyres, lights, or maintenance data — not available via Tibber
@@ -498,13 +498,27 @@ The server ships with a `Dockerfile` and supports full cloud deployment, enablin
 
 ### Architecture
 
-In HTTP/cloud mode the server starts two things independently:
+The server connects to Tibber (a non-interactive token refresh, then an initial vehicle-list fetch)
+**synchronously, once, before it starts serving any request** — the same order stdio mode has always
+used. There is no separate "still starting" state or `error_type` for it: by the time `/health` or
+any tool call is reachable at all, that connection attempt has already resolved one way or the
+other. (Docker/docker-compose's `HEALTHCHECK` gives the container a 60s `start-period` before the
+first check even counts, which comfortably covers this.)
 
-1. **HTTP server** starts immediately → cloud health checks pass right away
-2. **Tibber connect** (a non-interactive token refresh) runs in the background → `/health` reports
-   `"ready": false` until complete, then `"ready": true`
+If the connection attempt fails — not configured, invalid credentials, the login was never done,
+or a network problem — the server still starts, with every tool call (and `/health`) reporting the
+real cause instead of crashing or silently returning an empty result. It also keeps retrying:
+whenever a tool call or a `/health` probe hits the failure, the server attempts to reconnect
+(subject to a cooldown that backs off the longer it stays broken, capped at 5 minutes) — so fixing
+the underlying problem (finishing the login, correcting `TIBBER_CLIENT_ID`/`SECRET`) heals the
+deployment on its own, without a restart, the next time either a tool is called or `/health` is
+probed. See ["Error Handling" in `AI_INSTRUCTIONS.md`](src/weconnect_mcp/server/AI_INSTRUCTIONS.md#error-handling)
+for the full list of `error_type` codes both tool calls and `/health` report:
 
-Tools called before the adapter is ready return a friendly `"Server is still starting"` error instead of crashing.
+```json
+{"status": "unavailable", "ready": false, "error_type": "not_configured",
+ "message": "TIBBER_CLIENT_ID, TIBBER_CLIENT_SECRET not set. ..."}
+```
 
 > ⚠️ **Cloud deployment — token bootstrap.** The Tibber OAuth login is a
 > one-time *interactive* step (browser + human click) that cannot run inside a headless

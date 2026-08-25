@@ -6,16 +6,22 @@ Test suite for the WeConnect MCP server (Tibber Data API backend).
 
 | Category | Tests | Files | Scope | Description |
 |----------|-------|-------|-------|-------------|
-| **Tools** | 32 | 3 | Unit | Data retrieval operations (adapter methods) |
-| **Tibber extraction** | 9 | 1 | Unit | TibberStateExtractionMixin + vin_from_external_id, against real fixture data |
+| **Tools** | 30 | 3 | Unit | Data retrieval operations (adapter methods) |
+| **Tibber client** | 26 | 1 | Unit | OAuth2/token-refresh logic, incl. concurrent-instance locking |
+| **Tibber extraction** | 9 | 1 | Unit | tibber_adapter.py's device-detail extraction functions + vin_from_external_id, against real fixture data |
+| **Error translation** | 11 | 1 | Unit | AdapterUnavailableError → `server_unavailable` JSON translation chain |
+| **Reconnecting adapter** | 11 | 1 | Unit | No-restart-needed self-healing retry logic |
 | **Caching** | 5 | 1 | Unit | CacheMixin behavior (expiry, fetch-once, refetch) |
+| **Starting adapter** | 6 | 1 | Unit | UnavailableAdapter fallback stub |
+| **Server startup** | 7 | 1 | Unit | mcp_server_cli.py's connect-or-fallback logic (both transports) |
+| **Health endpoint** | 3 | 1 | Integration | `/health` route, real ASGI transport |
 | **MCP Server** | 1 | 1 | Integration | MCP protocol layer (client connection) |
-| **Total** | **47** | **6** | All | Complete coverage |
+| **Total** | **109** | **12** | All | Complete coverage |
 
-All 47 tests are fast mock/offline tests (~0.1s) — there is no separate
-slow/real-API suite: the Tibber Data API is read-only, so nothing exists to
-test beyond what the mock adapter and the pure extraction-logic fixtures
-already cover.
+All tests are fast mock/offline tests (well under 1s total) — there is no
+separate slow/real-API suite: the Tibber Data API is read-only, so nothing
+exists to test beyond what the mock adapter, fixture data, and mocked
+`httpx` calls already cover.
 
 ## Test Structure
 
@@ -23,14 +29,20 @@ already cover.
 tests/
 ├── conftest.py                    # ⭐ Central fixtures (adapter, mcp_server, mcp_client)
 │
-├── tools/                         # Unit Tests: Adapter Methods (32 tests)
+├── tools/                         # Unit Tests: Adapter Methods (30 tests)
 │   ├── test_list_vehicles.py      # 4 tests  - List all vehicles
 │   ├── test_get_vehicle.py        # 10 tests - Get vehicle details (BASIC/FULL)
-│   └── test_get_energy_status.py  # 18 tests - Battery, charging, range, last-seen
+│   └── test_get_energy_status.py  # 16 tests - Battery, charging, range, last-seen
 │
 ├── test_mcp_server.py             # Integration: MCP client connection (1 test)
+├── test_health_endpoint.py        # Integration: /health route (3 tests)
 ├── test_caching.py                # Unit: CacheMixin behavior (5 tests)
-├── test_tibber_extraction.py      # Unit: Tibber capability parsing + VIN extraction (9 tests)
+├── test_tibber_extraction.py      # Unit: device-detail extraction + VIN extraction (9 tests)
+├── test_tibber_client.py          # Unit: OAuth2/token-refresh, concurrent locking (26 tests)
+├── test_error_translation.py      # Unit: AdapterUnavailableError → JSON translation (11 tests)
+├── test_starting_adapter.py       # Unit: UnavailableAdapter fallback stub (6 tests)
+├── test_reconnecting_adapter.py   # Unit: self-healing retry logic (11 tests)
+├── test_mcp_server_cli.py         # Unit: startup connect-or-fallback, both transports (7 tests)
 ├── test_adapter.py                # Mock adapter implementation (TestAdapter)
 └── test_data.py                   # Central test data configuration
 ```
@@ -66,7 +78,7 @@ pytest tests/ --cov=src/weconnect_mcp --cov-report=html
 
 ## Test Categories
 
-### 1. Unit Tests: Tools (32 tests)
+### 1. Unit Tests: Tools (30 tests)
 **What**: Individual adapter data retrieval methods
 **Fixtures**: `adapter` (TestAdapter with 2 mock vehicles)
 **Run**: `pytest tests/tools/ -v`
@@ -87,7 +99,7 @@ subclass (TestAdapter itself has no caching)
   refetch-after-expiry
 
 ### 3. Unit Tests: Tibber Extraction (9 tests)
-**What**: TibberStateExtractionMixin's capability parsing and
+**What**: `tibber_adapter.py`'s device-detail capability parsing and
 `vin_from_external_id()`, against the confirmed-live device-detail fixture
 from `ARCHITECTURE.md` §3.1 — no mock adapter, no network
 **Run**: `pytest tests/test_tibber_extraction.py -v`
@@ -107,12 +119,14 @@ from `ARCHITECTURE.md` §3.1 — no mock adapter, no network
 
 ## Test Data
 
-**Mock vehicles** (in `TestAdapter`):
-1. **ID.7 Tourer** - Electric, VIN: WVWZZZED4SE003938, Name: ID7, License: M-XY 5678
-2. **T7 Multivan eHybrid** - Hybrid, VIN: WV2ZZZSTZNH009136, Name: T7, License: M-AB 1234
+**Mock vehicles** (in `TestAdapter`, both electric-shaped — Tibber's
+integration is EV-only, see `ARCHITECTURE.md`; no license plates either,
+Tibber never reports one):
+1. **ID.7 Tourer** - VIN: WVWZZZED4SE003938, Name: ID7
+2. **T7 Multivan eHybrid** - VIN: WV2ZZZSTZNH009136, Name: T7
 
 **Test data configuration**: `tests/test_data.py`
-- Vehicle identifiers (VINs, names, license plates)
+- Vehicle identifiers (VINs, names)
 - Expected values for all scenarios
 - Helper functions for parametrized tests
 

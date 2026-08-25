@@ -66,7 +66,7 @@ That's the entire surface.
 
 ```python
 get_vehicles()
-# Returns: [{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7", "license_plate": null}]
+# Returns: [{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7"}]
 ```
 
 ### 2. Identify Vehicles
@@ -74,7 +74,7 @@ Use either:
 - **Vehicle name** (preferred): `"ID.7"` - easier for humans to read
 - **VIN**: `"WVWZZZED4SE003938"` - unique identifier
 
-Both formats work automatically. `license_plate` is always `null` (not available via Tibber).
+Both formats work automatically. There is no license plate field or lookup -- Tibber never reports one.
 
 ### 3. Read Vehicle Data
 Use `get_vehicles`, `get_vehicle_info`, `get_charging_status` — these are the only 3 tools that exist.
@@ -92,8 +92,8 @@ All tools return JSON data. Data is cached for 5 minutes.
 
 **`get_vehicles()`**
 - **Purpose**: List all available vehicles
-- **Returns**: Array of vehicles with VIN, name, model (`license_plate` always `null`)
-- **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7", "license_plate": null}]`
+- **Returns**: Array of vehicles with VIN, name, model
+- **Example**: `get_vehicles()` → `[{"vin": "WVWZZZ...", "name": "ID.7", "model": "ID.7"}]`
 
 **`get_vehicle_info(vehicle_id)`**
 - **Purpose**: Vehicle identity plus a quick energy snapshot
@@ -155,7 +155,9 @@ There are only 3 tools, and all 3 return real data: `get_vehicles`, `get_vehicle
 Data is cached for 5 minutes automatically.
 
 ### 5. Handle Errors Gracefully
-A tool returns `{"error": "..."}` in two cases: the vehicle identifier doesn't resolve to a known vehicle (all three tools), or — for `get_charging_status` only — the vehicle resolves but doesn't support charging (e.g. no battery). Check the error message text to tell the two apart; there's still no "not supported" response beyond that, since unsupported operations otherwise simply have no tool.
+Two distinct error shapes exist — see "Error Handling" below for the full detail:
+- `{"error": "..."}`: a per-request problem (unresolvable `vehicle_id`, or — `get_charging_status` only — a vehicle that doesn't support charging). Check the message text to tell the two apart.
+- `{"error": "server_unavailable", "error_type": "...", "message": "..."}`: the whole backend is down (auth/config/connectivity problem). Branch on `error_type`, not on `message` text — it's the stable, short code meant for exactly this.
 
 ### 6. Don't Attempt Charging/Climate/Lock Workflows
 There is no command tool of any kind. If the user wants control, say so directly instead of looking for a tool that doesn't exist.
@@ -171,13 +173,12 @@ There is no command tool of any kind. If the user wants control, say so directly
 ### Vehicle Identification
 - **Name**: `"ID.7"` etc. — matched case-insensitively
 - **VIN**: exact match. For our confirmed VW/Enode-backed vehicle, Tibber's `externalId` is the bare VIN (no vendor prefix, unlike some other brands Tibber supports) — see `ARCHITECTURE.md` §3.1.
-- **License Plate**: NOT SUPPORTED (Tibber doesn't provide it)
+- **License Plate**: NOT SUPPORTED — there's no field or lookup path for it at all (Tibber doesn't provide it, and never will for this backend)
 
 ### Architecture (Internal)
-The server uses a modular mixin-based architecture:
-- **CacheMixin**: Handles data caching (freshness tracking, expiry checks)
-- **TibberStateExtractionMixin**: Extracts charging/range state from Tibber's 5-capability device-detail response
-- **AbstractAdapter.resolve_vehicle_id**: Resolves names/VINs/license plates to vehicle identifiers (a concrete default on the base class, not a separate mixin — every adapter inherits the same one implementation)
+- **CacheMixin**: The only mixin — handles data caching (freshness tracking, expiry checks); genuinely backend-agnostic, unlike the extraction functions below
+- **Device-detail extraction functions** (top of `tibber_adapter.py`): Extract charging/range state from Tibber's 5-capability device-detail response — plain module-level functions, not a mixin, since they're 100% Tibber-specific with exactly one consumer
+- **AbstractAdapter.resolve_vehicle_id**: Resolves names/VINs to vehicle identifiers (a concrete default on the base class, not a separate mixin — every adapter inherits the same one implementation)
 - **TibberAdapter** (`src/weconnect_mcp/adapter/tibber_adapter.py`): Orchestrates the above. `AbstractAdapter` only declares the methods Tibber can actually back (`list_vehicles`, `get_vehicle`, `get_energy_status`, `shutdown`) — there are no command methods or physical/climate/position/maintenance read methods to be no-ops in the first place.
 - **TibberDataAPI** (`src/weconnect_mcp/adapter/tibber_client.py`): OAuth2 (Authorization Code + PKCE) client. Requires a token file produced once, interactively, by `weconnect_mcp.cli.tibber_login_cli` — the adapter itself never opens a browser.
 
@@ -192,10 +193,10 @@ The Tibber Data API has no write endpoints (confirmed via its OpenAPI schema). T
 Only identity + 5 charging/range capabilities exist. Doors, windows, tyres, lights, climatization, window heating, position, maintenance, odometer, license plate, model year, software version: none of these have a Tibber equivalent. See the full 51-point comparison against the old VW-direct `carconnectivity` library (now removed, still available on its own permanent branch) in `ARCHITECTURE.md` §5.
 
 ### 3. Electric Vehicles Only
-Tibber's vehicle integration only ever reports EVs, regardless of brand — combustion/PHEV fields in the data models are always empty for this backend.
+Tibber's vehicle integration only ever reports EVs, regardless of brand — there is no combustion/PHEV field in the data models at all for this backend (removed entirely rather than kept as a permanently-empty field).
 
 ### 4. Token Expiration / Auth
-Access tokens last ~1 hour and refresh automatically using a stored refresh token (~30 days). If the refresh token itself expires or is revoked, the server will fail to start with a clear `TibberAuthError` — re-run `weconnect_mcp.cli.tibber_login_cli` to re-authorize (a one-time interactive step; the running server can't do this itself, by design — see "Architecture" above).
+Access tokens last ~1 hour and refresh automatically using a stored refresh token (~30 days). If the refresh token itself expires or is revoked, every tool call reports a `server_unavailable` error (`error_type: "reauth_required"`) until a human re-authorizes — see "Error Handling" below for the exact codes, the runnable command (embedded in the error's `message`), and — if you have shell access — the runbook for resolving it yourself. Re-authorization is a one-time interactive step; the running server can never do this itself, by design (opening a browser and blocking on human consent is incompatible with a headless server process — see "Architecture" above).
 
 ### 5. Cache Freshness
 Data is cached for 5 minutes; a very recent state change made through the vehicle's own app (or Tibber's app) may take up to 5 minutes to show up here. `last_seen` (from `get_vehicle_info`/`get_charging_status`) is a separate, independent timestamp — it's when Tibber itself last heard from the vehicle, not when this server last fetched it; use it to judge whether the underlying vehicle data is stale, on top of (not instead of) this 5-minute cache window.
@@ -204,7 +205,12 @@ Data is cached for 5 minutes; a very recent state change made through the vehicl
 
 ## Error Handling
 
-All tools use the same `{"error": "..."}` shape, but there are two distinct causes:
+Tools report failures in one of two distinct shapes — check which one you got before reacting:
+
+### Per-request errors: `{"error": "..."}`
+
+These mean the *tool call itself* didn't resolve, not that the server is broken. Retrying the
+exact same call won't help; a different `vehicle_id` or a different tool might.
 
 Unresolvable `vehicle_id` (any of the 3 tools):
 ```json
@@ -221,6 +227,64 @@ Vehicle resolves but doesn't support charging (`get_charging_status` only):
 }
 ```
 The message text always says which case it is — check it rather than assuming every error is an unresolvable `vehicle_id`.
+
+### Server-wide errors: `{"error": "server_unavailable", "error_type": "...", "message": "..."}`
+
+These mean the whole backend can't serve *any* vehicle data right now — every tool call will fail
+identically until the underlying cause is fixed. `error_type` is a stable, short code; `message` is
+a human-readable detail that, for the two login-related codes below, **always contains the exact,
+ready-to-run shell command for this specific deployment** — it already has the right Python
+interpreter and the right credentials-file path baked in (see `tibber_client.default_login_command`
+in the server's source if you want the mechanism). **Always read the command out of `message` and
+run that string verbatim — never construct your own command** (e.g. a bare `weconnect-tibber-login`
+or `python3 -m weconnect_mcp.cli.tibber_login_cli`), since without the exact interpreter/venv and
+credentials-file path this deployment uses, a guessed command reliably fails with a confusing,
+unrelated error (`command not found`, `ModuleNotFoundError`, or "Missing TIBBER_CLIENT_ID" even
+though it *is* configured — just not for whatever interpreter/cwd the guessed command happened to
+run under). React on `error_type`, not by pattern-matching the rest of `message`. The same codes
+also show up in the `/health` endpoint's JSON in HTTP/cloud mode.
+
+| `error_type` | Meaning | What to tell the user / do |
+|---|---|---|
+| `not_configured` | `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET` were never set (no env var, no credentials file) | Tell the user: register an OAuth2 client at https://data-api.tibber.com/clients/manage/, then set both values the way `message` describes (env var, or the credentials file at the path `message` names). **You cannot do the registration step for them** — it happens on Tibber's website, outside this server entirely, and you have no credentials to set until they've done it. Once they confirm it's done, retry the failing tool call — the server rereads a **credentials file** fresh on every reconnect attempt, so editing it takes effect without a restart; an **environment variable**, however, only takes effect for a process launched *after* it's set, so if that's how they configured it, a server restart genuinely is required this one time — tell them so rather than having them retry indefinitely. |
+| `invalid_client` | Tibber rejected the *configured* `TIBBER_CLIENT_ID`/`TIBBER_CLIENT_SECRET` outright (client deleted, secret rotated, typo) | Tell the user this is **not** an expired-login problem — running the login command will not fix it and you should not attempt it. They need to check the client still exists and the secret matches at https://data-api.tibber.com/clients/manage/, then fix the configured value (same file/env `message` points at) and retry. |
+| `reauth_required` | The one-time interactive login was never done, or the refresh token expired/was revoked (~30 days) | **If you have a shell/Bash tool for this same machine: run the fix yourself, don't just describe it to the user.** See the runbook below this table — this is the normal, expected path for an agent like Claude Code. Only fall back to giving the user the command from `message` to run themselves if you have no shell tool at all, or it's a remote/cloud MCP connection with no access to the server's host. |
+| `network_error` | The server couldn't reach Tibber's API at all — token endpoint or data endpoint alike (DNS/connection/timeout) | Transient and unrelated to credentials. Tell the user it looks like a connectivity issue reaching Tibber, and suggest retrying shortly. Retries happen automatically (see below) — no restart needed either way. |
+| `unavailable` | Generic fallback for a failure that doesn't fit the categories above (e.g. Tibber's token endpoint returned an unexpected 5xx, or an OAuth error code this server doesn't specifically recognize) | Report the `message` text to the user as-is; suggest retrying, and escalating to the server operator if it persists. |
+
+#### Runbook: resolving `reauth_required` when you have shell access
+
+This is the single most common failure a fresh setup hits (no login done yet), and — unlike
+`not_configured`/`invalid_client` — it's one you can usually resolve completely yourself, without
+making the user open a terminal at all. Concretely:
+
+0. **Check whether `message` itself says this is a container/cloud deployment first.** If the
+   server is running inside Docker/Railway, `message` already knows it and describes a completely
+   different fix (run the login locally on the human's own machine, then bootstrap the deployment
+   via `TIBBER_TOKEN_JSON`) instead of a command — in that case skip straight to relaying `message`
+   to the user verbatim; you have shell access to the container, not to their machine, so you
+   cannot run this step for them no matter how it's phrased.
+1. **Otherwise, tell the user what's about to happen before you run anything**: this command opens
+   a real browser tab and asks them to click through Tibber's own login/consent screen; it then
+   waits (up to a few minutes) for that to complete. Ask for their OK to proceed — this opens a
+   browser window and binds a local port, which warrants asking first even though it changes
+   nothing risky.
+2. **Run the exact command from `message` via your shell tool**, not a paraphrase of it. Use a
+   generous timeout (a few minutes) since it blocks until the browser flow completes; do not treat
+   "still running" as a hang and kill it prematurely — the human needs time to see the tab and click
+   through it.
+3. Its own output tells you whether it worked: a line starting `✓ Authorized...` plus a list of
+   vehicles found means success. A `✗ ...` line or a non-zero exit means it failed — report that
+   output to the user rather than guessing why (e.g. they closed the tab, or waited too long and the
+   flow timed out).
+4. **No server restart needed — just retry the tool call that originally failed (or wait for the
+   next `/health` probe).** The server automatically retries connecting the next time any tool is
+   called, or `/health` is checked, after a failure (see `ReconnectingAdapter` in
+   `starting_adapter.py`), so once step 2 succeeded, the very next one picks up the fresh login
+   itself. If that retry still fails, wait a bit and try once more first — the server cools down
+   between reconnect attempts (starting at ~10s, backing off further the longer it stays broken, up
+   to 5 minutes) so a persistently broken backend isn't retried on every single call — before
+   concluding something else is wrong.
 
 ---
 
@@ -262,9 +326,9 @@ AI: "I can't do that — this server reads vehicle status via Tibber's API, whic
 2. **There are only 3 tools, and all 3 work**: `get_vehicles`, `get_vehicle_info`, `get_charging_status`
 3. **Nothing else exists** — no physical status, climate, position, maintenance, or command tool of any kind
 4. **No control is possible** — if asked to lock/unlock/charge/climate/flash, say so directly, there's no tool to attempt
-5. **License plates DON'T WORK** — Tibber doesn't provide them
+5. **No license plate field or lookup exists at all** — Tibber never provides one, so it isn't part of any tool's response or accepted as an identifier
 6. **Cache is automatic** — 5 minutes
-7. **Errors are JSON** — `{"error": "..."}`, either an unresolvable vehicle identifier or (for `get_charging_status` only) a vehicle that doesn't support charging; check the message text to tell them apart
+7. **Errors are JSON, two shapes** — `{"error": "..."}` for a per-request problem (bad `vehicle_id`, or unsupported charging query); `{"error": "server_unavailable", "error_type": "...", "message": "..."}` when the whole backend is down (auth/config/connectivity) — branch on `error_type`, see "Error Handling" for the full code list and what to do for each
 
 **Most important**: Be upfront about the read-only, narrow-data nature of this server. Don't look for a tool that doesn't exist and then report its absence as a failure — check the 3-tool list above first.
 
@@ -274,7 +338,7 @@ AI: "I can't do that — this server reads vehicle status via Tibber's API, whic
 
 **Operation Type**: `read` (there is no `write`/`command` tag — no such tool exists)
 **Functional Areas**: `discovery`, `vehicle-info`, `energy`
-**Specific Features**: `charging`, `bev-phev`
+**Specific Features**: `charging`, `electric`
 
 **Usage**: MCP clients can filter tools by tags. All 3 tools are fully functional, so tags here are purely organizational (unlike a hypothetical dual-backend deployment, there's no "check the description to see if it actually works" caveat needed).
 

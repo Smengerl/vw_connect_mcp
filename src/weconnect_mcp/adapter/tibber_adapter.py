@@ -34,43 +34,124 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, AdapterUnavailableError, VehicleModel, VehicleListItem,
+    AbstractAdapter, AdapterUnavailableError, ChargingModel, VehicleModel, VehicleListItem,
     VehicleDetailLevel, EnergyStatusModel, RangeInfo, ElectricDriveInfo,
 )
-from weconnect_mcp.adapter.mixins import CacheMixin, TibberStateExtractionMixin
+from weconnect_mcp.adapter.mixins import CacheMixin
 from weconnect_mcp.adapter.tibber_client import (
-    TibberDataAPI, TibberReauthRequiredError, TokenStore, vin_from_external_id,
+    TibberAuthError, TibberDataAPI, TokenStore, default_login_command, vin_from_external_id,
 )
 
 logger = logging.getLogger(__name__)
 
+# ── Tibber device-detail extraction ──────────────────────────────────────────
+# Converts a Tibber Data API device-detail response (a flat list of
+# capability dicts) into ChargingModel plus a plain range-in-km float.
+# Tibber's confirmed capability set is 5 fields (ARCHITECTURE.md §3.1), all
+# charging/range related -- no doors/windows/tyres/lights/climatization/
+# position/maintenance equivalent exists, so those categories are simply not
+# implemented here at all (get_energy_status returns None for them directly).
+#
+# Plain module-level functions, not methods: neither uses any adapter state,
+# so there's nothing a class (or the mixin this used to be, back when it
+# pretended to be reusable across a second backend that was never built --
+# see CLAUDE.md's no-dual-backend note) would add over just calling them.
+_ID_SOC = "storage.stateOfCharge"          # %
+_ID_TARGET_SOC = "storage.targetStateOfCharge"  # %
+_ID_RANGE = "range.remaining"              # m
+_ID_CONNECTOR = "connector.status"         # connected/disconnected/unknown
+_ID_CHARGING = "charging.status"           # charging/idle/unknown
+
+_STATUS_CONNECTED = "connected"
+_STATUS_CHARGING = "charging"
+
+
+def _capability(detail: Dict[str, Any], capability_id: str) -> Optional[Dict[str, Any]]:
+    for cap in detail.get("capabilities", []):
+        if cap.get("id") == capability_id:
+            return cap
+    return None
+
+
+def _get_tibber_charging_state(detail: Dict[str, Any]) -> Optional[ChargingModel]:
+    """Extract charging info from a Tibber device-detail response."""
+    soc_cap = _capability(detail, _ID_SOC)
+    target_cap = _capability(detail, _ID_TARGET_SOC)
+    connector_cap = _capability(detail, _ID_CONNECTOR)
+    charging_cap = _capability(detail, _ID_CHARGING)
+
+    if not any([soc_cap, target_cap, connector_cap, charging_cap]):
+        return None
+
+    current_soc = float(soc_cap["value"]) if soc_cap and soc_cap.get("value") is not None else None
+    target_soc = int(target_cap["value"]) if target_cap and target_cap.get("value") is not None else None
+
+    is_plugged_in = None
+    if connector_cap is not None:
+        is_plugged_in = connector_cap.get("value") == _STATUS_CONNECTED
+
+    is_charging = None
+    charging_state_str = None
+    if charging_cap is not None:
+        charging_state_str = charging_cap.get("value")
+        is_charging = charging_state_str == _STATUS_CHARGING
+
+    return ChargingModel(
+        is_charging=is_charging,
+        is_plugged_in=is_plugged_in,
+        charging_state=charging_state_str,
+        target_soc_percent=target_soc,
+        current_soc_percent=current_soc,
+    )
+
+
+def _get_tibber_range_km(detail: Dict[str, Any]) -> Optional[float]:
+    """Extract remaining range (in km) from a Tibber device-detail response."""
+    range_cap = _capability(detail, _ID_RANGE)
+    if range_cap is None or range_cap.get("value") is None:
+        return None
+
+    value = float(range_cap["value"])
+    unit = range_cap.get("unit")
+    return value / 1000 if unit == "m" else value
+
 
 def _translate_auth_errors(fn):
-    """Convert a Tibber-specific reauth failure into the adapter port's
+    """Convert any Tibber-specific auth failure into the adapter port's
     generic AdapterUnavailableError, so callers (the MCP tool layer) don't
     need to know this adapter happens to be backed by Tibber. See
     ARCHITECTURE.md §2.4.
+
+    Catches the TibberAuthError base class: every auth failure (not
+    configured, invalid client credentials, network error, reauth
+    required, ...) is one of these, distinguished only by its error_type
+    attribute, not by subclass -- see TibberAuthError's own docstring in
+    tibber_client.py. All of it needs to reach the MCP client as a clear
+    "server_unavailable" response with its differentiated message and
+    error_type, not escape as a raw exception that crashes the tool call.
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except TibberReauthRequiredError as exc:
-            raise AdapterUnavailableError(str(exc)) from exc
+        except TibberAuthError as exc:
+            raise AdapterUnavailableError(str(exc), error_type=exc.error_type) from exc
     return wrapper
 
 
-class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
+class TibberAdapter(CacheMixin, AbstractAdapter):
     """Adapter for vehicles using the Tibber Data API.
 
-    Composed of mixins for its concerns:
-    - CacheMixin: data caching to avoid hammering Tibber's API
-    - TibberStateExtractionMixin: extract charging/range state from a
-      Tibber device-detail response
+    Uses CacheMixin for data caching (to avoid hammering Tibber's API) --
+    the one piece of behavior here that's genuinely reusable, since it
+    doesn't know anything about Tibber. Device-detail extraction is a set
+    of plain module-level functions above instead of a second mixin: they
+    were Tibber-specific either way, so composing them in via multiple
+    inheritance never bought anything over calling them directly.
 
-    Vehicle identifier resolution (VIN/name/license plate) comes from
+    Vehicle identifier resolution (VIN/name) comes from
     AbstractAdapter's own concrete `resolve_vehicle_id` — no separate
-    mixin needed for that.
+    mixin needed for that either.
     """
 
     def __init__(
@@ -79,6 +160,7 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
         client_secret: Optional[str],
         redirect_uri: str,
         token_path: str,
+        login_command: Optional[str] = None,
     ) -> None:
         """Initialize adapter.
 
@@ -90,6 +172,13 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
                 for the same client — no browser interaction happens here).
             token_path: Path to the token file produced by
                 weconnect_mcp.cli.tibber_login_cli.
+            login_command: Exact, copy-paste-runnable command that performs
+                the one-time interactive login, baked into auth-error
+                messages instead of a generic hint (see
+                tibber_client.default_login_command and its caller,
+                mcp_server_cli._build_tibber_adapter, which knows the real
+                credentials-file path this deployment uses). None falls
+                back to TibberDataAPI's own generic default.
         """
         super().__init__()
 
@@ -97,6 +186,7 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,
+            login_command=login_command if login_command is not None else default_login_command(),
             store=TokenStore(token_path),
             allow_interactive_login=False,
         )
@@ -128,10 +218,7 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
 
     @_translate_auth_errors
     def list_vehicles(self) -> list[VehicleListItem]:
-        """Get list of vehicles with VIN, name, model.
-
-        Tibber has no license plate data, so that field is always None.
-        """
+        """Get list of vehicles with VIN, name, model."""
         self._ensure_fresh_data()
         items = []
         for entry in self._vehicles_cache:
@@ -141,7 +228,6 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
                 vin=vin,
                 name=info.get("name"),
                 model=info.get("model"),
-                license_plate=None,
             ))
         return items
 
@@ -198,8 +284,8 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
         if detail is None:
             return None
 
-        charging = self._get_tibber_charging_state(detail)
-        range_km = self._get_tibber_range_km(detail)
+        charging = _get_tibber_charging_state(detail)
+        range_km = _get_tibber_range_km(detail)
         if charging is None and range_km is None:
             return None
 
@@ -208,16 +294,10 @@ class TibberAdapter(CacheMixin, TibberStateExtractionMixin, AbstractAdapter):
             battery_temperature_kelvin=None,  # not exposed by Tibber
             charging=charging,
         )
-        range_model = RangeInfo(
-            total_km=range_km,
-            electric_km=range_km,
-            combustion_km=None,  # Tibber only ever reports EVs
-        )
+        range_model = RangeInfo(total_km=range_km)
 
         return EnergyStatusModel(
-            vehicle_type="electric",
             range=range_model,
             electric=electric_info,
-            combustion=None,
             last_seen=detail.get("status", {}).get("lastSeen"),
         )

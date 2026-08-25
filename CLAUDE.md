@@ -24,12 +24,12 @@ in code or docs — this project is Tibber-only now.
 src/weconnect_mcp/
 ├── adapter/
 │   ├── abstract_adapter.py       # AbstractAdapter (ABC) + Pydantic models — the port
-│   ├── tibber_adapter.py         # TibberAdapter — the only concrete adapter
-│   ├── starting_adapter.py       # No-op stub used during async startup (HTTP mode)
+│   ├── tibber_adapter.py         # TibberAdapter — the only concrete adapter (device-detail
+│   │                             #   extraction lives here too, as plain module functions)
+│   ├── starting_adapter.py       # UnavailableAdapter stub + ReconnectingAdapter (no-restart-needed self-healing)
 │   ├── tibber_client.py          # TibberDataAPI: OAuth2 (Auth Code + PKCE) client
 │   └── mixins/
-│       ├── cache_mixin.py                  # 5-min data cache
-│       └── tibber_state_extraction_mixin.py # Extract charging/range from Tibber's response
+│       └── cache_mixin.py                  # 5-min data cache — the only mixin left (see below)
 ├── server/
 │   ├── mcp_server.py             # get_server() — builds the FastMCP instance
 │   ├── AI_INSTRUCTIONS.md        # Canonical AI-facing tool description — keep in sync!
@@ -79,10 +79,15 @@ registration file itself.
 - **Docstrings**: Google-style; document *why*, not *what* — see the
   top-level system prompt's comment guidance (comments only for non-obvious
   constraints/invariants, not restating the code).
-- **Mixin pattern**: adapters and server registration are composed from
-  single-responsibility mixins (see Architecture above). Follow this pattern
-  for new cross-cutting concerns rather than adding methods directly to
-  `TibberAdapter`.
+- **Mixin pattern**: only reach for a mixin when the behavior is genuinely
+  backend-agnostic and reusable, like `CacheMixin` (see Architecture above).
+  Tibber-specific logic used by exactly one class (`TibberAdapter`) doesn't
+  qualify — put it there directly (as methods, or as plain module-level
+  functions if it doesn't need adapter state, like the device-detail
+  extraction functions in `tibber_adapter.py`). A prior version of this
+  project had a `TibberStateExtractionMixin` for exactly that case; it
+  never had a second consumer, since this is (and will stay) a
+  single-backend project, so it was dissolved.
 
 ## Testing
 
@@ -91,16 +96,17 @@ registration file itself.
 ./scripts/test.sh -v       # verbose
 ```
 
-47 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
-fake vehicles: electric ID.7 Tourer, hybrid T7 Multivan eHybrid — see that
-file's docstring for exact values), plus `test_tibber_extraction.py`, which
-exercises `TibberStateExtractionMixin`/`vin_from_external_id` directly
-against real fixture data from `ARCHITECTURE.md` §3.1 (no mock adapter
+109 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
+fake vehicles, both electric-shaped — ID.7 Tourer and T7 Multivan eHybrid,
+see that file's docstring for exact values), plus `test_tibber_extraction.py`,
+which exercises `tibber_adapter.py`'s device-detail extraction functions and
+`vin_from_external_id` directly against real fixture data from
+`ARCHITECTURE.md` §3.1 (no mock adapter
 involved). No slow/real-API test suite exists beyond that: the Tibber Data
 API is read-only, so mock + fixture coverage is everything there is to
 test. See `tests/README.md` for full structure.
 
-**All 47 tests must pass before committing.** When adding a tool, add tests
+**All tests must pass before committing.** When adding a tool, add tests
 under `tests/tools/test_<name>.py` following the existing pattern (success
 case, vehicle-not-found case, edge cases).
 

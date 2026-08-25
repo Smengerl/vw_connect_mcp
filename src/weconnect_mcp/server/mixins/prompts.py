@@ -616,7 +616,7 @@ Combines vehicle battery data with external route/weather sources; execution of 
             "Analyse current and ongoing charging behaviour and suggest optimisations "
             "to maximise battery longevity: target SOC, charge rate, and schedule."
         ),
-        tags={"battery", "charging", "health", "optimization", "bev-phev", "proactive", "external-data"}
+        tags={"battery", "charging", "health", "optimization", "electric", "proactive", "external-data"}
     )
     def battery_health_optimizer(vehicle_id: str) -> str:
         """Optimise battery charging strategy for long-term health.

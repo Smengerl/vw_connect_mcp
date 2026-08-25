@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import secrets
+import sys
 import threading
 import time
 import webbrowser
@@ -71,54 +72,152 @@ USER_AGENT = "weconnect-mcp/0.1.0 (github.com/weconnect_mvp)"
 # Refresh the access token this many seconds before it actually expires.
 _REFRESH_SKEW = 60
 
-_REAUTH_REQUIRED_MESSAGE = (
-    "Tibber authorization has expired and could not be refreshed "
-    "automatically. This server cannot fetch vehicle data until a human "
-    "re-authorizes it: run `python -m weconnect_mcp.cli.tibber_login_cli` "
-    "on the server host, then restart the server."
+
+def default_login_command(config_path: str | None = None) -> str:
+    """Build an always-runnable login command for *this exact process's*
+    interpreter, optionally pointed at a credentials file.
+
+    Deliberately uses ``sys.executable`` (the interpreter currently
+    running this code) instead of a bare ``python``/``python3`` or the
+    installed ``weconnect-tibber-login`` console script name -- both of
+    those only work if the right venv happens to already be active and on
+    PATH in whatever shell runs the command, which is *not* the shell an
+    MCP client (or a human copy-pasting from a chat) starts from. Reusing
+    sys.executable sidesteps that entirely: it's the literal path this
+    server process was launched with (e.g.
+    ``/path/to/project/.venv/bin/python``), so the same command works
+    regardless of PATH or which venv (if any) is active elsewhere --
+    *except* inside a container (see ``_running_in_container()``), where
+    that path exists only inside the container and ``login_instruction()``
+    below stops using it entirely for exactly that reason.
+    """
+    cmd = f"{sys.executable} -m weconnect_mcp.cli.tibber_login_cli"
+    if config_path:
+        cmd += f" {config_path}"
+    return cmd
+
+
+def _running_in_container() -> bool:
+    """Best-effort detection of a Docker/Railway-style container
+    deployment, where the interactive login flow cannot run at all (no
+    browser) and any path this process names via ``sys.executable`` is
+    only valid inside the container, never on the operator's own machine.
+
+    ``/.dockerenv`` is the standard Docker-created marker file. Railway
+    injects several ``RAILWAY_*`` environment variables into every
+    deployment regardless of which one exactly, so checking the prefix is
+    more robust than pinning to one variable name.
+    """
+    return os.path.exists("/.dockerenv") or any(k.startswith("RAILWAY_") for k in os.environ)
+
+
+def login_instruction(login_command: str) -> str:
+    """Human-facing instruction for completing the interactive Tibber
+    login -- correct whether this process is running locally or inside a
+    container, which need entirely different advice, not just different
+    wording (see _running_in_container()'s docstring)."""
+    if _running_in_container():
+        return (
+            "this looks like a container/cloud deployment (Docker or "
+            "Railway) -- the interactive login cannot run here at all (no "
+            "browser, and the only command this process could name would "
+            "point inside this container, not at your own machine). Run "
+            "`weconnect-tibber-login` (or `python3 -m "
+            "weconnect_mcp.cli.tibber_login_cli`) on your own machine "
+            "instead, then set TIBBER_TOKEN_JSON to bootstrap this "
+            "deployment -- see README.md's Cloud Deployment section"
+        )
+    return (
+        f"run `{login_command}` on the server host (interactive -- opens a "
+        "browser, needs a human to click through Tibber's consent screen)"
+    )
+
+
+def _reauth_required_message(login_command: str) -> str:
+    return (
+        "Tibber authorization has expired and could not be refreshed "
+        "automatically. This server cannot fetch vehicle data until a "
+        f"human re-authorizes it: {login_instruction(login_command)}. No "
+        "server restart needed -- the next call automatically retries "
+        "once that's done."
+    )
+
+
+_INVALID_CLIENT_MESSAGE_TEMPLATE = (
+    "Tibber rejected the configured OAuth2 client credentials "
+    "(TIBBER_CLIENT_ID/TIBBER_CLIENT_SECRET) as invalid ({error}). This is "
+    "NOT an expired-token problem -- re-running the login flow will not fix "
+    "it. Check that the client still exists and the secret matches at "
+    "https://data-api.tibber.com/clients/manage/, then correct the "
+    "configured value(s). No server restart needed -- the next call "
+    "automatically retries once that's done."
 )
 
 
 class TibberAuthError(RuntimeError):
-    """Raised when the client needs authorization it isn't allowed to obtain."""
+    """Raised when the client needs authorization it isn't allowed to obtain.
+
+    ``error_type`` is a short, stable, machine-readable code that lets
+    callers -- ultimately the MCP tool layer, and the AI assistant on the
+    other end of it -- branch on *which* auth problem this is instead of
+    only having a free-text message to pattern-match. It's a constructor
+    argument (see AdapterUnavailableError in abstract_adapter.py for the
+    same pattern one layer up) rather than one subclass per code: nothing
+    in this codebase ever dispatches on this exception's *type* -- every
+    catch site catches this base class and reads ``.error_type`` off the
+    instance -- so a family of near-empty subclasses used to exist purely
+    to stamp a string and were collapsed away.
+
+    Known codes: "not_configured", "invalid_client", "reauth_required",
+    "network_error", and "unavailable" (the default, generic fallback for
+    anything that doesn't fit a more specific category).
+    """
+
+    def __init__(self, message: str, error_type: str = "unavailable") -> None:
+        super().__init__(message)
+        self.error_type = error_type
 
 
 class TibberTokenEndpointError(TibberAuthError):
-    """Raised when Tibber's token endpoint rejects a request.
+    """Raised when Tibber's token endpoint responds with a non-200 status.
 
-    Carries the raw status_code/body so callers can tell a genuine
-    rejection of the credentials themselves (invalid_grant / invalid_client
-    / unauthorized_client -- the refresh_token or client registration is
-    dead) apart from a transient failure (5xx, rate limiting) that's worth
-    leaving the stored token alone for and simply retrying later.
+    Carries the raw status_code/body so callers can tell apart:
+    - invalid_client / unauthorized_client -- the client registration
+      itself is rejected (see is_invalid_client)
+    - invalid_grant -- the refresh_token/authorization code is dead, but
+      the client registration is fine (see is_invalid_grant)
+    - anything else (5xx, rate limiting, ...) -- transient, worth leaving
+      the stored token alone for and simply retrying later
     """
 
-    _REAUTH_REQUIRED_ERRORS = {"invalid_grant", "invalid_client", "unauthorized_client"}
+    _INVALID_CLIENT_ERRORS = {"invalid_client", "unauthorized_client"}
+    _INVALID_GRANT_ERRORS = {"invalid_grant"}
 
     def __init__(self, status_code: int, body: str) -> None:
         self.status_code = status_code
         self.body = body
         super().__init__(f"Token endpoint returned {status_code}: {body}")
 
-    @property
-    def is_reauth_required(self) -> bool:
-        """True if this rejection means the refresh token itself is dead --
-        not a transient server-side hiccup worth just retrying."""
+    def _error_code(self) -> str | None:
         if self.status_code != 400:
-            return False
+            return None
         try:
-            error = json.loads(self.body).get("error")
+            return json.loads(self.body).get("error")
         except (json.JSONDecodeError, AttributeError):
-            return False
-        return error in self._REAUTH_REQUIRED_ERRORS
+            return None
 
+    @property
+    def is_invalid_client(self) -> bool:
+        """True if Tibber rejected the client_id/client_secret themselves --
+        a configuration problem, not an expired token."""
+        return self._error_code() in self._INVALID_CLIENT_ERRORS
 
-class TibberReauthRequiredError(TibberAuthError):
-    """Raised once a refresh failure is confirmed as a genuine rejection --
-    not a race with another instance sharing this token file (see
-    TokenStore.locked()) -- so interactive re-authorization via
-    tibber_login_cli is required before this server can serve vehicle data
-    again. See ARCHITECTURE.md §2.4."""
+    @property
+    def is_invalid_grant(self) -> bool:
+        """True if the refresh_token/authorization code itself is dead --
+        not a transient server-side hiccup, and not a client-credential
+        problem either."""
+        return self._error_code() in self._INVALID_GRANT_ERRORS
 
 
 # ── Token storage ─────────────────────────────────────────────────────────────
@@ -267,6 +366,13 @@ class TibberDataAPI:
     scopes: list[str] = field(default_factory=lambda: list(DEFAULT_SCOPES))
     allow_interactive_login: bool = False
     tokens: TokenSet | None = None
+    login_command: str = field(default_factory=default_login_command)
+    """Exact, always-runnable command that performs the one-time
+    interactive login -- baked into every auth-error message below instead
+    of a generic/PATH-dependent hint, and set by the caller that knows the
+    real credentials-file path (see mcp_server_cli._build_tibber_adapter)
+    so the message a human (or an AI assistant with shell access) sees is
+    copy-paste-correct for this exact deployment."""
 
     def __post_init__(self):
         self.tokens = self.store.load()
@@ -283,10 +389,13 @@ class TibberDataAPI:
             if not self.allow_interactive_login:
                 raise TibberAuthError(
                     "No cached Tibber tokens found at "
-                    f"{self.store.path}, and interactive login is disabled "
-                    "in this context. Run the one-time setup tool first: "
-                    "python -m weconnect_mcp.cli.tibber_login_cli "
-                    "(see README for required env vars)."
+                    f"{self.store.path}. The one-time interactive login has "
+                    f"never been completed on this host: {login_instruction(self.login_command)}. "
+                    "(TIBBER_CLIENT_ID/SECRET are set -- this is not a "
+                    "configuration problem, just a missing one-time login "
+                    "step.) No server restart needed -- the next call "
+                    "automatically retries once that's done.",
+                    error_type="reauth_required",
                 )
             self.tokens = self._interactive_login()
             self.store.save(self.tokens)
@@ -364,7 +473,10 @@ class TibberDataAPI:
                 # dead and cleared it -- that verdict still holds, no need
                 # to spend another call on Tibber's token endpoint.
                 self.tokens = None
-                raise TibberReauthRequiredError(_REAUTH_REQUIRED_MESSAGE)
+                raise TibberAuthError(
+                    _reauth_required_message(self.login_command),
+                    error_type="reauth_required",
+                )
 
             if not current.expired:
                 # Another instance already refreshed while we waited for
@@ -378,8 +490,11 @@ class TibberDataAPI:
                     raise TibberAuthError(
                         "Cached Tibber token has no refresh_token and "
                         "interactive login is disabled in this context. "
-                        "Re-run the one-time setup tool: python -m "
-                        "weconnect_mcp.cli.tibber_login_cli"
+                        f"Re-run the one-time setup tool: "
+                        f"{login_instruction(self.login_command)}. No "
+                        "server restart needed -- the next call "
+                        "automatically retries once that's done.",
+                        error_type="reauth_required",
                     )
                 self.tokens = self._interactive_login()
                 self.store.save(self.tokens)
@@ -395,8 +510,31 @@ class TibberDataAPI:
             try:
                 self.tokens = self._token_request(data)
             except TibberTokenEndpointError as exc:
-                if not exc.is_reauth_required:
-                    raise  # transient (5xx, rate limit, ...) -- leave the store alone, retry later
+                if exc.is_invalid_client:
+                    # The client_id/secret themselves are rejected -- the
+                    # refresh_token may well still be fine, so leave the
+                    # token file alone (nothing to gain from clearing it;
+                    # re-authorizing won't fix a bad client registration).
+                    logger.error(
+                        "Tibber rejected the client credentials (%s) -- "
+                        "not a token problem, check TIBBER_CLIENT_ID/SECRET",
+                        exc,
+                    )
+                    raise TibberAuthError(
+                        _INVALID_CLIENT_MESSAGE_TEMPLATE.format(error=exc),
+                        error_type="invalid_client",
+                    ) from exc
+                if exc.status_code != 400:
+                    raise  # genuinely transient (5xx, rate limit, ...) -- leave the store alone, retry later
+                # Any 400 response is a client-side rejection by definition
+                # (OAuth2/HTTP semantics) -- never something a blind retry
+                # fixes, even when the specific `error` code isn't one of
+                # the two we recognize by name (is_invalid_grant is False
+                # for it). Treat it the same as a confirmed invalid_grant
+                # rather than silently bucketing an unrecognized code as
+                # "transient, just wait" -- clear the store and require
+                # reauth, which is the closest broadly-correct remediation
+                # even when the exact cause isn't one we've seen before.
                 self.store.clear()
                 self.tokens = None
                 logger.error(
@@ -404,20 +542,32 @@ class TibberDataAPI:
                     "stale token file, interactive re-authorization required",
                     exc,
                 )
-                raise TibberReauthRequiredError(_REAUTH_REQUIRED_MESSAGE) from exc
+                raise TibberAuthError(
+                    _reauth_required_message(self.login_command),
+                    error_type="reauth_required",
+                ) from exc
             self.store.save(self.tokens)
             logger.info("Refreshed Tibber access token")
 
     def _token_request(self, data: dict[str, str]) -> TokenSet:
-        resp = httpx.post(
-            TOKEN_URI,
-            data=data,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            timeout=30.0,
-        )
+        try:
+            resp = httpx.post(
+                TOKEN_URI,
+                data=data,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=30.0,
+            )
+        except httpx.HTTPError as exc:
+            raise TibberAuthError(
+                f"Could not reach Tibber's token endpoint ({TOKEN_URI}): "
+                f"{exc}. This looks like a connectivity problem (DNS, "
+                "network, or timeout), not a credentials problem -- retry "
+                "once connectivity is restored.",
+                error_type="network_error",
+            ) from exc
         if resp.status_code != 200:
             # Never echo the request body (contains secrets); response only.
             raise TibberTokenEndpointError(resp.status_code, resp.text)
@@ -425,18 +575,22 @@ class TibberDataAPI:
 
     # ---- REST calls ---------------------------------------------------------
     def _get(self, path: str) -> dict[str, Any]:
+        """GET one Tibber Data API path, retrying once after a 401 refresh.
+
+        Wraps the whole request (both attempts, plus the final status
+        check) in the same httpx.HTTPError -> network_error translation
+        _token_request() already had -- without this, a DNS blip, timeout,
+        or unexpected 5xx here would crash the calling tool call with a raw
+        exception instead of the clean server_unavailable JSON this
+        project's whole error-differentiation design is built to produce
+        (and would never trigger ReconnectingAdapter's retry either, since
+        it isn't classified as an AdapterUnavailableError). Errors raised
+        by self._refresh() below are TibberAuthError already -- not an
+        httpx.HTTPError -- so they pass through this untouched.
+        """
         self.ensure_authorized()
         assert self.tokens is not None
-        resp = httpx.get(
-            f"{API_BASE}{path}",
-            headers={
-                "Authorization": f"Bearer {self.tokens.access_token}",
-                "User-Agent": USER_AGENT,
-            },
-            timeout=30.0,
-        )
-        if resp.status_code == 401:
-            self._refresh()
+        try:
             resp = httpx.get(
                 f"{API_BASE}{path}",
                 headers={
@@ -445,7 +599,26 @@ class TibberDataAPI:
                 },
                 timeout=30.0,
             )
-        resp.raise_for_status()
+            if resp.status_code == 401:
+                self._refresh()
+                resp = httpx.get(
+                    f"{API_BASE}{path}",
+                    headers={
+                        "Authorization": f"Bearer {self.tokens.access_token}",
+                        "User-Agent": USER_AGENT,
+                    },
+                    timeout=30.0,
+                )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise TibberAuthError(
+                f"Could not fetch data from Tibber's API ({API_BASE}{path}): "
+                f"{exc}. This looks like a connectivity problem (DNS, "
+                "network, timeout, or an unexpected server error), not a "
+                "credentials problem -- retry once connectivity is "
+                "restored.",
+                error_type="network_error",
+            ) from exc
         return resp.json()
 
     def homes(self) -> list[dict[str, Any]]:

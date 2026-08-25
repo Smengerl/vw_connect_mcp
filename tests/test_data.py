@@ -12,7 +12,7 @@ Purpose:
 - Helper functions for parametrized tests
 
 Contents:
-1. Vehicle Identifiers (VINs, names, license plates)
+1. Vehicle Identifiers (VINs, names)
 2. Expected Values for Each Tool/Method
    - Vehicle info (electric & hybrid)
    - Energy status (battery, tank, range, charging)
@@ -21,28 +21,30 @@ Contents:
    - get_hybrid_vehicle_identifiers()
    - get_all_valid_identifiers()
 
-Test Data Overview:
-- Electric: ID.7 Tourer (VIN: WVWZZZED4SE003938, plate: M-XY 5678)
-- Hybrid: T7 Multivan eHybrid (VIN: WV2ZZZSTZNH009136, plate: M-AB 1234) --
-  a plug-in hybrid, not a pure combustion vehicle: it has a real electric
-  drive/battery (something Tibber's Enode-backed integration could
-  plausibly actually report), unlike a pure ICE vehicle, which Tibber
-  never reports at all (see ARCHITECTURE.md -- "Tibber is EV-only").
+Test Data Overview (both vehicles are electric -- Tibber's Enode-backed
+integration is EV-only, see ARCHITECTURE.md; the second vehicle exists to
+exercise multi-vehicle identifier resolution, not a different energy-data
+shape). No license plates either -- Tibber's Data API never reports one,
+so there's no field for it and no identifier-resolution path for it
+either (see abstract_adapter.py's docstrings):
+- ID.7 Tourer (VIN: WVWZZZED4SE003938)
+- T7 Multivan eHybrid (VIN: WV2ZZZSTZNH009136) -- keeps its real-world
+  "eHybrid" name, but its energy data is the same electric shape as any
+  other Tibber-reported vehicle (see TestAdapter's docstring)
 
 All expected values match TestAdapter mock data exactly to ensure test accuracy.
 """
 
 # ==================== VEHICLE IDs ====================
 
-# Electric Vehicle (VW ID.7)
+# ID.7 Tourer
 VIN_ELECTRIC = "WVWZZZED4SE003938"
 NAME_ELECTRIC = "ID7"
-LICENSE_PLATE_ELECTRIC = "M-XY 5678"
 
-# Hybrid Vehicle (VW T7 Multivan eHybrid)
+# T7 Multivan eHybrid -- second vehicle for identifier-resolution coverage,
+# not a different energy-data shape (see module docstring)
 VIN_HYBRID = "WV2ZZZSTZNH009136"
 NAME_HYBRID = "T7"
-LICENSE_PLATE_HYBRID = "M-AB 1234"  # Updated to match TestAdapter
 
 # Invalid identifiers
 VIN_INVALID = "INVALID_VIN"
@@ -51,46 +53,39 @@ VIN_NONEXISTENT = "NONEXISTENT"
 
 # ==================== EXPECTED VALUES ====================
 
-# Vehicle Info - Electric (ID.7)
+# Vehicle Info - ID.7
 EXPECTED_ELECTRIC_VEHICLE = {
     "vin": VIN_ELECTRIC,
     "name": NAME_ELECTRIC,
-    "model": "ID.7 Tourer",  # Updated to match TestAdapter
+    "model": "ID.7 Tourer",
     "manufacturer": "Volkswagen",
-    "license_plate": LICENSE_PLATE_ELECTRIC,  # only on VehicleListItem, not VehicleModel
     "last_seen": "2024-01-15T10:31:00Z",
 }
 
-# Vehicle Info - Hybrid (T7 Multivan eHybrid)
+# Vehicle Info - T7 Multivan eHybrid
 EXPECTED_HYBRID_VEHICLE = {
     "vin": VIN_HYBRID,
     "name": NAME_HYBRID,
-    "model": "Multivan eHybrid",  # Updated to match TestAdapter
+    "model": "Multivan eHybrid",
     "manufacturer": "Volkswagen",
-    "license_plate": LICENSE_PLATE_HYBRID,  # only on VehicleListItem, not VehicleModel
     "last_seen": "2024-01-15T10:30:00Z",
 }
 
-# Energy Status - Electric
+# Energy Status - ID.7
 EXPECTED_ENERGY_ELECTRIC = {
-    "vehicle_type": "electric",
     "battery_level_percent": 77.0,
-    "total_range_km": 312.0,  # Updated to match TestAdapter
-    "electric_range_km": 312.0,
-    "is_charging": True,  # Updated: vehicle is charging in TestAdapter
+    "range_km": 312.0,
+    "is_charging": True,
     "last_seen": "2024-01-15T10:31:00Z",
 }
 
-# Energy Status - Hybrid (both electric and combustion data present, unlike a BEV/pure ICE)
+# Energy Status - T7 Multivan eHybrid (same shape as any other vehicle
+# Tibber reports -- see module docstring)
 EXPECTED_ENERGY_HYBRID = {
-    "vehicle_type": "hybrid",
     "battery_level_percent": 64.0,
-    "total_range_km": 630.0,  # Updated to match TestAdapter
-    "electric_range_km": 50.0,
-    "combustion_range_km": 580.0,
+    "range_km": 630.0,
     "is_charging": False,
     "is_plugged_in": True,
-    "tank_level_percent": 72.0,  # Updated to match TestAdapter
     "last_seen": "2024-01-15T10:30:00Z",
 }
 
@@ -98,13 +93,13 @@ EXPECTED_ENERGY_HYBRID = {
 # ==================== HELPER FUNCTIONS ====================
 
 def get_electric_vehicle_identifiers():
-    """Return all valid identifiers for the electric test vehicle."""
-    return [VIN_ELECTRIC, NAME_ELECTRIC, LICENSE_PLATE_ELECTRIC]
+    """Return all valid identifiers for the ID.7 test vehicle."""
+    return [VIN_ELECTRIC, NAME_ELECTRIC]
 
 
 def get_hybrid_vehicle_identifiers():
-    """Return all valid identifiers for the hybrid test vehicle."""
-    return [VIN_HYBRID, NAME_HYBRID, LICENSE_PLATE_HYBRID]
+    """Return all valid identifiers for the T7 Multivan eHybrid test vehicle."""
+    return [VIN_HYBRID, NAME_HYBRID]
 
 
 def get_all_valid_identifiers():

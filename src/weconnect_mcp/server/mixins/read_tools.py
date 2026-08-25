@@ -38,14 +38,24 @@ def _handle_unavailable(fn):
     ARCHITECTURE.md §2.4) -- not something retrying the call or trying a
     different vehicle_id can fix. Every other exception is left to
     propagate as-is.
+
+    ``error_type`` is included alongside the free-text ``message`` so an
+    AI assistant reading this response can branch on *which* auth problem
+    this is (see "Error Handling" in AI_INSTRUCTIONS.md for the full list
+    of codes and what to do for each) instead of only pattern-matching the
+    message text.
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
         except AdapterUnavailableError as exc:
-            logger.error("Adapter unavailable: %s", exc)
-            return json.dumps({"error": "server_unavailable", "message": str(exc)})
+            logger.error("Adapter unavailable (%s): %s", exc.error_type, exc)
+            return json.dumps({
+                "error": "server_unavailable",
+                "error_type": exc.error_type,
+                "message": str(exc),
+            })
     return wrapper
 
 
@@ -74,7 +84,7 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="get_vehicles",
-        description="List all available vehicles with VIN, name, and model. Start here to discover which vehicles you can access. license_plate is always null (Tibber does not provide it).",
+        description="List all available vehicles with VIN, name, and model. Start here to discover which vehicles you can access.",
         tags={"discovery", "read"},
         annotations={"title": "Get All Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -93,7 +103,7 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     )
     @_handle_unavailable
     def get_vehicle_info(
-        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name)"]
     ) -> str:
         """Get basic vehicle information plus a quick energy snapshot."""
         logger.info("get vehicle info (tool) for id=%s", vehicle_id)
@@ -105,7 +115,7 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         result = vehicle.model_dump()
         energy_status = adapter.get_energy_status(vehicle_id)
         charging = energy_status.electric.charging if energy_status and energy_status.electric else None
-        result["range_km"] = energy_status.range.electric_km if energy_status and energy_status.range else None
+        result["range_km"] = energy_status.range.total_km if energy_status and energy_status.range else None
         result["is_charging"] = charging.is_charging if charging else None
         result["is_plugged_in"] = charging.is_plugged_in if charging else None
         return json.dumps(result)
@@ -113,12 +123,12 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
     @mcp.tool(
         name="get_charging_status",
         description="Get charging status for electric vehicles: charging state (charging/idle), plug-connected state, target SOC, current SOC, electric range (km), and last-seen timestamp.",
-        tags={"energy", "read", "charging", "bev-phev"},
+        tags={"energy", "read", "charging", "electric"},
         annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
     @_handle_unavailable
     def get_charging_status(
-        vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name)"]
     ) -> str:
         """Get charging status plus electric range."""
         logger.info("get charging status (tool) for id=%s", vehicle_id)
@@ -127,6 +137,6 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
             logger.warning("Vehicle '%s' not found or doesn't support charging", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
         result = energy_status.electric.charging.model_dump()
-        result["range_km"] = energy_status.range.electric_km if energy_status.range else None
+        result["range_km"] = energy_status.range.total_km if energy_status.range else None
         result["last_seen"] = energy_status.last_seen
         return json.dumps(result)

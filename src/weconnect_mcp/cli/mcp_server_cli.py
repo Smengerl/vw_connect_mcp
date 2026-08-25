@@ -144,9 +144,14 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
     container deployments (Docker, Railway) keep using pure env vars, with
     no file needed.
 
-    Raises RuntimeError with a clear message if required credentials are
-    missing from both sources, so the failure is obvious in server logs at
-    startup rather than surfacing as a confusing later error.
+    Raises TibberAuthError (error_type="not_configured") if required
+    credentials are missing from both sources, so the failure is obvious
+    in server logs at startup rather than surfacing as a confusing later
+    error -- and so run_server_from_cli's existing TibberAuthError
+    handling turns it into a clean UnavailableAdapter (server still starts
+    and every tool call reports the real cause) instead of a bare
+    RuntimeError crashing stdio mode or silently stalling http mode
+    forever in "starting" state.
 
     Args:
         config_path: Optional path to a Tibber credentials JSON file
@@ -155,7 +160,9 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
             are sufficient, and a missing/nonexistent path is not an error.
     """
     from weconnect_mcp.adapter.tibber_adapter import TibberAdapter
+    from weconnect_mcp.adapter.tibber_client import TibberAuthError, default_login_command, login_instruction
 
+    login_command = default_login_command(config_path)
     file_config = _load_tibber_file_config(config_path)
 
     client_id = os.environ.get("TIBBER_CLIENT_ID") or file_config.get("client_id")
@@ -172,12 +179,22 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
     )
 
     if not client_id or not client_secret:
-        raise RuntimeError(
-            "TIBBER_CLIENT_ID and TIBBER_CLIENT_SECRET must be set (via "
-            "environment variables or a credentials file passed as the "
-            "'config' argument, see src/tibber_config.example.json). "
-            "Register an OAuth2 client at "
-            "https://data-api.tibber.com/clients/manage/ first."
+        missing = ", ".join(
+            name for name, value in (("TIBBER_CLIENT_ID", client_id), ("TIBBER_CLIENT_SECRET", client_secret))
+            if not value
+        )
+        config_hint = (
+            f"the credentials file at {config_path}" if config_path
+            else "environment variables (no credentials file was given)"
+        )
+        raise TibberAuthError(
+            f"{missing} not set. Set them via {config_hint} -- see "
+            "src/tibber_config.example.json for the file's shape. Register "
+            "an OAuth2 client at https://data-api.tibber.com/clients/manage/ "
+            f"first if you haven't already, then (once set) "
+            f"{login_instruction(login_command)} once to complete the "
+            "interactive login.",
+            error_type="not_configured",
         )
 
     _seed_tibber_token_from_env(token_path)
@@ -186,6 +203,7 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
         client_id=client_id,
         client_secret=client_secret,
         redirect_uri=redirect_uri,
+        login_command=login_command,
         token_path=token_path,
     )
 
@@ -210,104 +228,74 @@ def run_server_from_cli(config_path: Optional[str] = None, transport: str = DEFA
     else:
         logger.debug("Starting Tibber adapter (credentials from environment variables only)")
 
-    if transport == "http":
-        # ── HTTP / cloud mode ─────────────────────────────────────────────────
-        # Start the HTTP server FIRST so cloud health-checks pass immediately,
-        # then connect the Tibber adapter in the background thread.
-        # The server is built around a mutable proxy so all tool closures
-        # transparently use the real adapter once the connection completes.
-        import threading
-        from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
-        from weconnect_mcp.adapter.starting_adapter import StartingAdapter, UnavailableAdapter
-        from weconnect_mcp.adapter.tibber_client import TibberAuthError
+    # ── Connect (or fall back), synchronously, for both transports ──────────────
+    # Both transports connect before serving a single request -- there is no
+    # more "start serving immediately, connect in a background thread" dance
+    # for HTTP: Docker/Railway's health-check start-period (60s, see
+    # Dockerfile/docker-compose.yml) comfortably covers the couple of seconds
+    # a real Tibber connection attempt takes, so the extra machinery that
+    # used to exist purely to answer /health during that window (a mutable
+    # adapter proxy, a StartingAdapter stand-in, a background thread) bought
+    # nothing a synchronous connect doesn't already handle just as well.
+    #
+    # A failed Tibber login (no cached tokens, invalid config, or a refresh
+    # that was genuinely rejected -- see ARCHITECTURE.md §2.4) must not crash
+    # the whole process before any MCP client ever connects. Start the
+    # server anyway with a fallback adapter so every tool call reports the
+    # real cause via a clean "server_unavailable" response instead of the
+    # client just seeing the server fail to launch. In HTTP mode this also
+    # catches completely unexpected errors (a bug, a malformed credentials
+    # file) for the same reason cloud platforms need *something* answering
+    # /health rather than a crash-looping container; stdio mode leaves those
+    # uncaught since a human is right there to see the traceback.
+    from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
+    from weconnect_mcp.adapter.starting_adapter import ReconnectingAdapter, UnavailableAdapter
+    from weconnect_mcp.adapter.tibber_client import TibberAuthError
 
-        class _AdapterProxy(AbstractAdapter):
-            """Thin proxy that delegates to whichever adapter is current."""
-            _ready = False
-            def __init__(self, initial: AbstractAdapter) -> None:
-                self._delegate = initial
-            def _swap(self, real: AbstractAdapter) -> None:
-                self._delegate = real
-                self._ready = True
-            def list_vehicles(self): return self._delegate.list_vehicles()  # type: ignore[override]
-            def get_vehicle(self, v): return self._delegate.get_vehicle(v)  # type: ignore[override]
-            def get_energy_status(self, v): return self._delegate.get_energy_status(v)  # type: ignore[override]
-            def shutdown(self): return self._delegate.shutdown()  # type: ignore[override]
+    def _try_connect() -> AbstractAdapter:
+        return _build_tibber_adapter(config_path)
 
-        proxy = _AdapterProxy(StartingAdapter())
-        real_adapter: list[AbstractAdapter] = []
+    try:
+        initial: AbstractAdapter = _try_connect()
+    except TibberAuthError as exc:
+        logger.error("Tibber adapter unavailable at startup (%s): %s", exc.error_type, exc)
+        initial = UnavailableAdapter(str(exc), error_type=exc.error_type)
+    except Exception as exc:
+        if transport != "http":
+            raise
+        logger.error("Tibber adapter failed to connect: %s", exc, exc_info=True)
+        initial = UnavailableAdapter(str(exc))
 
-        server = get_server(proxy, api_key=resolved_api_key)
+    # Wrapped in ReconnectingAdapter even on the happy path: if this adapter
+    # is still healthy in 30 days when its refresh token finally does expire
+    # (ARCHITECTURE.md §2.4), a human rerunning the login tool should heal it
+    # on the next call too, not just the initial "never connected yet" case.
+    adapter: AbstractAdapter = ReconnectingAdapter(_try_connect, initial)
 
-        def _connect_backend() -> None:
-            try:
-                adapter = _build_tibber_adapter(config_path)
-                adapter.__enter__()
-                real_adapter.append(adapter)
-                proxy._swap(adapter)
-                logger.info("Tibber adapter connected – server fully ready")
-            except TibberAuthError as exc:
-                # No cached tokens, or a refresh that was genuinely rejected
-                # (ARCHITECTURE.md §2.4) -- won't resolve itself. Swap in a
-                # stub that reports this clearly on every tool call instead
-                # of leaving StartingAdapter's silent "still starting"
-                # responses in place forever.
-                logger.error("Tibber adapter unavailable: %s", exc)
-                proxy._swap(UnavailableAdapter(str(exc)))
-            except Exception as exc:
-                logger.error("Tibber adapter failed to connect: %s", exc)
-
-        threading.Thread(target=_connect_backend, daemon=True, name="tibber-connect").start()
-
+    with adapter:
+        server = get_server(adapter, api_key=resolved_api_key)
         try:
-            from starlette.middleware import Middleware as ASGIMiddleware
-            from starlette.middleware.cors import CORSMiddleware
+            if transport == "http":
+                from starlette.middleware import Middleware as ASGIMiddleware
+                from starlette.middleware.cors import CORSMiddleware
 
-            cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
-            cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
+                cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+                cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["*"]
 
-            server.run(
-                show_banner=False, transport="http", host="0.0.0.0", port=port,
-                uvicorn_config={"log_config": logging_config.get_uvicorn_log_config()},
-                middleware=[ASGIMiddleware(CORSMiddleware,
-                    allow_origins=cors_origins,
-                    allow_methods=["GET", "POST", "OPTIONS"],
-                    allow_headers=["Authorization", "Content-Type"],
-                )],
-            )
+                server.run(
+                    show_banner=False, transport="http", host="0.0.0.0", port=port,
+                    uvicorn_config={"log_config": logging_config.get_uvicorn_log_config()},
+                    middleware=[ASGIMiddleware(CORSMiddleware,
+                        allow_origins=cors_origins,
+                        allow_methods=["GET", "POST", "OPTIONS"],
+                        allow_headers=["Authorization", "Content-Type"],
+                    )],
+                )
+            else:
+                logger.debug("Starting MCP server")
+                server.run(show_banner=False, transport="stdio")
         finally:
             logger.debug("Shutdown server")
-            for a in real_adapter:
-                try:
-                    a.__exit__(None, None, None)
-                except Exception:
-                    pass
-
-    else:
-        # ── stdio mode (local) ────────────────────────────────────────────────
-        # A failed Tibber login (no cached tokens, or a refresh that was
-        # genuinely rejected -- see ARCHITECTURE.md §2.4) must not crash the
-        # whole process before any MCP client ever connects. Start the
-        # server anyway with a stub adapter so every tool call reports the
-        # real cause via a clean "server_unavailable" response instead of
-        # the client just seeing the server fail to launch.
-        from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
-        from weconnect_mcp.adapter.starting_adapter import UnavailableAdapter
-        from weconnect_mcp.adapter.tibber_client import TibberAuthError
-
-        try:
-            adapter: AbstractAdapter = _build_tibber_adapter(config_path)
-        except TibberAuthError as exc:
-            logger.error("Tibber adapter unavailable at startup: %s", exc)
-            adapter = UnavailableAdapter(str(exc))
-
-        with adapter:
-            logger.debug("Starting MCP server")
-            server = get_server(adapter, api_key=resolved_api_key)
-            try:
-                server.run(show_banner=False, transport="stdio")
-            finally:
-                logger.debug("Shutdown server")
 
 
 def build_parser():

@@ -116,7 +116,11 @@ def main():
             print(f"      → Battery: {data.electric.battery_level_percent}%, "
                   f"Range: {data.range.total_km} km, {status}")
         else:
-            print(f"      → No electric drive, tank: {data.combustion.tank_level_percent}%")
+            # Tibber's vehicle integration is EV-only (see ARCHITECTURE.md),
+            # so `electric` is always populated in practice -- this branch
+            # only exists because the type (Optional[ElectricDriveInfo])
+            # still technically allows None.
+            print("      → No energy data available for this vehicle")
         print()
     
     print("=" * 70)

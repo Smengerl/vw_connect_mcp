@@ -116,9 +116,7 @@ The following scripts source and use `detect_python.sh`:
 - `start_server_fg.sh` - Start server in foreground
 - `start_server_bg.sh` - Start server in background
 - `test.sh` - Run test suite
-- `create_claude_config.sh` - Generate Claude Desktop config
-- `create_copilot_desktop_config.sh` - Generate Copilot Desktop config
-- `create_github_copilot_config.sh` - Generate VS Code GitHub Copilot config
+- `create_mcp_config.sh <claude|copilot-desktop|vscode>` - Generate an MCP client config for Claude Desktop, Copilot Desktop, or VS Code
 
 ## Benefits
 

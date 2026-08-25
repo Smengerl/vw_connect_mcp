@@ -1,10 +1,10 @@
 # GitHub Copilot Instructions for WeConnect MCP
 
 **Type**: MCP Server (Python) for vehicle data via the [Tibber Data API](https://data-api.tibber.com/docs/) — originally built for Volkswagen, but **not VW-specific**: Tibber's integration runs through Enode (30+ EV brands), so any vehicle paired to the connected Tibber account works identically
-**Architecture**: Modular adapter with mixins (`CacheMixin`, `TibberStateExtractionMixin`) composed into `TibberAdapter`; vehicle identifier resolution is a concrete default method on `AbstractAdapter` itself, not a separate mixin
+**Architecture**: `TibberAdapter(CacheMixin, AbstractAdapter)` — `CacheMixin` is the only mixin left (genuinely backend-agnostic); Tibber-specific device-detail extraction used to be a second mixin but had exactly one consumer, so it's now plain module-level functions in `tibber_adapter.py` instead. Vehicle identifier resolution is a concrete default method on `AbstractAdapter` itself, not a separate mixin either.
 **Key Library**: `fastmcp` (MCP server framework). No third-party VW API library is used — the old `carconnectivity` (VW-direct) backend was removed after VW blocked third-party access; its code lives on, unmaintained, on the permanent `carconnectivity` git branch.
 **Languages**: Python 3.10+ with modern type hints (`dict[str, Any]`, not `Dict`)
-**Test Suite**: 47 tests (all mock/offline, no real API calls) — **ALL 47 MUST PASS** before committing
+**Test Suite**: 109 tests (all mock/offline, no real API calls) — **ALL MUST PASS** before committing
 
 > For setup, usage, scripts, project structure, and test documentation see **README.md** and **tests/README.md**. For the AI-facing description of the tool surface (kept in sync with the actual tools) see **src/weconnect_mcp/server/AI_INSTRUCTIONS.md**.
 
@@ -42,28 +42,33 @@ if charging is not None:
 soc = energy_status.electric.charging.current_soc_percent
 ```
 
-## Architecture (Mixin Pattern)
+## Architecture (Mixin Pattern — used sparingly)
 
-`TibberAdapter` (`src/weconnect_mcp/adapter/tibber_adapter.py`) uses **multiple inheritance** to
-compose functionality:
+`TibberAdapter` (`src/weconnect_mcp/adapter/tibber_adapter.py`) only reaches for a mixin when the
+behavior is genuinely backend-agnostic and reusable:
 
 ```python
 class TibberAdapter(
-    CacheMixin,                  # Caching with 5-min TTL
-    TibberStateExtractionMixin,  # Extract charging/range state from Tibber's device-detail response
-    AbstractAdapter               # Base class (abstract interface) -- also provides
-):                                #   resolve_vehicle_id (VIN/name/license plate) as a concrete default
+    CacheMixin,       # Caching with 5-min TTL -- the only mixin: backend-agnostic, reusable
+    AbstractAdapter   # Base class (abstract interface) -- also provides
+):                    #   resolve_vehicle_id (VIN/name) as a concrete default
     ...
 ```
 
-| Mixin | File |
+Tibber's device-detail extraction (charging/range state) used to be a second mixin
+(`TibberStateExtractionMixin`) here, but it was 100% Tibber-specific with exactly one consumer —
+composing it in via multiple inheritance never bought anything a plain module-level function
+wouldn't. It's now `_get_tibber_charging_state()`/`_get_tibber_range_km()`, plain functions at the
+top of `tibber_adapter.py` itself.
+
+| Piece | File |
 |---|---|
 | `CacheMixin` | `src/weconnect_mcp/adapter/mixins/cache_mixin.py` |
-| `TibberStateExtractionMixin` | `src/weconnect_mcp/adapter/mixins/tibber_state_extraction_mixin.py` |
+| Device-detail extraction functions | `src/weconnect_mcp/adapter/tibber_adapter.py` (top of file) |
 | `TibberAdapter` (composes the above) | `src/weconnect_mcp/adapter/tibber_adapter.py` |
 | `AbstractAdapter` + Pydantic models | `src/weconnect_mcp/adapter/abstract_adapter.py` |
 | `TibberDataAPI` (OAuth2 + PKCE HTTP client) | `src/weconnect_mcp/adapter/tibber_client.py` |
-| `StartingAdapter` (no-op stub while HTTP-mode backend connects) | `src/weconnect_mcp/adapter/starting_adapter.py` |
+| `UnavailableAdapter` / `ReconnectingAdapter` (fallback stub + no-restart-needed self-healing retry) | `src/weconnect_mcp/adapter/starting_adapter.py` |
 
 **Key Points**:
 - Each mixin = single responsibility
@@ -78,7 +83,7 @@ class TibberAdapter(
 ### Vehicle Identification
 - **Name**: `"ID.7"` (preferred for readability), matched case-insensitively (partial match on name)
 - **VIN**: `"WVWZZZED4SE003938"` (unique identifier)
-- **License Plate**: ⚠️ **NOT SUPPORTED** — Tibber's API doesn't provide it; `license_plate` is always `null`
+- **License Plate**: ⚠️ **NOT SUPPORTED** — Tibber's API doesn't provide it, so there's no `license_plate` field or lookup path at all
 
 ### Vehicle Types
 Tibber's vehicle integration **only ever reports electric vehicles**, regardless of brand.
@@ -95,8 +100,8 @@ vehicle types for test purposes.
   caller.
 
 ### What Tibber Actually Reports (5 capabilities)
-Extracted in `TibberStateExtractionMixin` from a Tibber device-detail response's flat
-`capabilities` list:
+Extracted by `tibber_adapter.py`'s `_get_tibber_charging_state()`/`_get_tibber_range_km()` from a
+Tibber device-detail response's flat `capabilities` list:
 
 | Capability id | Meaning |
 |---|---|
@@ -122,7 +127,7 @@ tests/
   test_adapter.py         # TestAdapter — mock AbstractAdapter implementation (NOT in the adapter package)
   test_data.py            # shared VIN constants + expected-value dicts
   test_caching.py         # CacheMixin behavior (via a minimal concrete subclass)
-  test_tibber_extraction.py  # TibberStateExtractionMixin + vin_from_external_id, real fixture data
+  test_tibber_extraction.py  # tibber_adapter.py's extraction functions + vin_from_external_id, real fixture data
   test_mcp_server.py      # MCP protocol / tool-registration tests
   tools/
     test_get_vehicle.py
@@ -228,17 +233,17 @@ using FastMCP's `@mcp.tool(...)` decorator (not the raw MCP SDK's `@server.call_
 @mcp.tool(
     name="get_charging_status",
     description="...",
-    tags={"energy", "read", "charging", "bev-phev"},
+    tags={"energy", "read", "charging", "electric"},
     annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True},
 )
 def get_charging_status(
-    vehicle_id: Annotated[str, "Vehicle identifier (VIN, name, or license plate)"]
+    vehicle_id: Annotated[str, "Vehicle identifier (VIN or name)"]
 ) -> str:
     energy_status = adapter.get_energy_status(vehicle_id)
     if energy_status is None or energy_status.electric is None or energy_status.electric.charging is None:
         return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
     result = energy_status.electric.charging.model_dump()
-    result["range_km"] = energy_status.range.electric_km if energy_status.range else None
+    result["range_km"] = energy_status.range.total_km if energy_status.range else None
     result["last_seen"] = energy_status.last_seen
     return json.dumps(result)
 ```
@@ -297,8 +302,8 @@ def get_vehicle(self, vehicle_id: str, details: VehicleDetailLevel = VehicleDeta
     """Get vehicle info. Fields with no Tibber equivalent stay None.
 
     Args:
-        vehicle_id: VIN, name, or license plate
-        details: BASIC, FULL, or ALL
+        vehicle_id: VIN or name
+        details: BASIC or FULL
 
     Returns:
         VehicleModel, or None if the vehicle isn't found
@@ -327,8 +332,7 @@ These four are the source of truth for the exposed interface and must stay consi
 
 ### Add a New Read Tool
 1. Add a method to `TibberAdapter` in `src/weconnect_mcp/adapter/tibber_adapter.py` (and, if it
-   needs new extraction logic, to `TibberStateExtractionMixin` in
-   `src/weconnect_mcp/adapter/mixins/tibber_state_extraction_mixin.py`)
+   needs new device-detail extraction logic, add a function for it at the top of that same file)
 2. Add the corresponding abstract method + Pydantic model to `AbstractAdapter` in
    `src/weconnect_mcp/adapter/abstract_adapter.py` if needed
 3. Implement the same method on `TestAdapter` in `tests/test_adapter.py`

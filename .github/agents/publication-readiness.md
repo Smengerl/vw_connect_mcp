@@ -112,9 +112,7 @@ Ensure all CLI scripts are documented in README.md with usage examples:
 - `setup.sh` - Project initialization
 - `test.sh` - Test execution
 - `activate_venv.sh` - Virtual environment activation
-- `create_claude_config.sh` - Claude Desktop configuration
-- `create_github_copilot_config.sh` - VS Code Copilot configuration  
-- `create_copilot_desktop_config.sh` - Microsoft Copilot Desktop configuration
+- `create_mcp_config.sh <claude|copilot-desktop|vscode>` - MCP client configuration (Claude Desktop, Microsoft Copilot Desktop, VS Code Copilot)
 - `start_server_fg.sh` - Start server in foreground
 - `start_server_bg.sh` - Start server in background
 - `stop_server_bg.sh` - Stop background server

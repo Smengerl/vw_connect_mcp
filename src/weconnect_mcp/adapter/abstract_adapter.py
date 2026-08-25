@@ -13,7 +13,7 @@ always-None/not-supported stubs.
 
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 from enum import Enum
 
 
@@ -49,11 +49,20 @@ class VehicleModel(BaseModel):
     last_seen: Optional[str] = None  # ISO 8601; Tibber's status.lastSeen, same call as connection_state
 
 class VehicleListItem(BaseModel):
-    """Simplified vehicle info for listing"""
+    """Simplified vehicle info for listing.
+
+    No ``license_plate`` field -- same reasoning as VehicleModel's
+    docstring above: Tibber's Data API never reports it (confirmed via its
+    OpenAPI schema), so it was removed entirely rather than kept as a
+    permanently-``None`` field. This used to be the one exception to that
+    rule (kept so identifier resolution could accept a license plate as
+    input), but with the field always ``None`` for the only backend this
+    project has, that input path could never actually match anything
+    either -- removed along with it, see AbstractAdapter.resolve_vehicle_id.
+    """
     vin: str
     name: Optional[str] = None
     model: Optional[str] = None
-    license_plate: Optional[str] = None
 
 class VehicleDetailLevel(str, Enum):
     """Detail level for vehicle information."""
@@ -61,10 +70,18 @@ class VehicleDetailLevel(str, Enum):
     FULL = "full"        # BASIC + connection_state + last_seen (costs an extra Tibber API call)
 
 class RangeInfo(BaseModel):
-    """Consolidated range info"""
+    """Range info.
+
+    A single ``total_km`` field, not a electric/combustion split -- Tibber's
+    vehicle integration is EV-only (confirmed live, ARCHITECTURE.md), so a
+    combustion range can never be populated by the only backend this
+    project has (or will have, per CLAUDE.md: no dual-backend plans). A
+    previous version modeled electric_km/combustion_km separately for a
+    hypothetical PHEV/combustion vehicle that could never actually occur
+    here; that distinction was removed as dead weight rather than kept
+    always-empty.
+    """
     total_km: Optional[float] = None
-    electric_km: Optional[float] = None  # BEV/PHEV
-    combustion_km: Optional[float] = None  # PHEV/Combustion
 
 class ElectricDriveInfo(BaseModel):
     """Electric drive info"""
@@ -72,19 +89,15 @@ class ElectricDriveInfo(BaseModel):
     battery_temperature_kelvin: Optional[float] = None
     charging: Optional[ChargingModel] = None
 
-class CombustionDriveInfo(BaseModel):
-    """Combustion drive info"""
-    tank_level_percent: Optional[float] = None
-    fuel_type: Optional[str] = None
-    adblue_range_km: Optional[float] = None  # Diesel only
-    adblue_level_percent: Optional[float] = None  # Diesel only
-
 class EnergyStatusModel(BaseModel):
-    """Consolidated energy and range info"""
-    vehicle_type: str  # electric, hybrid, combustion
+    """Consolidated energy and range info.
+
+    No ``vehicle_type``/combustion fields -- see RangeInfo's docstring for
+    why: this project's only backend (Tibber) never reports anything but
+    electric vehicles, so there is nothing to discriminate between.
+    """
     range: RangeInfo
-    electric: Optional[ElectricDriveInfo] = None  # BEV/PHEV
-    combustion: Optional[CombustionDriveInfo] = None  # PHEV/Combustion
+    electric: Optional[ElectricDriveInfo] = None
     last_seen: Optional[str] = None  # ISO 8601; Tibber's status.lastSeen
 
 class AdapterUnavailableError(RuntimeError):
@@ -96,8 +109,18 @@ class AdapterUnavailableError(RuntimeError):
 
     Concrete adapters raise this (or a backend-specific subclass) so the
     MCP tool layer can report "server unavailable" without needing to know
-    which backend-specific failure caused it.
+    which backend-specific failure caused it. ``error_type`` carries a
+    short, stable, machine-readable code (see the Tibber-specific
+    TibberAuthError subclasses in tibber_client.py for the concrete codes
+    this project produces) so a client -- ultimately the AI assistant on
+    the other end of the MCP connection -- can branch on *which* failure
+    this is instead of only having the free-text ``message`` to
+    pattern-match.
     """
+
+    def __init__(self, message: str, error_type: str = "unavailable") -> None:
+        super().__init__(message)
+        self.error_type = error_type
 
 
 class AbstractAdapter(ABC):
@@ -108,17 +131,17 @@ class AbstractAdapter(ABC):
         """Get vehicle info with configurable detail level.
 
         Args:
-            vehicle_id: VIN, name, or license plate
+            vehicle_id: VIN or name
             details: BASIC or FULL
         """
         pass
 
     @abstractmethod
     def get_energy_status(self, vehicle_id: str) -> Optional[EnergyStatusModel]:
-        """Get energy and range info (vehicle-type-aware).
+        """Get energy and range info.
 
         Args:
-            vehicle_id: VIN, name, or license plate
+            vehicle_id: VIN or name
         """
         pass
 
@@ -128,13 +151,37 @@ class AbstractAdapter(ABC):
 
     @abstractmethod
     def list_vehicles(self) -> list[VehicleListItem]:
-        """Return list of vehicles with VIN, name, model, license plate."""
+        """Return list of vehicles with VIN, name, model."""
         pass
 
-    def resolve_vehicle_id(self, identifier: str) -> Optional[str]:
-        """Resolve identifier (name, VIN, license plate) to VIN.
+    def health_status(self) -> dict[str, Any]:
+        """Liveness/readiness info for the MCP server's /health endpoint.
 
-        Search priority: 1) Name (partial), 2) VIN (exact), 3) License plate (exact)
+        Default: always ready -- a plain working adapter (the real
+        TibberAdapter, or a test double) has no "unavailable" state of its
+        own to report. UnavailableAdapter and ReconnectingAdapter (see
+        starting_adapter.py) override this with their actual state; for
+        ReconnectingAdapter this also attempts a reconnect first if one is
+        due, so /health participates in the same self-healing every real
+        tool call already gets, instead of only reflecting whatever the
+        last tool call (or the initial connect attempt) happened to see.
+
+        Shape: ``{"ready": True}`` when healthy, or
+        ``{"ready": False, "error_type": ..., "message": ...}`` when not.
+        """
+        return {"ready": True}
+
+    def resolve_vehicle_id(self, identifier: str) -> Optional[str]:
+        """Resolve identifier (name or VIN) to VIN.
+
+        Search priority: 1) Name (partial), 2) VIN (exact)
+
+        There used to be a third priority (license plate, exact) here, but
+        VehicleListItem no longer has a license_plate field to match
+        against -- Tibber's Data API never reports one, so that input path
+        could never actually match anything for this project's only
+        backend either. Removed along with the field itself rather than
+        left as permanently-dead matching logic.
         """
         vehicles = self.list_vehicles()
         identifier_lower = identifier.lower().strip()
@@ -147,11 +194,6 @@ class AbstractAdapter(ABC):
         # Priority 2: VIN (exact)
         for vehicle in vehicles:
             if vehicle.vin.lower() == identifier_lower:
-                return vehicle.vin
-
-        # Priority 3: License plate (exact)
-        for vehicle in vehicles:
-            if vehicle.license_plate and vehicle.license_plate.lower() == identifier_lower:
                 return vehicle.vin
 
         return None

@@ -119,24 +119,36 @@ def get_server(adapter: AbstractAdapter, api_key: Optional[str] = None) -> FastM
     # ── Health check endpoint (HTTP transport only) ───────────────────────────
     # Exposed at GET /health (unauthenticated) so that cloud platforms and load
     # balancers can verify the server is up without an API key.
-    # Returns "starting" while the VW adapter is still logging in (can take 30s).
     @mcp.custom_route("/health", methods=["GET", "OPTIONS"])
     async def health(_request):  # type: ignore[no-untyped-def]
         """Liveness + readiness probe.
 
-        Returns HTTP 200 immediately (even during Tibber login) so Railway's
-        health-check window is not exhausted.  The ``ready`` field tells
-        clients whether the Tibber adapter has finished connecting.
+        By the time this server is serving any request, the backend has
+        already been connected once, synchronously, before server.run() was
+        even called (see mcp_server_cli.py) -- so there's no separate
+        "still starting" state to report here, only whether that attempt
+        actually succeeded.
+
+        Delegates entirely to adapter.health_status() (see AbstractAdapter
+        and starting_adapter.py) instead of reaching into any adapter's
+        internals directly -- for a ReconnectingAdapter specifically, this
+        also attempts a reconnect first if one is due, so a human fixing
+        the underlying problem heals this endpoint too, not just the next
+        real tool call.
         """
         from starlette.responses import JSONResponse
-        is_ready = getattr(adapter, "_ready", True)  # StartingAdapter is the only one with _ready = False
-        return JSONResponse(
-            {
-                "status": "ok" if is_ready else "starting",
-                "service": "weconnect-mcp",
-                "ready": is_ready,
-            }
-        )
+
+        status = adapter.health_status()
+        is_ready = status["ready"]
+        body = {
+            "status": "ok" if is_ready else "unavailable",
+            "service": "weconnect-mcp",
+            "ready": is_ready,
+        }
+        if not is_ready:
+            body["error_type"] = status["error_type"]
+            body["message"] = status["message"]
+        return JSONResponse(body)
 
     return mcp
 

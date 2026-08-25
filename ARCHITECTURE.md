@@ -251,16 +251,19 @@ src/weconnect_mcp/
 │   ├── abstract_adapter.py       # AbstractAdapter (ABC) + Pydantic models — the port.
 │   │                             #   Also owns resolve_vehicle_id (VIN/name/license-plate
 │   │                             #   → VIN), a concrete default every adapter inherits.
-│   ├── tibber_adapter.py         # TibberAdapter(CacheMixin, TibberStateExtractionMixin,
-│   │                             #   AbstractAdapter)
-│   ├── starting_adapter.py       # No-op stub used during async startup (HTTP mode)
+│   ├── tibber_adapter.py         # TibberAdapter(CacheMixin, AbstractAdapter) -- also has the
+│   │                             #   device-detail-extraction functions (maps the 5 capabilities
+│   │                             #   into ChargingModel + range_km) as plain module functions
+│   ├── starting_adapter.py       # UnavailableAdapter stub + ReconnectingAdapter (retries the
+│   │                             #   build on the next call instead of needing a restart)
 │   ├── tibber_client.py          # TibberDataAPI: OAuth2 (Auth Code + PKCE) client, TokenStore
 │   └── mixins/
-│       ├── cache_mixin.py                   # 5-min data cache
-│       └── tibber_state_extraction_mixin.py # Maps the 5 capabilities into ChargingModel + range_km
+│       └── cache_mixin.py        # 5-min data cache -- the only mixin left; Tibber-specific
+│                                  #   extraction used to be a second one here, but with exactly
+│                                  #   one consumer (TibberAdapter) it was dissolved into it
 └── server/
     └── mixins/
-        ├── read_tools.py         # The 5 MCP tools
+        ├── read_tools.py         # The 3 MCP tools
         └── prompts.py            # 11 MCP workflow prompts
 ```
 
