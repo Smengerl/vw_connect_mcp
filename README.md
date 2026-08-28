@@ -1,5 +1,15 @@
 # weconnect_mvp — MCP Server for Connected Vehicles via Tibber
 
+> [!NOTE]
+> **Purpose of this branch:** `cleanup/remove-carconnectivity` holds the full, granular commit
+> history of the refactor that removed the VW-direct `carconnectivity` backend and made Tibber
+> the project's only backend. `main` contains the exact same end result as a single squashed
+> commit
+> ([`ae1077e`](https://github.com/Smengerl/vw_connect_mcp/commit/ae1077e66134be01d253b25634b196d4e96a9931));
+> this branch exists purely as the more detailed, step-by-step audit trail of how that refactor
+> happened. It is not ahead of `main` in anything that matters and needs no further action —
+> develop against [`main`](https://github.com/Smengerl/vw_connect_mcp/tree/main) instead.
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-47%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
