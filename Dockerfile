@@ -3,18 +3,25 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install only what's needed for pip to build native extensions
+# build-essential: native extensions. git: setuptools_scm shells out to
+# `git describe` at build time to derive the package version from the
+# nearest tag (see pyproject.toml's [tool.setuptools_scm]) -- without it
+# here, the build silently falls back to fallback_version instead of
+# failing loudly, which is easy to miss.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
-COPY src/ ./src/
-# .git is needed here (nowhere else) so setuptools_scm can derive the
-# package version from the nearest git tag at build time -- see
-# .dockerignore and pyproject.toml's [tool.setuptools_scm]. It never
-# reaches the runtime image below, only this discarded builder stage.
-COPY .git/ ./.git/
+# Full context, not just pyproject.toml/README.md/src/: setuptools_scm's
+# `git describe --dirty` (see pyproject.toml's [tool.setuptools_scm]) diffs
+# the working tree against .git's index, and would see every excluded
+# tracked file (tests/, examples/, .github/, ...) as "deleted" and mark the
+# build dirty even from a clean, exactly-tagged commit if only a subset
+# were copied here. None of this reaches the runtime image below -- it
+# only ever COPYs this stage's compiled /install output and src/, never
+# the raw context.
+COPY . .
 RUN pip install --no-cache-dir --prefix=/install .
 
 

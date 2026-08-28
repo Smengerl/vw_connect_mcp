@@ -1,6 +1,15 @@
 # Version control
-.git/
-.github/
+# .git/ is intentionally NOT excluded: setuptools_scm (see pyproject.toml's
+# [tool.setuptools_scm]) needs it -- and a *complete*, non-sparse working
+# tree next to it -- in the builder stage to derive the package version
+# from the nearest git tag via `git describe`, the same way a local
+# `pip install -e .` does. `git describe --dirty` diffs the working tree
+# against the index; if tests/, examples/, .github/ etc. were excluded
+# here the way they used to be, git would see them as "deleted" and the
+# build would always resolve a dirty/guessed version even from a clean,
+# exactly-tagged commit. None of this reaches the final runtime image --
+# Dockerfile's runtime stage only COPYs the builder's compiled /install
+# output and src/, never the raw context.
 
 # Python artifacts
 __pycache__/
@@ -18,10 +27,21 @@ venv/
 # project's Tibber backend uses (see .gitignore) -- NOT the old
 # src/config.json/src/tokenstore.json names from the removed carconnectivity
 # backend, which don't exist here anymore and excluding them protected
-# nothing.
+# nothing. Kept in sync with .gitignore's own credential patterns (that
+# file is the reference; a real secret was found missing from here twice
+# in a row while wiring this up -- see git history) rather than
+# re-deriving similar-looking patterns by hand again.
 src/tibber_config.json
 tibber_tokens.json
-tibber_tokens.json.lock
+**/*tibber_tokens.json
+**/*tibber_tokens.json.lock
+.env
+**/*.env
+# local/ is gitignored as a scratch/backup directory for rescued secrets
+# (see .gitignore) -- confirmed live to contain a real .env and a real
+# tibber_tokens.json copy, neither of which the patterns above alone would
+# have caught nested under it.
+local/
 /tmp/tokenstore*
 logs/
 
@@ -31,9 +51,8 @@ logs/
 *.swp
 *.swo
 
-# Tests (not needed in production image)
-tests/
-
-# Docs / examples
-examples/
+# Docs / examples: not excluded from the build CONTEXT (see .git/ note
+# above -- their absence would falsely mark the tree dirty), but the
+# runtime image never gets them either way since Dockerfile only COPYs
+# src/ and the builder's compiled /install output into it.
 tmp/
