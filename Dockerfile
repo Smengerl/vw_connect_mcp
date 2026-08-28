@@ -10,6 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
+# .git is needed here (nowhere else) so setuptools_scm can derive the
+# package version from the nearest git tag at build time -- see
+# .dockerignore and pyproject.toml's [tool.setuptools_scm]. It never
+# reaches the runtime image below, only this discarded builder stage.
+COPY .git/ ./.git/
 RUN pip install --no-cache-dir --prefix=/install .
 
 

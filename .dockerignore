@@ -1,5 +1,10 @@
 # Version control
-.git/
+# .git/ is intentionally NOT excluded: setuptools_scm (see pyproject.toml's
+# [tool.setuptools_scm]) needs it in the builder stage to derive the package
+# version from the nearest git tag, the same way a local `pip install -e .`
+# does. It never reaches the final runtime image -- Dockerfile's runtime
+# stage only COPYs the builder's compiled /install output and src/, not
+# .git itself.
 .github/
 
 # Python artifacts

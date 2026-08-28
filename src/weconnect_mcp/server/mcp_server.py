@@ -1,6 +1,7 @@
-"""MCP Server for Volkswagen vehicle data via the Tibber Data API.
+"""MCP Server for connected vehicle data via the Tibber Data API.
 
-Provides FastMCP server with tools and prompts for vehicle access.
+Provides FastMCP server with tools and prompts for vehicle access. Not
+VW-specific despite the project's origins -- see weconnect_mcp/__init__.py.
 
 Transport modes:
   - stdio:  Local usage with Claude Desktop / VS Code Copilot
@@ -19,6 +20,7 @@ from fastmcp import FastMCP
 from fastmcp.server.auth import AuthProvider
 from pathlib import Path
 
+from weconnect_mcp import __version__
 from weconnect_mcp.adapter.abstract_adapter import AbstractAdapter
 from weconnect_mcp.server.mixins import (
     register_read_tools,
@@ -108,7 +110,7 @@ def get_server(adapter: AbstractAdapter, api_key: Optional[str] = None) -> FastM
     mcp = FastMCP(
         name="vehicle-service",
         instructions=instructions,
-        version="1.0.0",
+        version=__version__,
         auth=auth_provider,
     )
     

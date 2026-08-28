@@ -50,6 +50,8 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import httpx
 import platformdirs
 
+from weconnect_mcp import __version__
+
 logger = logging.getLogger(__name__)
 
 # ── Constants (see ../../../ARCHITECTURE.md §2-3) ────────────────────────────
@@ -68,7 +70,7 @@ DEFAULT_SCOPES = [
     "data-api-vehicles-read",
 ]
 
-USER_AGENT = "weconnect-mcp/0.1.0 (github.com/weconnect_mvp)"
+USER_AGENT = f"weconnect-mcp/{__version__} (github.com/Smengerl/vw_connect_mcp)"
 
 # Refresh the access token this many seconds before it actually expires.
 _REFRESH_SKEW = 60
