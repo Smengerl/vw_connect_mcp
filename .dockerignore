@@ -1,10 +1,5 @@
 # Version control
-# .git/ is intentionally NOT excluded: setuptools_scm (see pyproject.toml's
-# [tool.setuptools_scm]) needs it in the builder stage to derive the package
-# version from the nearest git tag, the same way a local `pip install -e .`
-# does. It never reaches the final runtime image -- Dockerfile's runtime
-# stage only COPYs the builder's compiled /install output and src/, not
-# .git itself.
+.git/
 .github/
 
 # Python artifacts
@@ -19,9 +14,14 @@ __pycache__/
 .venv/
 venv/
 
-# Credentials – NEVER copy into image
-src/config.json
-src/tokenstore.json
+# Credentials – NEVER copy into image. These are the actual filenames this
+# project's Tibber backend uses (see .gitignore) -- NOT the old
+# src/config.json/src/tokenstore.json names from the removed carconnectivity
+# backend, which don't exist here anymore and excluding them protected
+# nothing.
+src/tibber_config.json
+tibber_tokens.json
+tibber_tokens.json.lock
 /tmp/tokenstore*
 logs/
 
