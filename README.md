@@ -1,5 +1,17 @@
 # weconnect_mvp
 
+> [!NOTE]
+> **Purpose of this branch:** `carconnectivity` is a permanent, unmaintained archive of this
+> project's original VW-direct backend (built on the
+> [`carconnectivity`](https://github.com/tillsteinbach/CarConnectivity) library), frozen at the
+> point Volkswagen blocked third-party API access (see the warning below). It exists purely as a
+> historical/reference snapshot of the pre-Tibber architecture — no further development happens
+> here, and it won't receive fixes even if VW's block is someday lifted.
+>
+> **For the current, actively maintained server** (Tibber Data API backend, works with any
+> Enode-supported EV brand, not just VW), see
+> [`main`](https://github.com/Smengerl/vw_connect_mcp/tree/main).
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
