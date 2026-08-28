@@ -194,7 +194,10 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
    export TIBBER_CLIENT_ID="your-client-id"
    export TIBBER_CLIENT_SECRET="your-client-secret"
    export TIBBER_REDIRECT_URI="http://localhost:8515/callback"   # optional, this is the default
-   export TIBBER_TOKEN_PATH="./tibber_tokens.json"                # optional, this is the default
+   # export TIBBER_TOKEN_PATH="/custom/path/tibber_tokens.json"  # optional -- default is an
+   #   OS-standard per-user data directory (e.g. ~/Library/Application Support/weconnect-mcp on
+   #   macOS), NOT the current directory, so every local MCP client shares one token file by
+   #   default. Only set this to deliberately opt out (e.g. isolated test accounts).
    ```
 3. **Run the one-time interactive login** (opens a browser; only needs to be done once — the
    server itself never opens a browser, it only refreshes the resulting token non-interactively).
@@ -204,9 +207,9 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
    python -m weconnect_mcp.cli.tibber_login_cli src/tibber_config.json   # Option A (file)
    python -m weconnect_mcp.cli.tibber_login_cli                          # Option B (env vars)
    ```
-   On success this writes the token to `token_path` (from the file, or `TIBBER_TOKEN_PATH`/its
-   `./tibber_tokens.json` default) and lists the vehicle(s) found in your Tibber account. You
-   won't be asked to log in again — every later run just refreshes this token.
+   On success this writes the token to `token_path` (from the file, `TIBBER_TOKEN_PATH`, or its
+   OS-standard per-user default, see above) and lists the vehicle(s) found in your Tibber account.
+   You won't be asked to log in again — every later run just refreshes this token.
 4. **Start the server** — the config file is optional (pass it if you used Option A above):
    ```bash
    python -m weconnect_mcp.cli.mcp_server_cli [src/tibber_config.json]
@@ -216,10 +219,14 @@ The setup script automatically detects and avoids Microsoft Store Python (which 
 [Connecting AI Assistants](#connecting-ai-assistants))
 already generates configs pointing at `src/tibber_config.json` with a correct `"cwd"` — no manual
 editing of the generated MCP client config needed. If you hand-edit an MCP client config instead,
-make sure it has a `"cwd"` pointing at this repo: without one, a relative `token_path` resolves
-against the *client's* working directory (e.g. Claude Desktop's own), not this project's — a real
-failure mode, not a theoretical one. See [`ARCHITECTURE.md`](ARCHITECTURE.md#6-troubleshooting)
-for troubleshooting specific error messages (missing credentials, no cached token, `invalid_grant`).
+still give it a `"cwd"` pointing at this repo, so a relative `config.json` argument resolves
+correctly — but note that `token_path`'s own default no longer depends on `cwd` at all: it's a
+fixed per-user directory (see step 2 above), specifically so that multiple local MCP clients
+(Claude Desktop, VS Code Copilot, Claude Code, ...) launching this server with *different* working
+directories still converge on the same cached token instead of each silently getting its own
+(which used to make Tibber's rotating refresh_token strand whichever client refreshed second — see
+[`ARCHITECTURE.md`](ARCHITECTURE.md#6-troubleshooting) for troubleshooting specific error messages:
+missing credentials, no cached token, `invalid_grant`).
 
 ### Running the Server
 

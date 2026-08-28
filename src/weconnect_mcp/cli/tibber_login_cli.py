@@ -17,7 +17,10 @@ environment variables, which override the file when both are present:
     TIBBER_CLIENT_SECRET   Required (file or env).
     TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
                            Must match the redirect URI registered on the client.
-    TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
+    TIBBER_TOKEN_PATH      Optional, default is an OS-standard per-user data
+                           directory (see tibber_client.default_token_path),
+                           not the current directory -- so this and the
+                           server default agree without needing to be set.
 
 See ARCHITECTURE.md §2.1 for how to register an OAuth2 client and which
 scopes to select.
@@ -28,10 +31,11 @@ from __future__ import annotations
 import os
 import sys
 
-from weconnect_mcp.adapter.tibber_client import TibberAuthError, TibberDataAPI, TokenStore
+from weconnect_mcp.adapter.tibber_client import (
+    TibberAuthError, TibberDataAPI, TokenStore, default_token_path,
+)
 
 DEFAULT_REDIRECT = "http://localhost:8515/callback"
-DEFAULT_TOKEN_PATH = "./tibber_tokens.json"
 
 
 def main() -> int:
@@ -55,7 +59,7 @@ def main() -> int:
     token_path = (
         os.environ.get("TIBBER_TOKEN_PATH")
         or file_config.get("token_path")
-        or DEFAULT_TOKEN_PATH
+        or default_token_path()
     )
 
     if not client_id:

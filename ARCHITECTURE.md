@@ -447,3 +447,19 @@ Tibber.
   `Client`+`StdioTransport` against real subprocesses, and via two new deterministic
   `threading.Barrier`-based tests that contend for the real `flock` instead of simulating it
   sequentially).
+- **2026-08-28** — Found via deliberate error-simulation (mocking Tibber's token endpoint through
+  the real adapter/MCP-server/`fastmcp.Client` stack rather than just unit-testing exceptions in
+  isolation): §2.4's `TokenStore.locked()` fix only coordinates instances that already share one
+  token file, and the default `token_path` was `./tibber_tokens.json` — relative to whatever
+  working directory each MCP client happens to launch the server with. Two local clients (e.g.
+  Claude Desktop and VS Code Copilot) with no explicit `"cwd"`/`TIBBER_TOKEN_PATH` therefore each
+  got their *own* token file instead of sharing one, silently defeating the lock and reintroducing
+  the exact `invalid_grant` stranding this section's earlier fix addressed. Fixed by changing the
+  default (`tibber_client.default_token_path()`) to a fixed, OS-standard per-user data directory
+  via `platformdirs` (e.g. `~/Library/Application Support/weconnect-mcp/tibber_tokens.json` on
+  macOS) instead of a CWD-relative path — every local client now converges on the same file by
+  default, with `TIBBER_TOKEN_PATH` still available to opt out deliberately. `TokenStore.save()`
+  now also creates its parent directory if missing (the old default's directory, the CWD, always
+  already existed; the new default's directory generally doesn't on first run). No automatic
+  migration of pre-existing `./tibber_tokens.json` files was added — each existing local install
+  moves its own file over manually once.

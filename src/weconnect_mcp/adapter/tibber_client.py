@@ -48,6 +48,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
+import platformdirs
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,35 @@ def default_login_command(config_path: str | None = None) -> str:
     if config_path:
         cmd += f" {config_path}"
     return cmd
+
+
+def default_token_path() -> str:
+    """Default cache location for the Tibber token file, used whenever
+    TIBBER_TOKEN_PATH isn't set and no credentials file gives a
+    ``token_path`` either.
+
+    A fixed, OS-standard per-user data directory (via ``platformdirs``) --
+    deliberately NOT relative to the current working directory. Local/
+    desktop MCP clients (Claude Desktop, VS Code Copilot, Claude Code, ...)
+    each launch this server with their own working directory, not the
+    user's shell's, so a CWD-relative default used to silently resolve to
+    a *different* file per client. That defeats TokenStore.locked()
+    entirely -- it only coordinates instances that already share one file
+    -- and, because Tibber rotates the refresh_token on every use, left
+    whichever client refreshed second permanently stuck needing
+    re-authorization the next time it happened to refresh (see
+    ARCHITECTURE.md §2.4). A single well-known path fixes this for every
+    client by default, with TIBBER_TOKEN_PATH still available to opt out
+    deliberately (e.g. running two isolated Tibber accounts for testing).
+
+    ``appauthor=False`` skips platformdirs' extra per-author subdirectory
+    on Windows (there's no separate authoring org here, just this project).
+
+    Docker/Railway deployments are unaffected -- they always set
+    TIBBER_TOKEN_PATH explicitly to a mounted volume path and never reach
+    this default (see Dockerfile).
+    """
+    return str(Path(platformdirs.user_data_dir("weconnect-mcp", appauthor=False)) / "tibber_tokens.json")
 
 
 def _running_in_container() -> bool:
@@ -269,6 +299,12 @@ class TokenStore:
         return TokenSet(**data)
 
     def save(self, tokens: TokenSet) -> None:
+        # Parent may not exist yet -- the default token_path now points at
+        # an OS-standard per-user data directory (see default_token_path())
+        # that's never pre-created, unlike the old CWD-relative default. A
+        # custom TIBBER_TOKEN_PATH pointing at a not-yet-existing nested
+        # directory has the same need, so this isn't default-path-specific.
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(tokens.to_dict(), indent=2))
         try:
             os.chmod(self.path, 0o600)

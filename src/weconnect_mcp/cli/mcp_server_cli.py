@@ -7,7 +7,14 @@ which override the file when both are present:
   TIBBER_CLIENT_ID       Required (file or env).
   TIBBER_CLIENT_SECRET   Required (file or env).
   TIBBER_REDIRECT_URI    Optional, default http://localhost:8515/callback.
-  TIBBER_TOKEN_PATH      Optional, default ./tibber_tokens.json.
+  TIBBER_TOKEN_PATH      Optional, default is an OS-standard per-user data
+                         directory (see tibber_client.default_token_path) --
+                         NOT the current working directory, precisely so
+                         that multiple local MCP clients (Claude Desktop,
+                         VS Code Copilot, Claude Code, ...) converge on the
+                         same token file without any of them needing this
+                         set explicitly. Set it yourself only to opt out
+                         deliberately (e.g. isolated test accounts).
   TIBBER_TOKEN_JSON      Optional, headless bootstrap only (see below).
 
 A file is recommended for local/desktop use (Claude Desktop, VS Code
@@ -160,7 +167,9 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
             are sufficient, and a missing/nonexistent path is not an error.
     """
     from weconnect_mcp.adapter.tibber_adapter import TibberAdapter
-    from weconnect_mcp.adapter.tibber_client import TibberAuthError, default_login_command, login_instruction
+    from weconnect_mcp.adapter.tibber_client import (
+        TibberAuthError, default_login_command, default_token_path, login_instruction,
+    )
 
     login_command = default_login_command(config_path)
     file_config = _load_tibber_file_config(config_path)
@@ -175,7 +184,7 @@ def _build_tibber_adapter(config_path: Optional[str] = None):
     token_path = (
         os.environ.get("TIBBER_TOKEN_PATH")
         or file_config.get("token_path")
-        or "./tibber_tokens.json"
+        or default_token_path()
     )
 
     if not client_id or not client_secret:

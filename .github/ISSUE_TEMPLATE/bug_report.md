@@ -30,11 +30,11 @@ What actually happened.
 ```json
 {
   "client_id": "...",
-  "redirect_uri": "http://localhost:8515/callback",
-  "token_path": "./tibber_tokens.json"
+  "redirect_uri": "http://localhost:8515/callback"
 }
 ```
-**Note:** Remove sensitive data like `client_secret` and token contents!
+**Note:** Remove sensitive data like `client_secret` and token contents! If you've overridden
+`token_path`/`TIBBER_TOKEN_PATH` from its default, mention that too.
 
 ## Logs
 If applicable, add logs from:
