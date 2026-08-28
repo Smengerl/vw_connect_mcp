@@ -24,7 +24,7 @@ This server provides **Tools** and **Prompts** via the Model Context Protocol �
 - **3 total tools, all fully functional** — every tool below reliably returns real data; nothing is registered "for interface compatibility" that always fails:
   - `get_vehicles()` - List all vehicles
   - `get_vehicle_info(vehicle_id)` - Identity (manufacturer, model, name, online state, last-seen timestamp) plus a quick energy snapshot (electric range, charging flag, plug-connected flag)
-  - `get_charging_status(vehicle_id)` - Charging state, plug status, target/current SOC, electric range, last-seen timestamp
+  - `get_charging_status(vehicle_id)` - Resolved vehicle VIN/name, charging state, plug status, target/current SOC, electric range, last-seen timestamp
 
 ### **MCP Prompts**
 - **11 workflow prompts** (`src/weconnect_mcp/server/mixins/prompts.py`), each usable with this backend. Steps that would have needed a command (start/stop charging, climate control) are advisory-only — they tell the user to act via the vehicle's own app instead of calling a tool, since no such tool exists. Steps that would have needed GPS position ask the user for the location instead of calling a tool.
@@ -37,7 +37,7 @@ Only these data points exist, for electric vehicles only:
 
 | Data | Tool |
 |---|---|
-| VIN, brand, model, name | `get_vehicles()`, `get_vehicle_info()` |
+| VIN, brand, model, name | `get_vehicles()`, `get_vehicle_info()`, `get_charging_status()` (`vin`, `name`) |
 | Online/connection state | `get_vehicle_info()` |
 | Last-seen timestamp (ISO 8601) | `get_vehicle_info()`, `get_charging_status()` (`last_seen`) |
 | Electric range (km) | `get_vehicle_info()`, `get_charging_status()` (`range_km`) |
@@ -74,7 +74,7 @@ Use either:
 - **Vehicle name** (preferred): `"ID.7"` - easier for humans to read
 - **VIN**: `"WVWZZZED4SE003938"` - unique identifier
 
-Both formats work automatically. There is no license plate field or lookup -- Tibber never reports one.
+Both formats work automatically. Name matching is by substring, not exact match, and case-insensitive -- `"7"` or `"id"` both resolve to `"ID.7"` if it's the only match. Because of this, `get_vehicle_info` and `get_charging_status` always return the resolved vehicle's actual `vin`/`name` in their response -- check those fields to confirm which vehicle a loose identifier actually matched, especially with more than one vehicle registered. There is no license plate field or lookup -- Tibber never reports one.
 
 ### 3. Read Vehicle Data
 Use `get_vehicles`, `get_vehicle_info`, `get_charging_status` — these are the only 3 tools that exist.
@@ -105,9 +105,9 @@ All tools return JSON data. Data is cached for 5 minutes.
 
 **`get_charging_status(vehicle_id)`**
 - **Purpose**: Charging/plug status plus electric range
-- **Parameters**: `vehicle_id` - Vehicle name or VIN
-- **Returns**: `is_charging`, `is_plugged_in`, `charging_state` ("charging"/"idle"), `target_soc_percent`, `current_soc_percent`, `range_km`, `last_seen` (ISO 8601)
-- **Example**: `get_charging_status("ID.7")` → `{"is_charging": false, "is_plugged_in": false, "charging_state": "idle", "target_soc_percent": 80, "current_soc_percent": 74, "range_km": 346.0, "last_seen": "2024-01-15T10:31:00Z"}`
+- **Parameters**: `vehicle_id` - Vehicle name or VIN (partial names allowed, see "Identify Vehicles" above)
+- **Returns**: `vin`, `name` (the resolved vehicle's actual VIN/name — check these to confirm which vehicle matched, especially when `vehicle_id` was a partial name), `is_charging`, `is_plugged_in`, `charging_state` ("charging"/"idle"), `target_soc_percent`, `current_soc_percent`, `range_km`, `last_seen` (ISO 8601)
+- **Example**: `get_charging_status("ID.7")` → `{"vin": "WVWZZZ...", "name": "ID.7", "is_charging": false, "is_plugged_in": false, "charging_state": "idle", "target_soc_percent": 80, "current_soc_percent": 74, "range_km": 346.0, "last_seen": "2024-01-15T10:31:00Z"}`
 
 There is no fourth tool. Door/window/tyre/light/climate/position/maintenance queries and every vehicle command simply have no corresponding tool — don't guess a name and try calling it. There used to be a separate `get_battery_status` tool, but every field it returned duplicated `get_vehicle_info`/`get_charging_status` or is now folded into them, so it was merged away.
 

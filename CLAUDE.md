@@ -96,7 +96,7 @@ registration file itself.
 ./scripts/test.sh -v       # verbose
 ```
 
-109 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
+129 tests total: most against `tests/test_adapter.py`'s `TestAdapter` mock (2
 fake vehicles, both electric-shaped — ID.7 Tourer and T7 Multivan eHybrid,
 see that file's docstring for exact values), plus `test_tibber_extraction.py`,
 which exercises `tibber_adapter.py`'s device-detail extraction functions and

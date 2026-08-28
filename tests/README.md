@@ -6,17 +6,17 @@ Test suite for the WeConnect MCP server (Tibber Data API backend).
 
 | Category | Tests | Files | Scope | Description |
 |----------|-------|-------|-------|-------------|
-| **Tools** | 30 | 3 | Unit | Data retrieval operations (adapter methods) |
-| **Tibber client** | 26 | 1 | Unit | OAuth2/token-refresh logic, incl. concurrent-instance locking |
+| **Tools** | 33 | 4 | Unit | Data retrieval operations (adapter methods + `get_charging_status` tool-layer identity fields) |
+| **Tibber client** | 34 | 1 | Unit | OAuth2/token-refresh logic, incl. concurrent-instance locking |
 | **Tibber extraction** | 9 | 1 | Unit | tibber_adapter.py's device-detail extraction functions + vin_from_external_id, against real fixture data |
-| **Error translation** | 11 | 1 | Unit | AdapterUnavailableError → `server_unavailable` JSON translation chain |
-| **Reconnecting adapter** | 11 | 1 | Unit | No-restart-needed self-healing retry logic |
+| **Error translation** | 12 | 1 | Unit | AdapterUnavailableError → `server_unavailable` JSON translation chain |
+| **Reconnecting adapter** | 18 | 1 | Unit | No-restart-needed self-healing retry logic |
 | **Caching** | 5 | 1 | Unit | CacheMixin behavior (expiry, fetch-once, refetch) |
 | **Starting adapter** | 6 | 1 | Unit | UnavailableAdapter fallback stub |
 | **Server startup** | 7 | 1 | Unit | mcp_server_cli.py's connect-or-fallback logic (both transports) |
-| **Health endpoint** | 3 | 1 | Integration | `/health` route, real ASGI transport |
+| **Health endpoint** | 4 | 1 | Integration | `/health` route, real ASGI transport |
 | **MCP Server** | 1 | 1 | Integration | MCP protocol layer (client connection) |
-| **Total** | **109** | **12** | All | Complete coverage |
+| **Total** | **129** | **13** | All | Complete coverage |
 
 All tests are fast mock/offline tests (well under 1s total) — there is no
 separate slow/real-API suite: the Tibber Data API is read-only, so nothing
@@ -29,19 +29,20 @@ exists to test beyond what the mock adapter, fixture data, and mocked
 tests/
 ├── conftest.py                    # ⭐ Central fixtures (adapter, mcp_server, mcp_client)
 │
-├── tools/                         # Unit Tests: Adapter Methods (30 tests)
-│   ├── test_list_vehicles.py      # 4 tests  - List all vehicles
-│   ├── test_get_vehicle.py        # 10 tests - Get vehicle details (BASIC/FULL)
-│   └── test_get_energy_status.py  # 16 tests - Battery, charging, range, last-seen
+├── tools/                         # Unit Tests: Adapter Methods (33 tests)
+│   ├── test_list_vehicles.py      # 5 tests  - List all vehicles, incl. empty-pairing hint
+│   ├── test_get_vehicle.py        # 9 tests  - Get vehicle details (BASIC/FULL)
+│   ├── test_get_energy_status.py  # 16 tests - Battery, charging, range, last-seen
+│   └── test_get_charging_status.py # 3 tests - Resolved vin/name in the tool's own response
 │
 ├── test_mcp_server.py             # Integration: MCP client connection (1 test)
-├── test_health_endpoint.py        # Integration: /health route (3 tests)
+├── test_health_endpoint.py        # Integration: /health route (4 tests)
 ├── test_caching.py                # Unit: CacheMixin behavior (5 tests)
 ├── test_tibber_extraction.py      # Unit: device-detail extraction + VIN extraction (9 tests)
-├── test_tibber_client.py          # Unit: OAuth2/token-refresh, concurrent locking (26 tests)
-├── test_error_translation.py      # Unit: AdapterUnavailableError → JSON translation (11 tests)
+├── test_tibber_client.py          # Unit: OAuth2/token-refresh, concurrent locking (34 tests)
+├── test_error_translation.py      # Unit: AdapterUnavailableError → JSON translation (12 tests)
 ├── test_starting_adapter.py       # Unit: UnavailableAdapter fallback stub (6 tests)
-├── test_reconnecting_adapter.py   # Unit: self-healing retry logic (11 tests)
+├── test_reconnecting_adapter.py   # Unit: self-healing retry logic (18 tests)
 ├── test_mcp_server_cli.py         # Unit: startup connect-or-fallback, both transports (7 tests)
 ├── test_adapter.py                # Mock adapter implementation (TestAdapter)
 └── test_data.py                   # Central test data configuration
@@ -78,9 +79,11 @@ pytest tests/ --cov=src/weconnect_mcp --cov-report=html
 
 ## Test Categories
 
-### 1. Unit Tests: Tools (30 tests)
-**What**: Individual adapter data retrieval methods
-**Fixtures**: `adapter` (TestAdapter with 2 mock vehicles)
+### 1. Unit Tests: Tools (33 tests)
+**What**: Individual adapter data retrieval methods, plus `get_charging_status`'s
+tool-layer response shape (`mcp_client`, since resolved `vin`/`name` are added
+at the tool layer, not the adapter method)
+**Fixtures**: `adapter` (TestAdapter with 2 mock vehicles), `mcp_client`
 **Run**: `pytest tests/tools/ -v`
 
 **Coverage**:

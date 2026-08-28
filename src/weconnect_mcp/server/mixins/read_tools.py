@@ -22,7 +22,7 @@ import functools
 import json
 
 from weconnect_mcp.adapter.abstract_adapter import (
-    AbstractAdapter, AdapterUnavailableError, VehicleListItem,
+    AbstractAdapter, AdapterUnavailableError, VehicleDetailLevel, VehicleListItem,
 )
 from weconnect_mcp.cli import logging_config
 
@@ -84,7 +84,7 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="get_vehicles",
-        description="List all available vehicles with VIN, name, and model. Start here to discover which vehicles you can access.",
+        description="List all vehicles paired to the connected Tibber account (VIN, name, model). Read-only discovery step -- call this first to learn which vehicle_id values (VIN or name; names match by case-insensitive substring) the other two tools accept. Results are cached for 5 minutes. An empty result includes a hint explaining that pairing happens in the Tibber app, not through any tool here. A {\"error\": \"server_unavailable\", \"error_type\": ...} response means the server itself needs attention (e.g. re-authorization), not a bad request.",
         tags={"discovery", "read"},
         annotations={"title": "Get All Vehicles", "readOnlyHint": True, "idempotentHint": True}
     )
@@ -93,17 +93,22 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         """Return list of all vehicles as JSON string."""
         vehicles: List[VehicleListItem] = adapter.list_vehicles()
         logger.info("Listing %d vehicles via tool", len(vehicles))
+        if not vehicles:
+            return json.dumps({
+                "vehicles": [],
+                "hint": "No vehicles are paired to this Tibber account yet. Pairing happens in the Tibber app itself -- there is no tool here to do it. Tell the user to pair their vehicle there first, then try again.",
+            })
         return json.dumps([v.model_dump() for v in vehicles])
 
     @mcp.tool(
         name="get_vehicle_info",
-        description="Get vehicle identity plus a quick energy snapshot: manufacturer, model, name, online/connection state, last-seen timestamp, electric range (km), charging flag, and plug-connected state.",
+        description="Get a vehicle's identity plus a quick energy snapshot: manufacturer, model, name, VIN, online/connection state, last-seen timestamp, electric range (km), charging flag, plug-connected flag. vehicle_id accepts a VIN or a partial, case-insensitive name -- the response's own vin/name confirm exactly which vehicle matched. {\"error\": \"...\"} means no vehicle matched vehicle_id; {\"error\": \"server_unavailable\", \"error_type\": ...} means the server itself needs attention instead (e.g. re-authorization). Cached for 5 minutes. Read-only -- no vehicle setting can be changed and nothing can be started or stopped.",
         tags={"vehicle-info", "read"},
         annotations={"title": "Get Vehicle Information", "readOnlyHint": True, "idempotentHint": True}
     )
     @_handle_unavailable
     def get_vehicle_info(
-        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name)"]
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name, partial names allowed)"]
     ) -> str:
         """Get basic vehicle information plus a quick energy snapshot."""
         logger.info("get vehicle info (tool) for id=%s", vehicle_id)
@@ -122,13 +127,13 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
 
     @mcp.tool(
         name="get_charging_status",
-        description="Get charging status for electric vehicles: charging state (charging/idle), plug-connected state, target SOC, current SOC, electric range (km), and last-seen timestamp.",
+        description="Get charging/plug status for an electric vehicle: whether charging is running right now (is_charging, charging_state), plug-connected flag, target and current state of charge (%), electric range (km), last-seen timestamp -- plus the resolved vehicle's vin/name, since vehicle_id accepts a partial, case-insensitive name. {\"error\": \"...\"} means no vehicle matched vehicle_id or it has no charging data; {\"error\": \"server_unavailable\", \"error_type\": ...} means the server itself needs attention instead (e.g. re-authorization). Cached for 5 minutes.",
         tags={"energy", "read", "charging", "electric"},
         annotations={"title": "Get Charging Status", "readOnlyHint": True, "idempotentHint": True}
     )
     @_handle_unavailable
     def get_charging_status(
-        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name)"]
+        vehicle_id: Annotated[str, "Vehicle identifier (VIN or name, partial names allowed)"]
     ) -> str:
         """Get charging status plus electric range."""
         logger.info("get charging status (tool) for id=%s", vehicle_id)
@@ -136,7 +141,9 @@ def register_read_tools(mcp: FastMCP, adapter: AbstractAdapter) -> None:
         if energy_status is None or energy_status.electric is None or energy_status.electric.charging is None:
             logger.warning("Vehicle '%s' not found or doesn't support charging", vehicle_id)
             return json.dumps({"error": f"Vehicle {vehicle_id} not found or doesn't support charging"})
-        result = energy_status.electric.charging.model_dump()
+        vehicle = adapter.get_vehicle(vehicle_id, details=VehicleDetailLevel.BASIC)
+        result = {"vin": vehicle.vin if vehicle else None, "name": vehicle.name if vehicle else None}
+        result.update(energy_status.electric.charging.model_dump())
         result["range_km"] = energy_status.range.total_km if energy_status.range else None
         result["last_seen"] = energy_status.last_seen
         return json.dumps(result)

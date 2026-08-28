@@ -480,7 +480,7 @@ an individual vehicle that resolves but doesn't support charging, separately fro
 |------|---|
 | `get_vehicles` | List all vehicles: VIN, name, model (no `license_plate` field — Tibber doesn't provide one) |
 | `get_vehicle_info` | Manufacturer, model, name, online state, last-seen timestamp, plus a quick energy snapshot (electric range, charging flag, plug-connected flag) |
-| `get_charging_status` | Charging/plug state, target/current SOC, electric range, last-seen timestamp |
+| `get_charging_status` | Resolved vehicle VIN/name (confirms which vehicle matched, since `vehicle_id` accepts partial names), charging/plug state, target/current SOC, electric range, last-seen timestamp |
 
 ### What AI Assistants Can Do
 
