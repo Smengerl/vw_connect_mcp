@@ -1,7 +1,6 @@
-# weconnect_mvp — MCP Server for Connected Vehicles via Tibber
+# vw_connect_mcp — MCP Server for Connected Vehicles via Tibber
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-47%20passing-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License](https://img.shields.io/badge/license-CC%20BY--SA%204.0-blue)](http://creativecommons.org/licenses/by-sa/4.0/)
 
@@ -79,8 +78,8 @@ Get up and running in 3 steps:
 1. **Install**
 
    ```bash
-   git clone https://github.com/Smengerl/weconnect_mvp.git
-   cd weconnect_mvp
+   git clone https://github.com/Smengerl/vw_connect_mcp.git
+   cd vw_connect_mcp
    ./scripts/setup.sh
    ```
 
@@ -124,8 +123,8 @@ Get up and running in 3 steps:
 Simply run the setup script which handles everything automatically:
 
 ```bash
-git clone https://github.com/Smengerl/weconnect_mvp.git
-cd weconnect_mvp
+git clone https://github.com/Smengerl/vw_connect_mcp.git
+cd vw_connect_mcp
 ./scripts/setup.sh
 ```
 
@@ -139,8 +138,8 @@ The script will:
 **Manual Installation (Alternative):**
 
 ```bash
-git clone https://github.com/Smengerl/weconnect_mvp.git
-cd weconnect_mvp
+git clone https://github.com/Smengerl/vw_connect_mcp.git
+cd vw_connect_mcp
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e .
@@ -299,7 +298,7 @@ python -m weconnect_mcp.cli.mcp_server_cli --log-level DEBUG --log-file server.l
 Generate your configuration for Claude Desktop with the following script and follow the instructions to add it to your Claude Desktop configuration:
 
 ```bash
-cd /path/to/weconnect_mvp
+cd /path/to/vw_connect_mcp
 ./scripts/create_mcp_config.sh claude
 ```
 
@@ -336,7 +335,7 @@ Reload Claude Desktop and ask questions like:
 Generate your configuration for GitHub Copilot with the following script and follow the instructions to add it to your VS Code settings:
 
 ```bash
-cd /path/to/weconnect_mvp
+cd /path/to/vw_connect_mcp
 ./scripts/create_mcp_config.sh vscode
 ```
 
@@ -363,7 +362,7 @@ Restart VS Code and verify installation by typing `/list` in Copilot Chat. Look 
 Generate your configuration for Microsoft Copilot Desktop with the following script:
 
 ```bash
-cd /path/to/weconnect_mvp
+cd /path/to/vw_connect_mcp
 ./scripts/create_mcp_config.sh copilot-desktop
 ```
 
@@ -557,7 +556,7 @@ railway login
 **Step 2 – Create project and deploy**
 
 ```bash
-cd /path/to/weconnect_mvp
+cd /path/to/vw_connect_mcp
 railway init             # creates a new Railway project linked to this directory
 railway up --detach      # builds the Docker image and deploys it
 ```
