@@ -17,6 +17,8 @@ A developer-focused server that exposes vehicle data via a Model Context Protoco
 
 *Access your vehicle's status through AI assistants like Claude Desktop and GitHub Copilot*
 
+*Screenshots are from an earlier VW-direct version with more tools (doors, position, commands). The current Tibber-based server is read-only: charge state, range and plug status. See [What This Server Can Do](#what-this-server-can-do).*
+
 ---
 
 ## What This Server Can Do
